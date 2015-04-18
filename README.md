@@ -19,3 +19,6 @@ Inveigh.ps1 -i localip
 
 With features enabled/disabled  
 Inveigh.ps1 -i localip -LLMNR Y/N -NBNS Y/N -HTTP Y/N -SMB Y/N
+
+# Screenshot
+![Inveigh](https://cloud.githubusercontent.com/assets/5897462/7216149/c49679ce-e5c2-11e4-9825-2abacc56e91f.PNG)
