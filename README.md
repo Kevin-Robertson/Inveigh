@@ -1,5 +1,5 @@
 # Inveigh
-Inveigh is a PowerShell LLMNR/NBNS spoofer designed to assist penetration testers that find themselves restricted to a Windows system. This can commonly occur while performing phishing attacks, USB attacks, VLAN pivoting, or even restrictions from the client.
+Inveigh is a PowerShell LLMNR/NBNS spoofer designed to assist penetration testers that find themselves limited to a Windows system. This can commonly occur while performing phishing attacks, USB attacks, VLAN pivoting, or even restrictions from the client.
 
 # Notes
 1. Currently supports IPv4 LLMNR/NBNS spoofing and HTTP/SMB NTLMv1/NTLMv2 challenge/response capture.
