@@ -3,7 +3,7 @@ Inveigh is a LLMNR/NBNS spoofer designed to assist penetration testers that find
 
 # Notes
 1. Currently supports IPv4 LLMNR/NBNS spoofing and HTTP/SMB NTLMv1/NTLMv2 challenge/response capture.
-2. LLMNR/NBNS spoofing are performed through sniffing and sending with raw sockets. 
+2. LLMNR/NBNS spoofing is performed through sniffing and sending with raw sockets. 
 3. SMB captures are performed through sniffing.
 4. HTTP captures are performed with a listener.
 5. The local LLMNR/NBNS services do not need to be disabled on the client system. 
