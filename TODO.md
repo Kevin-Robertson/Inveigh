@@ -5,3 +5,4 @@
 - [ ] Add ability to capture LM challenge/responses
 - [x] Add HTTP for challenge/response captures
 - [ ] Add HTTPS for challenge/response captures
+- [ ] Add Get-Help style comments
