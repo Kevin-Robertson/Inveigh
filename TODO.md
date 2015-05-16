@@ -6,3 +6,7 @@
 - [x] Add HTTP for challenge/response captures
 - [ ] Add HTTPS for challenge/response captures
 - [x] Add Get-Help style comments
+- [ ] Add SMB listener
+- [ ] Add exfiltration method for captures
+- [ ] Add SMBRelay
+- [ ] Add wpad.dat
