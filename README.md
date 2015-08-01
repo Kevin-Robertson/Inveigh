@@ -17,10 +17,10 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer designed to assist penetratio
 Obtain an elevated administrator or SYSTEM shell. If necessary, use a method to bypass script execution policy.
 
 To execute with default settings:  
-Inveigh.ps1 -i localip
+Inveigh.ps1
 
 To execute with features enabled/disabled:   
-Inveigh.ps1 -i localip -LLMNR Y/N -NBNS Y/N -HTTP Y/N -HTTPS Y/N -SMB Y/N -Repeat Y/N -ForceWPADAuth Y/N
+Inveigh.ps1 -i localip -LLMNR Y/N -NBNS Y/N -NBNSTypes 00,03,20,1B -HTTP Y/N -HTTPS Y/N -SMB Y/N -Repeat Y/N -ForceWPADAuth Y/N -Output 0,1,2
 
 # Screenshot
 ![Inveigh](https://cloud.githubusercontent.com/assets/5897462/7216149/c49679ce-e5c2-11e4-9825-2abacc56e91f.PNG)
