@@ -15,6 +15,7 @@ Tested minimums are PowerShell 2.0 and .NET 3.5.
 8. Ensure that the LMMNR,NBNS,SMB,HTTP ports are open within any local firewall on the host system.
 9. Output files will be created in current working directory.
 10. If you copy/paste challenge/response captures from output window for password cracking, remove carriage returns.
+11. SMB relay support is experimental at this point, use caution if employing on a pen test.
 
 # Usage
 Obtain an elevated administrator or SYSTEM shell. If necessary, use a method to bypass the PowerShell script execution policy.
