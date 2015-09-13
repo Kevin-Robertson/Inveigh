@@ -1,5 +1,5 @@
 ## To Do
-- [ ] Code cleanup
+- [ ] Code cleanup!
 - [x] Add NBNS spoofer
 - [x] Add ability to capture NTLMv1 challenge/responses
 - [ ] Add ability to capture LM challenge/responses
@@ -8,5 +8,5 @@
 - [x] Add Get-Help style comments
 - [ ] Add SMB listener
 - [ ] Add exfiltration method for captures
-- [ ] Add SMBRelay
+- [x] Add SMBRelay
 - [ ] Add wpad.dat
