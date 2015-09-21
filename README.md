@@ -26,5 +26,11 @@ Inveigh.ps1
 To execute with features enabled/disabled:   
 Inveigh.ps1 -IP 'local IP' -SpoofIP 'local or remote IP' -LLMNR Y/N -NBNS Y/N -NBNSTypes 00,03,20,1B -HTTP Y/N -HTTPS Y/N -SMB Y/N -Repeat Y/N -ForceWPADAuth Y/N -Output 0,1,2 -OutputDir 'valid folder path'
 
-# Screenshot
-![inveigh-screenshot2](https://cloud.githubusercontent.com/assets/5897462/9102520/62f199c4-3bc1-11e5-87a7-08837950a04f.PNG)
+To execute with SMB relay enabled:
+Inveigh.ps1 -SMBRelay Y/N -SMBRelayTarget 'valid SMB target IP' -SMBRelayCommand "valid command to run on target"
+
+# Screenshots
+![inveigh](https://cloud.githubusercontent.com/assets/5897462/9984212/bb8741e4-5fe1-11e5-9cbd-a0a1308d1c09.PNG)
+
+HTTP to SMB Relay
+![smbrelay](https://cloud.githubusercontent.com/assets/5897462/9984215/d022fae4-5fe1-11e5-84c1-8dbc0a4227cb.PNG)
