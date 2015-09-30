@@ -9,6 +9,7 @@ Execute Invoke-Inveigh with optional parameters
 
 Cmdlets:  
 Invoke-Inveigh - Start Inveigh with or without parameters.  
+Get-Inveigh - Display queued output.  
 Get-InveighLog - Display log entries.  
 Get-InveighNTLMv1 - Display captured NTLMv1 challenge/response hashes.  
 Get-InveighNTLMv2 - Display captured NTLMv2 challenge/response hashes.  
