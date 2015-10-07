@@ -52,7 +52,6 @@ Get-InveighNTLMv2 - Get captured NTLMv2 challenge/response hashes
 Get-InveighStats - Get captured challenge/response counts  
 Get-InveighHelp - List the cmdlets  
 Watch-Inveigh - Enable real time console output  
-Hide-Inveigh - Disable real time console output  
 Clear-Inveigh - Clear capture, log, smbrelay, and spoof lists  
 Stop-Inveigh - Stop Inveigh  
 
@@ -66,5 +65,5 @@ Retrieval of captured NTLM2 challenge/response hashes with Get-InveighNTLMv2
 HTTP to SMB Relay
 ![inveigh3](https://cloud.githubusercontent.com/assets/5897462/10326314/b2de540a-6c67-11e5-8627-fe5d27018dc3.png)
 
-Module import and execution through one of Ben Turner and Dave Hardy's Metasploit Interactive Powershell Session payloads
-![inveigh4](https://cloud.githubusercontent.com/assets/5897462/10326315/be4689e8-6c67-11e5-80c6-c5fcb086ab40.png)
+Module import and execution through one of Ben Turner and Dave Hardy's Metasploit Interactive PowerShell Session payloads
+![inveigh5](https://cloud.githubusercontent.com/assets/5897462/10354363/53e73784-6d2d-11e5-8509-9bb7f3feab88.png)
