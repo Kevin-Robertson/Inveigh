@@ -19,7 +19,7 @@ Tested minimums are PowerShell 2.0 and .NET 3.5
 # Usage
 Obtain an elevated administrator or SYSTEM shell and use a method to load the module
 
-To import with Import-Method:  
+To import with Import-Module:  
 Import-Module ./Inveigh.ps1
 
 To import with dot source method:  
