@@ -49,7 +49,7 @@ Default = Disabled: Enable/Disable showing NTLM challenge/response captures from
 .PARAMETER ForceWPADAuth
 Default = Enabled: Matches Responder option to Enable/Disable authentication for wpad.dat GET requests. Disabling can prevent browser login prompts.
 
-.PARAMERTER Cleartext
+.PARAMERTER ClearText
 Default = Disabled: Downgrade authentication for WPAD to cleartext.
 
 .PARAMETER SMBRelay
