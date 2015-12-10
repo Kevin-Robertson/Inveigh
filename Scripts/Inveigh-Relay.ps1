@@ -1524,8 +1524,41 @@ Function Get-InveighNTLMv1
     <#
     .SYNOPSIS
     Get-InveighNTLMv1 will get captured NTLMv1 challenge/response hashes.
+    
+    .PARAMETER Unique
+    Default = Disabled: Enable/Disable displaying only the first captured challenge/response for each unique account.
     #>
-    $inveigh.NTLMv1_list
+    param
+    ( 
+        [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$Unique="N",
+        [parameter(ValueFromRemainingArguments=$true)] $invalid_parameter
+    )
+
+    if ($invalid_parameter)
+    {
+        throw "$($invalid_parameter) is not a valid parameter."
+    }
+
+    if($Unique -eq 'y')
+    {
+        $inveigh.NTLMv1_list.sort()
+
+        foreach($unique_NTLMv1 in $inveigh.NTLMv1_list)
+        {
+            $unique_NTLMv1_account = $unique_NTLMv1.substring(0,$unique_NTLMv1.indexof(":",($unique_NTLMv1.indexof(":")+2)))
+
+            if($unique_NTLMv1_account -ne $unique_NTLMv1_account_last)
+            {
+                $unique_NTLMv1
+            }
+
+            $unique_NTLMv1_account_last = $unique_NTLMv1_account
+        }
+    }
+    else
+    {
+        $inveigh.NTLMv1_list
+    }
 }
 
 Function Get-InveighNTLMv2
@@ -1533,8 +1566,41 @@ Function Get-InveighNTLMv2
     <#
     .SYNOPSIS
     Get-InveighNTLMv2 will get captured NTLMv1 challenge/response hashes.
+
+    .PARAMETER Unique
+    Default = Disabled: Enable/Disable displaying only the first captured challenge/response for each unique account.
     #>
-    $inveigh.NTLMv2_list
+    param
+    ( 
+        [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$Unique="N",
+        [parameter(ValueFromRemainingArguments=$true)] $invalid_parameter
+    )
+
+    if ($invalid_parameter)
+    {
+        throw "$($invalid_parameter) is not a valid parameter."
+    }
+
+    if($Unique -eq 'y')
+    {
+        $inveigh.NTLMv2_list.sort()
+
+        foreach($unique_NTLMv2 in $inveigh.NTLMv2_list)
+        {
+            $unique_NTLMv2_account = $unique_NTLMv2.substring(0,$unique_NTLMv2.indexof(":",($unique_NTLMv2.indexof(":")+2)))
+
+            if($unique_NTLMv2_account -ne $unique_NTLMv2_account_last)
+            {
+                $unique_NTLMv2
+            }
+
+            $unique_NTLMv2_account_last = $unique_NTLMv2_account
+        }
+    }
+    else
+    {
+        $inveigh.NTLMv2_list
+    }
 }
 
 Function Get-InveighLog
