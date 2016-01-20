@@ -14,7 +14,6 @@ Tested minimums are PowerShell 2.0 and .NET 3.5
 7. Kerberos should downgrade for SMB authentication due to spoofed hostnames not being valid in DNS.
 8. Ensure that the LMMNR,NBNS,SMB,HTTP ports are open within any local firewall on the host system.
 9. If you copy/paste challenge/response captures from output window for password cracking, remove carriage returns.
-10. SMB relay support is experimental at this point, use caution if employing on a pen test.
 
 # Usage
 Obtain an elevated administrator or SYSTEM shell and use a method to load the module
@@ -64,6 +63,7 @@ Stop-Inveigh - Stop all running Inveigh functions
 # Included In
 PowerShell Empire - https://github.com/PowerShellEmpire/Empire  
 PS>Attack - https://github.com/jaredhaight/psattack  
+p0wnedShell - https://github.com/Cn33liz/p0wnedShell   
 
 # Special Thanks  
 Anyone that posted .net packet sniffing examples.  
