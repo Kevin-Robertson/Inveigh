@@ -196,7 +196,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 	Invoke-InveighRelay -SMBRelayTarget 'valid SMB target IP' -SMBRelayCommand "valid command to run on target"  
 	
 * To execute Invoke-InveighBruteForce against a target:  
-	Invoke-InveighBruteForce -SpooferTarget 'valid SMB target IP'  
+	Invoke-InveighBruteForce -SpooferTarget 'valid target IP'  
 
 ## Included In
 * PowerShell Empire - https://github.com/PowerShellEmpire/Empire  
