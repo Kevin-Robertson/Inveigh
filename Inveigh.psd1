@@ -27,7 +27,7 @@ CompanyName = ''
 Copyright = 'BSD 3-Clause'
 
 # Description of the functionality provided by this module
-Description = 'Inveigh - LLMNR/NBNS spoofer with challenge/response capture over HTTP/SMB'
+Description = 'Inveigh - LLMNR/NBNS spoofer/man-in-the-middle tool'
 
 # Minimum version of the Windows PowerShell engine required by this module
 PowerShellVersion = '2.0'

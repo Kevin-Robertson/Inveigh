@@ -6,4 +6,5 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer with challenge/response captu
 https://github.com/Kevin-Robertson/Inveigh
 #>
 Import-Module $PWD\Scripts\Inveigh.ps1
+Import-Module $PWD\Scripts\Inveigh-BruteForce.ps1
 Import-Module $PWD\Scripts\Inveigh-Relay.ps1
