@@ -80,6 +80,9 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * Granular control of console and file output  
 * Run time control  
 
+##### Notes:
+* The NBNS brute force spoofer is CPU intensive.  
+
 ##### Parameters:
 * __SpooferIP__ - Specify an IP address for NBNS spoofing. This parameter is only necessary when redirecting victims to a system other than the Inveigh Brute Force host.   
 * __SpooferTarget__ - Specify an IP address to target for brute force NBNS spoofing.   
@@ -88,7 +91,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __NBNSPause__ Default = Disabled: (Integer) Specify the number of seconds the NBNS brute force spoofer will stop spoofing after an incoming HTTP request is received.  
 * __NBNSTTL__ - Default = 165 Seconds: Specify a custom NBNS TTL in seconds for the response packet.  
 * __HTTP__ - Default = Enabled: (Y/N) Enable/Disable HTTP challenge/response capture.  
-* __HTTPIP__ - Default = Any: Specify a TCP IP address for the HTTP listener.  
+* __HTTPIP__ - Default = Any: Specify an IP address for the HTTP listener.  
 * __HTTPPort__ - Default = 80: Specify a TCP port for the HTTP listener.  
 * __HTTPAuth__ - Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type. This setting does not apply to wpad.dat requests.  
 * __HTTPBasicRealm__ - Specify a realm name for Basic authentication. This parameter applies to both HTTPAuth and WPADAuth.  
