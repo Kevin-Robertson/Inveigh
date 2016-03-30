@@ -41,20 +41,20 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __HTTPDir__ - Specify a full directory path to enable hosting of basic content through the HTTP/HTTPS listener. This parameter will not be used if HTTPResponse is set.  
 * __HTTPDefaultFile__ - Specify a filename within the HTTPDir to serve as the default HTTP/HTTPS response file. This file will not be used for wpad.dat requests.  
 * __HTTPDefaultEXE__ - Specify an EXE filename within the HTTPDir to serve as the default HTTP/HTTPS response for EXE requests.  
-* __HTTPResponse__ - Specify a string or HTML to serve as the default HTTP/HTTPS response. This response will not be used for wpad.dat requests.  
+* __HTTPResponse__ - Specify a string or HTML to serve as the default HTTP/HTTPS response. This response will not be used for wpad.dat requests. Use PowerShell character escapes where necessary.  
 * __HTTPSCertAppID__ - Specify a valid application GUID for use with the ceriticate.  
 * __HTTPSCertThumbprint__ - Specify a certificate thumbprint for use with a custom certificate. The certificate filename must be located in the current working directory and named Inveigh.pfx.   
 * __WPADAuth__ - Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type for wpad.dat requests. Setting to Anonymous can prevent browser login prompts.  
 * __WPADIP__ - Specify a proxy server IP to be included in a basic wpad.dat response for WPAD enabled browsers. This parameter must be used with WPADPort.  
 * __WPADPort__ - Specify a proxy server port to be included in a basic wpad.dat response for WPAD enabled browsers. This parameter must be used with WPADIP.  
 * __WPADDirectHosts__ - Comma separated list of hosts to list as direct in the wpad.dat file. Listed hosts will not be routed through the defined proxy.  
-* __WPADResponse__ - Specify wpad.dat file contents to serve as the wpad.dat response. This parameter will not be used if WPADIP and WPADPort are set.  
+* __WPADResponse__ - Specify wpad.dat file contents to serve as the wpad.dat response. This parameter will not be used if WPADIP and WPADPort are set. Use PowerShell character escapes where necessary.   
 * __SMB__ - Default = Enabled: (Y/N) Enable/Disable SMB challenge/response capture. Warning, LLMNR/NBNS spoofing can still direct targets to the host system's SMB server. Block TCP ports 445/139 or kill the SMB services if you need to prevent login requests from being processed by the Inveigh host.  
 * __Challenge__ - Default = Random: Specify a 16 character hex NTLM challenge for use with the HTTP listener. If left blank, a random challenge will be generated for each request. This will only be used for non-relay captures.  
 * __MachineAccounts__ - Default = Disabled: (Y/N) Enable/Disable showing NTLM challenge/response captures from machine accounts.  
 * __SMBRelay__ - Default = Disabled: (Y/N) Enable/Disable SMB relay. Note that Inveigh-Relay.ps1 must be loaded into memory.  
 * __SMBRelayTarget__ - IP address of system to target for SMB relay.  
-* __SMBRelayCommand__ - Command to execute on SMB relay target.  
+* __SMBRelayCommand__ - Command to execute on SMB relay target. Use PowerShell character escapes where necessary.  
 * __SMBRelayUsernames__ - Default = All Usernames: Comma separated list of usernames to use for relay attacks. Accepts both username and domain\username format.  
 * __SMBRelayAutoDisable__ - Default = Enable: (Y/N) Automaticaly disable SMB relay after a successful command execution on target.  
 * __SMBRelayNetworkTimeout__ - Default = No Timeout: (Integer) Set the duration in seconds that Inveigh will wait for a reply from the SMB relay target after each packet is sent.  
@@ -80,9 +80,6 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * Granular control of console and file output  
 * Run time control  
 
-##### Notes:
-* The NBNS brute force spoofer is CPU intensive.  
-
 ##### Parameters:
 * __SpooferIP__ - Specify an IP address for NBNS spoofing. This parameter is only necessary when redirecting victims to a system other than the Inveigh Brute Force host.   
 * __SpooferTarget__ - Specify an IP address to target for brute force NBNS spoofing.   
@@ -91,16 +88,16 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __NBNSPause__ Default = Disabled: (Integer) Specify the number of seconds the NBNS brute force spoofer will stop spoofing after an incoming HTTP request is received.  
 * __NBNSTTL__ - Default = 165 Seconds: Specify a custom NBNS TTL in seconds for the response packet.  
 * __HTTP__ - Default = Enabled: (Y/N) Enable/Disable HTTP challenge/response capture.  
-* __HTTPIP__ - Default = Any: Specify an IP address for the HTTP listener.  
+* __HTTPIP__ - Default = Any: Specify a TCP IP address for the HTTP listener.  
 * __HTTPPort__ - Default = 80: Specify a TCP port for the HTTP listener.  
 * __HTTPAuth__ - Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type. This setting does not apply to wpad.dat requests.  
-* __HTTPBasicRealm__ - Specify a realm name for Basic authentication. This parameter applies to both HTTPAuth and WPADAuth.  
+* __HTTPBasicRealm__ - Specify a realm name for Basic authentication. This parameter applies to both HTTPAuth and WPADAuth. Use PowerShell character escapes where necessary.  
 * __HTTPResponse__ - Specify a string or HTML to serve as the default HTTP/HTTPS response. This response will not be used for wpad.dat requests.  
 * __WPADAuth__ - Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type for wpad.dat requests. Setting to Anonymous can prevent browser login prompts.  
 * __WPADIP__ - Specify a proxy server IP to be included in a basic wpad.dat response for WPAD enabled browsers. This parameter must be used with WPADPort.  
 * __WPADPort__ - Specify a proxy server port to be included in a basic wpad.dat response for WPAD enabled browsers. This parameter must be used with WPADIP.  
 * __WPADDirectHosts__ - Comma separated list of hosts to list as direct in the wpad.dat file. Listed hosts will not be routed through the defined proxy.   
-* __WPADResponse__ - Specify wpad.dat file contents to serve as the wpad.dat response. This parameter will not be used if WPADIP and WPADPort are set.  
+* __WPADResponse__ - Specify wpad.dat file contents to serve as the wpad.dat response. This parameter will not be used if WPADIP and WPADPort are set. Use PowerShell character escapes where necessary.   
 * __Challenge__ - Default = Random: Specify a 16 character hex NTLM challenge for use with the HTTP listener. If left blank, a random challenge will be generated for each request. This will only be used for non-relay captures.  
 * __MachineAccounts__ - Default = Disabled: (Y/N) Enable/Disable showing NTLM challenge/response captures from machine accounts.  
 * __ConsoleOutput__ - Default = Disabled: (Y/N) Enable/Disable real time console output. If using this option through a shell, test to ensure that it doesn't hang the shell.  
@@ -134,7 +131,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __MachineAccounts__ - Default = Disabled: (Y/N) Enable/Disable showing NTLM challenge/response captures from machine accounts.  
 * __WPADAuth__ - Default = NTLM: (Anonymous,NTLM) Specify the HTTP/HTTPS server authentication type for wpad.dat requests. Setting to Anonymous can prevent browser login prompts.  
 * __SMBRelayTarget__ - IP address of system to target for SMB relay.  
-* __SMBRelayCommand__ - Command to execute on SMB relay target.  
+* __SMBRelayCommand__ - Command to execute on SMB relay target. Use PowerShell character escapes where necessary.  
 * __SMBRelayUsernames__ - Default = All Usernames: Comma separated list of usernames to use for relay attacks. Accepts both username and domain\username format.  
 * __SMBRelayAutoDisable__ - Default = Enable: (Y/N) Automaticaly disable SMB relay after a successful command execution on target.  
 * __SMBRelayNetworkTimeout__ - Default = No Timeout: (Integer) Set the duration in seconds that Inveigh will wait for a reply from the SMB relay target after each packet is sent.  
@@ -198,8 +195,8 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * To execute SMB relay with only Invoke-InveighRelay:  
 	Invoke-InveighRelay -SMBRelayTarget 'valid SMB target IP' -SMBRelayCommand "valid command to run on target"  
 	
-* To execute Invoke-InveighBruteForce against a target:  
-	Invoke-InveighBruteForce -SpooferTarget 'valid target IP'  
+* To execute Inveigh-BruteForce against a target:  
+	Invoke-InveighRelay -SpooferTarget 'remote or local target IP'  
 
 ## Included In
 * PowerShell Empire - https://github.com/PowerShellEmpire/Empire  

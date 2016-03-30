@@ -48,7 +48,7 @@ Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authenticat
 Specify a realm name for Basic authentication. This parameter applies to both HTTPAuth and WPADAuth.
 
 .PARAMETER HTTPResponse
-Specify a string or HTML to serve as the default HTTP/HTTPS response. This response will not be used for wpad.dat requests.
+Specify a string or HTML to serve as the default HTTP/HTTPS response. This response will not be used for wpad.dat requests. Use PowerShell character escapes where necessary.
 
 .PARAMETER WPADAuth
 Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type for wpad.dat requests. Setting to Anonymous can prevent browser login prompts.
@@ -60,7 +60,7 @@ Specify a proxy server IP to be included in a basic wpad.dat response for WPAD e
 Specify a proxy server port to be included in a basic wpad.dat response for WPAD enabled browsers. This parameter must be used with WPADIP.
 
 .PARAMETER WPADDirectHosts
-Comma separated list of hosts to list as direct in the wpad.dat file. Listed hosts will not be routed through the defined proxy.
+Comma separated list of hosts to list as direct in the wpad.dat file. Listed hosts will not be routed through the defined proxy. Use PowerShell character escapes where necessary.
 
 .PARAMETER WPADResponse
 Specify wpad.dat file contents to serve as the wpad.dat response. This parameter will not be used if WPADIP and WPADPort are set.
@@ -435,7 +435,7 @@ $shared_basic_functions_scriptblock =
 
         $string_data = [System.BitConverter]::ToString($string_extract_data[($string_start+$string2_length+$string3_length)..($string_start+$string_length+$string2_length+$string3_length-1)])
         $string_data = $string_data -replace "-00",""
-        $string_data = $string_data.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $string_data = $string_data.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         $string_extract = New-Object System.String ($string_data,0,$string_data.Length)
         return $string_extract
     }
@@ -464,19 +464,19 @@ $HTTP_scriptblock =
         $HTTP_timestamp = Get-Date
         $HTTP_timestamp = $HTTP_timestamp.ToFileTime()
         $HTTP_timestamp = [BitConverter]::ToString([BitConverter]::GetBytes($HTTP_timestamp))
-        $HTTP_timestamp = $HTTP_timestamp.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+        $HTTP_timestamp = $HTTP_timestamp.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
 
         if($inveigh.challenge)
         {
             $HTTP_challenge = $inveigh.challenge
             $HTTP_challenge_bytes = $inveigh.challenge.Insert(2,'-').Insert(5,'-').Insert(8,'-').Insert(11,'-').Insert(14,'-').Insert(17,'-').Insert(20,'-')
-            $HTTP_challenge_bytes = $HTTP_challenge_bytes.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+            $HTTP_challenge_bytes = $HTTP_challenge_bytes.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         }
         else
         {
             $HTTP_challenge_bytes = [String](1..8 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
             $HTTP_challenge = $HTTP_challenge_bytes -replace ' ', ''
-            $HTTP_challenge_bytes = $HTTP_challenge_bytes.Split(" ") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+            $HTTP_challenge_bytes = $HTTP_challenge_bytes.Split(" ") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
         }
 
         $inveigh.HTTP_challenge_queue.Add($inveigh.HTTP_client.Client.RemoteEndpoint.Address.IPAddressToString + $inveigh.HTTP_client.Client.RemoteEndpoint.Port + ',' + $HTTP_challenge) |Out-Null
@@ -508,7 +508,7 @@ $HTTP_scriptblock =
     {
         if($WPADDirectHosts)
         {
-            foreach($WPAD_direct_host in $WPADDirectHosts)
+            ForEach($WPAD_direct_host in $WPADDirectHosts)
             {
                 $WPAD_direct_hosts_function += 'if (dnsDomainIs(host, "' + $WPAD_direct_host + '")) return "DIRECT";'
             }
@@ -565,7 +565,7 @@ $HTTP_scriptblock =
         if($TCP_request -like "47-45-54-20*" -or $TCP_request -like "48-45-41-44-20*" -or $TCP_request -like "4f-50-54-49-4f-4e-53-20*")
         {
             $HTTP_raw_URL = $TCP_request.Substring($TCP_request.IndexOf("-20-") + 4,$TCP_request.Substring($TCP_request.IndexOf("-20-") + 1).IndexOf("-20-") - 3)
-            $HTTP_raw_URL = $HTTP_raw_URL.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+            $HTTP_raw_URL = $HTTP_raw_URL.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
             $HTTP_request_raw_URL = New-Object System.String ($HTTP_raw_URL,0,$HTTP_raw_URL.Length)
 
             if($NBNSPause)
@@ -579,7 +579,7 @@ $HTTP_scriptblock =
         {
             $HTTP_authorization_header = $TCP_request.Substring($TCP_request.IndexOf("-41-75-74-68-6F-72-69-7A-61-74-69-6F-6E-3A-20-") + 46)
             $HTTP_authorization_header = $HTTP_authorization_header.Substring(0,$HTTP_authorization_header.IndexOf("-0D-0A-"))
-            $HTTP_authorization_header = $HTTP_authorization_header.Split("-") | FOREACH{ [CHAR][CONVERT]::toint16($_,16)}
+            $HTTP_authorization_header = $HTTP_authorization_header.Split("-") | ForEach-Object{ [CHAR][CONVERT]::toint16($_,16)}
             $authentication_header = New-Object System.String ($HTTP_authorization_header,0,$HTTP_authorization_header.Length)
         }
         else
@@ -1186,7 +1186,7 @@ if($inveigh.file_output -and !$inveigh.running)
 }
 
 }
-#End Invoke-Inveigh
+#End Invoke-InveighBruteForce
 
 Function Stop-Inveigh
 {
