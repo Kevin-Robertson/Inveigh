@@ -154,7 +154,6 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __Get-InveighLog__ - Get log entries    
 * __Get-InveighNTLMv1__ - Get all or unique (-unique) captured NTLMv1 challenge/response hashes  
 * __Get-InveighNTLMv2__ - Get all or unique (-unique) captured NTLMv2 challenge/response hashes  
-* __Get-InveighStat__ - Get captured challenge/response counts  
 * __Watch-Inveigh__ - Enable real time console output  
 * __Clear-Inveigh__ - Clear Inveigh data from memory  
 * __Stop-Inveigh__ - Stop all running Inveigh functions 
