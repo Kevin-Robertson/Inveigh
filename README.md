@@ -38,13 +38,14 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __HTTPS__ - Default = Disabled: (Y/N) Enable/Disable HTTPS challenge/response capture. Warning, a cert will be installed in the local store and attached to port 443. If the function does not exit gracefully, execute "netsh http delete sslcert ipport=0.0.0.0:443" and manually remove the certificate from "Local Computer\Personal" in the cert store.  
 * __HTTPAuth__ - Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type. This setting does not apply to wpad.dat requests.  
 * __HTTPBasicRealm__ - Specify a realm name for Basic authentication. This parameter applies to both HTTPAuth and WPADAuth.  
-* __HTTPDir__ - Specify a full directory path to enable hosting of basic content through the HTTP/HTTPS listener. This parameter will not be used if HTTPResponse is set.  
+* __HTTPDir__ - Specify a full directory path to enable hosting of basic content through the HTTP/HTTPS listener.     
 * __HTTPDefaultFile__ - Specify a filename within the HTTPDir to serve as the default HTTP/HTTPS response file. This file will not be used for wpad.dat requests.  
 * __HTTPDefaultEXE__ - Specify an EXE filename within the HTTPDir to serve as the default HTTP/HTTPS response for EXE requests.  
-* __HTTPResponse__ - Specify a string or HTML to serve as the default HTTP/HTTPS response. This response will not be used for wpad.dat requests. Use PowerShell character escapes where necessary.  
+* __HTTPResponse__ - Specify a string or HTML to serve as the default HTTP/HTTPS response. This response will not be used for wpad.dat requests. This parameter will not be used if HTTPDir is set. Use PowerShell character escapes where necessary.  
 * __HTTPSCertAppID__ - Specify a valid application GUID for use with the ceriticate.  
 * __HTTPSCertThumbprint__ - Specify a certificate thumbprint for use with a custom certificate. The certificate filename must be located in the current working directory and named Inveigh.pfx.   
 * __WPADAuth__ - Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type for wpad.dat requests. Setting to Anonymous can prevent browser login prompts.  
+* __WPADEmptyFile__ - Default = Enabled: (Y/N) Enable/Disable serving a proxyless, all direct, wpad.dat file for wpad.dat requests. Enabling this setting can reduce the amount of redundant wpad.dat requests. This parameter is ignored when using WPADIP, WPADPort, or WPADResponse.  
 * __WPADIP__ - Specify a proxy server IP to be included in a basic wpad.dat response for WPAD enabled browsers. This parameter must be used with WPADPort.  
 * __WPADPort__ - Specify a proxy server port to be included in a basic wpad.dat response for WPAD enabled browsers. This parameter must be used with WPADIP.  
 * __WPADDirectHosts__ - Comma separated list of hosts to list as direct in the wpad.dat file. Listed hosts will not be routed through the defined proxy.  
@@ -58,8 +59,11 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __SMBRelayUsernames__ - Default = All Usernames: Comma separated list of usernames to use for relay attacks. Accepts both username and domain\username format.  
 * __SMBRelayAutoDisable__ - Default = Enable: (Y/N) Automaticaly disable SMB relay after a successful command execution on target.  
 * __SMBRelayNetworkTimeout__ - Default = No Timeout: (Integer) Set the duration in seconds that Inveigh will wait for a reply from the SMB relay target after each packet is sent.  
-* __ConsoleOutput__ - Default = Disabled: (Y/N) Enable/Disable real time console output. If using this option through a shell, test to ensure that it doesn't hang the shell.  
+* __ConsoleOutput__ - Default = Disabled: (Y/N) Enable/Disable real time console output. If using this option through a shell, test to ensure that it doesn't hang the shell.
+* __ConsoleStatus__ - Default = Disabled: (Integer) Set interval in minutes for displaying all unique captured hashes and credentials. This is useful for displaying full capture lists when running through a shell that does not have access to the support functions.  
+* __ConsoleUnique__ - Default = Enabled: (Y/N) Enable/Disable displaying challenge/response hashes for only unique IP, domain/hostname, and username combinations when real time console output is enabled.    
 * __FileOutput__ - Default = Disabled: (Y/N) Enable/Disable real time file output.  
+* __FileUnique__ - Default = Enabled: (Y/N) Enable/Disable outputting challenge/response hashes for only unique IP, domain/hostname, and username combinations when real time file output is enabled.   
 * __StatusOutput__ - Default = Enabled: (Y/N) Enable/Disable startup and shutdown messages.  
 * __OutputStreamOnly__ - Default = Disabled: (Y/N) Enable/Disable forcing all output to the standard output stream. This can be helpful if running Inveigh through a shell that does not return other output streams. Note that you will not see the various yellow warning messages if enabled.  
 * __OutputDir__ - Default = Working Directory: Set a valid path to an output directory for log and capture files. FileOutput must also be enabled.  
@@ -147,8 +151,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 ### Support Functions
 * __Get-Inveigh__ - Get queued console output  
 * __Get-InveighCleartext__ - Get all captured cleartext credentials  
-* __Get-InveighLog__ - Get log entries  
-* __Get-InveighNTLM__ - Get all captured challenge/response hashes  
+* __Get-InveighLog__ - Get log entries    
 * __Get-InveighNTLMv1__ - Get all or unique (-unique) captured NTLMv1 challenge/response hashes  
 * __Get-InveighNTLMv2__ - Get all or unique (-unique) captured NTLMv2 challenge/response hashes  
 * __Get-InveighStat__ - Get captured challenge/response counts  
