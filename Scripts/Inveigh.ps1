@@ -1097,10 +1097,10 @@ $HTTP_scriptblock =
             elseif($HTTP_request_bytes[8] -eq 3)
             {
                 $NTLM = 'NTLM'
-                $HTTP_NTLM_offset = $HTTP_request_bytes[24]
-                $HTTP_NTLM_length = DataLength 22 $HTTP_request_bytes
-                $HTTP_NTLM_domain_length = DataLength 28 $HTTP_request_bytes
-                $HTTP_NTLM_domain_offset = DataLength 32 $HTTP_request_bytes
+                $HTTP_NTLM_length = DataLength2 20 $HTTP_request_bytes
+                $HTTP_NTLM_offset = DataLength4 24 $HTTP_request_bytes
+                $HTTP_NTLM_domain_length = DataLength2 28 $HTTP_request_bytes
+                $HTTP_NTLM_domain_offset = DataLength4 32 $HTTP_request_bytes
                 [String] $NTLM_challenge = $inveigh.HTTP_challenge_queue -like $inveigh.request.RemoteEndpoint.Address.IPAddressToString + $inveigh.request.RemoteEndpoint.Port + '*'
                 $inveigh.HTTP_challenge_queue.Remove($NTLM_challenge)
                 $NTLM_challenge = $NTLM_challenge.Substring(($NTLM_challenge.IndexOf(",")) + 1)
@@ -1111,13 +1111,15 @@ $HTTP_scriptblock =
                 }
                 else
                 {  
-                    $HTTP_NTLM_domain_string = DataToString $HTTP_NTLM_domain_length 0 0 $HTTP_NTLM_domain_offset $HTTP_request_bytes
+                    $HTTP_NTLM_domain_string = DataToString $HTTP_NTLM_domain_offset $HTTP_NTLM_domain_length $HTTP_request_bytes
                 } 
                     
-                $HTTP_NTLM_user_length = DataLength 36 $HTTP_request_bytes
-                $HTTP_NTLM_user_string = DataToString $HTTP_NTLM_user_length $HTTP_NTLM_domain_length 0 $HTTP_NTLM_domain_offset $HTTP_request_bytes     
-                $HTTP_NTLM_host_length = DataLength 44 $HTTP_request_bytes
-                $HTTP_NTLM_host_string = DataToString $HTTP_NTLM_host_length $HTTP_NTLM_domain_length $HTTP_NTLM_user_length $HTTP_NTLM_domain_offset $HTTP_request_bytes
+                $HTTP_NTLM_user_length = DataLength2 36 $HTTP_request_bytes
+                $HTTP_NTLM_user_offset = DataLength4 40 $HTTP_request_bytes
+                $HTTP_NTLM_user_string = DataToString $HTTP_NTLM_user_offset $HTTP_NTLM_user_length $HTTP_request_bytes
+                $HTTP_NTLM_host_length = DataLength2 44 $HTTP_request_bytes
+                $HTTP_NTLM_host_offset = DataLength4 48 $HTTP_request_bytes
+                $HTTP_NTLM_host_string = DataToString $HTTP_NTLM_host_offset $HTTP_NTLM_host_length $HTTP_request_bytes
         
                 if($HTTP_NTLM_length -eq 24) # NTLMv1
                 {
