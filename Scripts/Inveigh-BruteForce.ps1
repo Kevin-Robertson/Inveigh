@@ -285,6 +285,13 @@ else
 $inveigh.status_queue.Add("Inveigh Brute Force started at $(Get-Date -format 's')") > $null
 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh Brute Force started")])  > $null
 
+$firewall_status = netsh advfirewall show allprofiles state | where {$_ -match 'ON'}
+
+if($firewall_status)
+{
+    $inveigh.status_queue.Add("Windows Firewall = Enabled")  > $null
+}
+
 if($NBNS -eq 'Y')
 {   
     $inveigh.status_queue.Add("NBNS Brute Force Spoofer Target = $SpooferTarget") > $null
@@ -440,6 +447,12 @@ if($inveigh.status_output)
             {
 
                 "Run Stop-Inveigh to stop running Inveigh functions"
+                {
+                    Write-Warning($inveigh.status_queue[0])
+                    $inveigh.status_queue.RemoveRange(0,1)
+                }
+
+                "Windows Firewall = Enabled"
                 {
                     Write-Warning($inveigh.status_queue[0])
                     $inveigh.status_queue.RemoveRange(0,1)

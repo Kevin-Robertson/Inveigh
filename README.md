@@ -73,7 +73,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __Tool__ - Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Metasploit's Interactive Powershell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire 
   
 ### Invoke-InveighBruteForce
-* The remote (Hot Potato method)/unprivileged NBNS brute force spoofer function. This function can be used to perform NBNS spoofing across subnets and/or perform NBNS spoofing without an elevated administrator or SYSTEM shell. 
+* The remote (Hot Potato method)/unprivileged NBNS brute force spoofer function. This function can be used to perform NBNS spoofing across subnets and/or perform NBNS spoofing without an elevated administrator or SYSTEM shell.
 
 ##### Privilege Requirements:
 * Regular User
@@ -83,6 +83,9 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * NTLMv1/NTLMv2 challenge/response capture over HTTP  
 * Granular control of console and file output  
 * Run time control  
+
+##### Notes:
+* Microsoft released patches in June 2016 that will likely prevent some of this function's features from working.  
 
 ##### Parameters:
 * __SpooferIP__ - Specify an IP address for NBNS spoofing. This parameter is only necessary when redirecting victims to a system other than the Inveigh Brute Force host.   
@@ -156,7 +159,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __Get-InveighNTLMv2__ - Get all or unique (-unique) captured NTLMv2 challenge/response hashes  
 * __Watch-Inveigh__ - Enable real time console output  
 * __Clear-Inveigh__ - Clear Inveigh data from memory  
-* __Stop-Inveigh__ - Stop all running Inveigh functions 
+* __Stop-Inveigh__ - Stop all running Inveigh functions  
 
 ## Miscellaneous Notes
 * The local LLMNR/NBNS services do not need to be disabled on the host system.   
