@@ -1506,17 +1506,17 @@ $sniffer_scriptblock =
 
                                 '42-4D'
                                 {
-                                $NBNS_query_type = '1C'
+                                    $NBNS_query_type = '1C'
                                 }
 
                                 '42-4E'
                                 {
-                                $NBNS_query_type = '1D'
+                                    $NBNS_query_type = '1D'
                                 }
 
                                 '42-4F'
                                 {
-                                $NBNS_query_type = '1E'
+                                    $NBNS_query_type = '1E'
                                 }
 
                             }

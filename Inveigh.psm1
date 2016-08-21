@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-Inveigh is a Windows PowerShell LLMNR/NBNS spoofer with challenge/response capture over HTTP(S)/SMB and NTLMv2 HTTP to SMB relay.
+Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool.
 
 .LINK
 https://github.com/Kevin-Robertson/Inveigh
 #>
 Import-Module $PWD\Scripts\Inveigh.ps1
-Import-Module $PWD\Scripts\Inveigh-BruteForce.ps1
+Import-Module $PWD\Scripts\Inveigh-Unprivileged.ps1
 Import-Module $PWD\Scripts\Inveigh-Relay.ps1
