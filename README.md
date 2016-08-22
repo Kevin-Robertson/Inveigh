@@ -72,28 +72,42 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __Inspect__ - (Switch) Disable LLMNR, NBNS, HTTP, HTTPS, and SMB in order to only inspect LLMNR/NBNS traffic.  
 * __Tool__ - Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Metasploit's Interactive Powershell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire 
   
-### Invoke-InveighBruteForce
-* The remote (Hot Potato method)/unprivileged NBNS brute force spoofer function. This function can be used to perform NBNS spoofing across subnets and/or perform NBNS spoofing without an elevated administrator or SYSTEM shell.
+### Invoke-InveighUnprivileged
+* Inveigh LLMNR/NBNS spoofer function that does not require local administrator access.  
 
 ##### Privilege Requirements:
 * Regular User
   
 ##### Features: 
+* IPv4 NBNS spoofer with granular control that can be run with or without disabling the local NBNS service  
+* IPv4 LLMNR spoofer with granular control that can be run only with the local LLMNR service disabled  
 * Targeted IPv4 NBNS brute force spoofer with granular control  
 * NTLMv1/NTLMv2 challenge/response capture over HTTP  
+* Basic auth cleartext credential capture over HTTP  
+* WPAD server capable of hosting a basic or custom wpad.dat file  
+* HTTP server capable of hosting limited content  
 * Granular control of console and file output  
 * Run time control  
 
-##### Notes:
-* Microsoft released patches in June 2016 that will likely prevent some of this function's features from working.  
+##### Notes:  
+* Microsoft released patches in June 2016 that will likely prevent some of this function's brute force features from working the way they did before June.  
 
 ##### Parameters:
 * __SpooferIP__ - Specify an IP address for NBNS spoofing. This parameter is only necessary when redirecting victims to a system other than the Inveigh Brute Force host.   
 * __SpooferTarget__ - Specify an IP address to target for brute force NBNS spoofing.   
-* __Hostname__ - Default = WPAD: Specify a hostname for NBNS spoofing.  
+* __SpooferHostsReply__ - Default = All: Comma separated list of requested hostnames to respond to when spoofing with LLMNR and NBNS.  
+* __SpooferHostsIgnore__ - Default = All: Comma separated list of requested hostnames to ignore when spoofing with LLMNR and NBNS.  
+* __SpooferIPsReply__ - Default = All: Comma separated list of source IP addresses to respond to when spoofing with LLMNR and NBNS.  
+* __SpooferIPsIgnore__ - Default = All: Comma separated list of source IP addresses to ignore when spoofing with LLMNR and NBNS.  
+* __SpooferRepeat__ - Default = Enabled: (Y/N) Enable/Disable repeated LLMNR/NBNS spoofs to a victim system after one user challenge/response has been captured.  
+* __LLMNR__ - Default = Enabled: (Y/N) Enable/Disable LLMNR spoofing.  
+* __LLMNRTTL__ - Default = 30 Seconds: Specify a custom LLMNR TTL in seconds for the response packet.  
 * __NBNS__ - Default = Disabled: (Y/N) Enable/Disable NBNS spoofing.  
-* __NBNSPause__ Default = Disabled: (Integer) Specify the number of seconds the NBNS brute force spoofer will stop spoofing after an incoming HTTP request is received.  
 * __NBNSTTL__ - Default = 165 Seconds: Specify a custom NBNS TTL in seconds for the response packet.  
+* __NBNSTypes__ - Default = 00,20: Comma separated list of NBNS types to spoof. Types include 00 = Workstation Service, 03 = Messenger Service, 20 = Server Service, 1B = Domain Name  
+* __NBNSBruteForce__ - Default = Disabled: (Y/N) Enable/Disable NBNS spoofing.  
+* __NBNSBruteForcePause__ Default = Disabled: (Integer) Specify the number of seconds the NBNS brute force spoofer will stop spoofing after an incoming HTTP request is received.   
+* __Hostname__ - Default = WPAD: Specify a hostname for NBNS spoofing.  
 * __HTTP__ - Default = Enabled: (Y/N) Enable/Disable HTTP challenge/response capture.  
 * __HTTPIP__ - Default = Any: Specify a TCP IP address for the HTTP listener.  
 * __HTTPPort__ - Default = 80: Specify a TCP port for the HTTP listener.  
@@ -107,8 +121,10 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __WPADResponse__ - Specify wpad.dat file contents to serve as the wpad.dat response. This parameter will not be used if WPADIP and WPADPort are set. Use PowerShell character escapes where necessary.   
 * __Challenge__ - Default = Random: Specify a 16 character hex NTLM challenge for use with the HTTP listener. If left blank, a random challenge will be generated for each request. This will only be used for non-relay captures.  
 * __MachineAccounts__ - Default = Disabled: (Y/N) Enable/Disable showing NTLM challenge/response captures from machine accounts.  
-* __ConsoleOutput__ - Default = Disabled: (Y/N) Enable/Disable real time console output. If using this option through a shell, test to ensure that it doesn't hang the shell.  
+* __ConsoleStatus__ - Default = Disabled: (Integer) Set interval in minutes for displaying all unique captured hashes and credentials. This is useful for displaying full capture lists when running through a shell that does not have access to the support functions.  
+* __ConsoleUnique__ - Default = Enabled: (Y/N) Enable/Disable displaying challenge/response hashes for only unique IP, domain/hostname, and username combinations when real time console output is enabled.    
 * __FileOutput__ - Default = Disabled: (Y/N) Enable/Disable real time file output.  
+* __FileUnique__ - Default = Enabled: (Y/N) Enable/Disable outputting challenge/response hashes for only unique IP, domain/hostname, and username combinations when real time file output is enabled.   
 * __StatusOutput__ - Default = Enabled: (Y/N) Enable/Disable startup and shutdown messages.  
 * __OutputStreamOnly__ - Default = Disabled: (Y/N) Enable/Disable forcing all output to the standard output stream. This can be helpful if running Inveigh Brute Force through a shell that does not return other output streams. Note that you will not see the various yellow warning messages if enabled.  
 * __OutputDir__ - Default = Working Directory: Set a valid path to an output directory for log and capture files. FileOutput must also be enabled.  
