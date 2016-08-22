@@ -1621,8 +1621,20 @@ $sniffer_scriptblock =
                 
                             $LLMNR_query = [System.BitConverter]::ToString($payload_bytes[13..($payload_bytes.Length - 4)])
                             $LLMNR_query = $LLMNR_query -replace "-00",""
-                            $LLMNR_query = $LLMNR_query.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
-                            $LLMNR_query_string = New-Object System.String($LLMNR_query,0,$LLMNR_query.Length)
+
+                            if($LLMNR_query.Length -eq 2)
+                            {
+                                $LLMNR_query = [Char][System.Convert]::ToInt16($LLMNR_query,16)
+                                $LLMNR_query_string = New-Object System.String($LLMNR_query)
+                            }
+                            else
+                            {
+                                $LLMNR_query = $LLMNR_query.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+                                $LLMNR_query_string = New-Object System.String($LLMNR_query,0,$LLMNR_query.Length)
+                            }
+
+                            
+                            $inveigh.console_queue.Add($LLMNR_query_string)
                 
                             if($LLMNR -eq 'Y')
                             {

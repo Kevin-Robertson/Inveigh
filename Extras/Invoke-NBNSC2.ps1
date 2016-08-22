@@ -93,15 +93,11 @@ while($running)
 
     if($NBNS_request_data)
     {
-        $NBNS_query_string_encoded = $([Text.Encoding]::UTF8.GetString($NBNS_request_data))
-        $NBNS_query_string_encoded = $NBNS_query_string_encoded.SubString(13,($NBNS_query_string_encoded.Length - 16))
-        $NBNS_query_string_encoded = $NBNS_query_string_encoded -replace "00",""
-
-        if($NBNS_query_string_encoded -like '*CA*')
-        {
-            $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))
-        }
-
+        $NBNS_query = [System.BitConverter]::ToString($NBNS_request_data[13..($NBNS_request_data.Length - 4)])
+        $NBNS_query = $NBNS_query -replace "-00",""
+        $NBNS_query = $NBNS_query.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+        $NBNS_query_string_encoded = New-Object System.String ($NBNS_query,0,$NBNS_query.Length)
+        $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))
         $NBNS_query_string_subtracted = ""
         $NBNS_query_string = ""
         $n = 0

