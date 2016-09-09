@@ -24,10 +24,13 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 ##### Parameters:
 * __IP__ - Specify a specific local IP address for listening. This IP address will also be used for LLMNR/NBNS spoofing if the 'SpooferIP' parameter is not set.  
 * __SpooferIP__ - Specify an IP address for LLMNR/NBNS spoofing. This parameter is only necessary when redirecting victims to a system other than the Inveigh host.    
-* __SpooferHostsReply__ - Default = All: Comma separated list of requested hostnames to respond to when spoofing with LLMNR and NBNS.  
+* __SpooferHostsReply__ - Default = All: Comma separated list of requested hostnames to respond to when spoofing with LLMNR and NBNS. Listed hostnames will override the whitelist created through SpooferLearning.  
 * __SpooferHostsIgnore__ - Default = All: Comma separated list of requested hostnames to ignore when spoofing with LLMNR and NBNS.  
 * __SpooferIPsReply__ - Default = All: Comma separated list of source IP addresses to respond to when spoofing with LLMNR and NBNS.  
 * __SpooferIPsIgnore__ - Default = All: Comma separated list of source IP addresses to ignore when spoofing with LLMNR and NBNS.  
+* __SpooferLearning__ - Default = Disabled: (Y/N) Enable/Disable LLMNR/NBNS valid host learning. If enabled, Inveigh will send out LLMNR/NBNS requests for any received LLMNR/NBNS requests. If a response is received, Inveigh will add the hostname to a spoofing blacklist.  
+* __SpooferLearningDelay__ - (Interger) Set the amount of time in minutes that Inveigh will delay spoofing while valid hosts are being blacklisted through SpooferLearning.  
+* __SpooferLearningInterval__ - Default = 30 Minutes: (Interger) Set the amount of time in minutes that Inveigh wait before sending out a LLMNR/NBNS request for a hostname that has already been checked if SpooferLearning is enabled.  
 * __SpooferRepeat__ - Default = Enabled: (Y/N) Enable/Disable repeated LLMNR/NBNS spoofs to a victim system after one user challenge/response has been captured.  
 * __LLMNR__ - Default = Enabled: (Y/N) Enable/Disable LLMNR spoofing.  
 * __LLMNRTTL__ - Default = 30 Seconds: Specify a custom LLMNR TTL in seconds for the response packet.  
@@ -115,6 +118,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __HTTPBasicRealm__ - Specify a realm name for Basic authentication. This parameter applies to both HTTPAuth and WPADAuth. Use PowerShell character escapes where necessary.  
 * __HTTPResponse__ - Specify a string or HTML to serve as the default HTTP/HTTPS response. This response will not be used for wpad.dat requests.  
 * __WPADAuth__ - Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type for wpad.dat requests. Setting to Anonymous can prevent browser login prompts.  
+* __WPADEmptyFile__ - Default = Enabled: (Y/N) Enable/Disable serving a proxyless, all direct, wpad.dat file for wpad.dat requests. Enabling this setting can reduce the amount of redundant wpad.dat requests. This parameter is ignored when using WPADIP, WPADPort, or WPADResponse.  
 * __WPADIP__ - Specify a proxy server IP to be included in a basic wpad.dat response for WPAD enabled browsers. This parameter must be used with WPADPort.  
 * __WPADPort__ - Specify a proxy server port to be included in a basic wpad.dat response for WPAD enabled browsers. This parameter must be used with WPADIP.  
 * __WPADDirectHosts__ - Comma separated list of hosts to list as direct in the wpad.dat file. Listed hosts will not be routed through the defined proxy.   
