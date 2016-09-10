@@ -39,7 +39,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __NBNSTypes__ - Default = 00,20: Comma separated list of NBNS types to spoof. Types include 00 = Workstation Service, 03 = Messenger Service, 20 = Server Service, 1B = Domain Name  
 * __HTTP__ - Default = Enabled: (Y/N) Enable/Disable HTTP challenge/response capture.  
 * __HTTPS__ - Default = Disabled: (Y/N) Enable/Disable HTTPS challenge/response capture. Warning, a cert will be installed in the local store and attached to port 443. If the function does not exit gracefully, execute "netsh http delete sslcert ipport=0.0.0.0:443" and manually remove the certificate from "Local Computer\Personal" in the cert store.  
-* __HTTPAuth__ - Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type. This setting does not apply to wpad.dat requests.  
+* __HTTPAuth__ - Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type. This setting does not apply to wpad.dat requests. Note that Microsoft has changed the behavior of WDAP through NBNS in the June 2016patches. A WPAD enabled browser may now trigger NTLM authentication after sending out NBNS requests to random hostnames and connecting to the root of the web server.   
 * __HTTPBasicRealm__ - Specify a realm name for Basic authentication. This parameter applies to both HTTPAuth and WPADAuth.  
 * __HTTPDir__ - Specify a full directory path to enable hosting of basic content through the HTTP/HTTPS listener.     
 * __HTTPDefaultFile__ - Specify a filename within the HTTPDir to serve as the default HTTP/HTTPS response file. This file will not be used for wpad.dat requests.  
@@ -114,7 +114,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __HTTP__ - Default = Enabled: (Y/N) Enable/Disable HTTP challenge/response capture.  
 * __HTTPIP__ - Default = Any: Specify a TCP IP address for the HTTP listener.  
 * __HTTPPort__ - Default = 80: Specify a TCP port for the HTTP listener.  
-* __HTTPAuth__ - Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type. This setting does not apply to wpad.dat requests.  
+* __HTTPAuth__ - Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type. This setting does not apply to wpad.dat requests. Note that Microsoft has changed the behavior of WDAP through NBNS in the June 2016patches. A WPAD enabled browser may now trigger NTLM authentication after sending out NBNS requests to random hostnames and connecting to the root of the web server.  
 * __HTTPBasicRealm__ - Specify a realm name for Basic authentication. This parameter applies to both HTTPAuth and WPADAuth. Use PowerShell character escapes where necessary.  
 * __HTTPResponse__ - Specify a string or HTML to serve as the default HTTP/HTTPS response. This response will not be used for wpad.dat requests.  
 * __WPADAuth__ - Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type for wpad.dat requests. Setting to Anonymous can prevent browser login prompts.  

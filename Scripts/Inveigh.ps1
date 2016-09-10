@@ -79,7 +79,9 @@ in the cert store.
 
 .PARAMETER HTTPAuth
 Default = NTLM: (Anonymous,Basic,NTLM) Specify the HTTP/HTTPS server authentication type. This setting does not
-apply to wpad.dat requests.
+apply to wpad.dat requests. Note that Microsoft has changed the behavior of WDAP through NBNS in the June 2016
+patches. A WPAD enabled browser may now trigger NTLM authentication after sending out NBNS requests to random
+hostnames and connecting to the root of the web server.
 
 .PARAMETER HTTPBasicRealm
 Specify a realm name for Basic authentication. This parameter applies to both HTTPAuth and WPADAuth.
@@ -1481,7 +1483,7 @@ $sniffer_scriptblock =
                 
             17 
             {  # UDP
-                $source_port =  $binary_reader.ReadBytes(2)
+                $source_port = $binary_reader.ReadBytes(2)
                 $endpoint_source_port = DataToUInt16 ($source_port)
                 $destination_port = DataToUInt16 $binary_reader.ReadBytes(2)
                 $UDP_length = $binary_reader.ReadBytes(2)
@@ -1490,7 +1492,7 @@ $sniffer_scriptblock =
                 $payload_bytes = $binary_reader.ReadBytes(($UDP_length_uint - 2) * 4)
 
                 # Incoming packets 
-                switch ($destination_port)
+                switch($destination_port)
                 {
 
                     137 # NBNS
@@ -1611,8 +1613,9 @@ $sniffer_scriptblock =
 
                                     if($NBNS_learning_send)
                                     {
-                                        $NBNS_transaction_ID_bytes = [String](1..2 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
-                                        $NBNS_transaction_ID_bytes = $NBNS_transaction_ID_bytes.Split(" ") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+                                        $NBNS_transaction_ID = [String](1..2 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
+                                        $NBNS_transaction_ID_bytes = $NBNS_transaction_ID.Split(" ") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+                                        $NBNS_transaction_ID = $NBNS_transaction_ID -replace " ","-"
                                         $NBNS_UDP_client = new-Object System.Net.Sockets.UdpClient 137
                                         $NBNS_hostname_bytes = $payload_bytes[13..($payload_bytes.Length - 5)]
 
@@ -1625,7 +1628,7 @@ $sniffer_scriptblock =
                                         $NBNS_UDP_client.Connect($NBNS_learning_destination_endpoint)
                                         $NBNS_UDP_client.Send($NBNS_request_packet,$NBNS_request_packet.Length)
                                         $NBNS_UDP_client.Close()
-                                        $NBNS_learning_log.Add("$(Get-Date -format 's') $NBNS_query_string")
+                                        $NBNS_learning_log.Add("$(Get-Date -format 's') $NBNS_transaction_ID $NBNS_query_string")
                                         $inveigh.console_queue.Add("$(Get-Date -format 's') - NBNS request for $NBNS_query_string sent to " + $NBNS_learning_destination_endpoint.Address.IPAddressToString)
                                         $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - LLMNR request for $NBNS_query_string sent to " + $NBNS_learning_destination_endpoint.Address.IPAddressToString)])
                                     }
@@ -1711,7 +1714,7 @@ $sniffer_scriptblock =
                                 $inveigh.console_queue.Add("$(Get-Date -format 's') - NBNS request for $NBNS_query_string<$NBNS_query_type> received from $source_IP $NBNS_response_message")
                                 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - NBNS request for $NBNS_query_string<$NBNS_query_type> received from $source_IP $NBNS_response_message")])
                             }
-                            elseif($SpooferLearning -eq 'Y' -and [System.BitConverter]::ToString($payload_bytes[4..7]) -eq '00-00-00-01' -and [System.BitConverter]::ToString($NBNS_transaction_ID_bytes) -eq [System.BitConverter]::ToString($payload_bytes[0..1]))
+                            elseif($SpooferLearning -eq 'Y' -and [System.BitConverter]::ToString($payload_bytes[4..7]) -eq '00-00-00-01' -and $NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
                             {
                                 [Byte[]]$NBNS_response_IP_bytes = $payload_bytes[($payload_bytes.Length - 4)..($payload_bytes.Length)]
                                 $NBNS_response_IP = [System.Net.IPAddress]$NBNS_response_IP_bytes
@@ -1792,8 +1795,9 @@ $sniffer_scriptblock =
 
                                     if($LLMNR_learning_send)
                                     {
-                                        $LLMNR_transaction_ID_bytes = [String](1..2 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
-                                        $LLMNR_transaction_ID_bytes = $LLMNR_transaction_ID_bytes.Split(" ") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+                                        $LLMNR_transaction_ID = [String](1..2 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
+                                        $LLMNR_transaction_ID_bytes = $LLMNR_transaction_ID.Split(" ") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+                                        $LLMNR_transaction_ID = $LLMNR_transaction_ID -replace " ","-"
                                         $LLMNR_UDP_client = new-Object System.Net.Sockets.UdpClient
                                         $LLMNR_hostname_bytes = $payload_bytes[13..($payload_bytes.Length - 5)]
 
@@ -1808,7 +1812,7 @@ $sniffer_scriptblock =
                                         $LLMNR_UDP_client.Send($LLMNR_request_packet,$LLMNR_request_packet.Length)
                                         $LLMNR_UDP_client_port = ($LLMNR_UDP_client.Client.LocalEndPoint).Port
                                         $LLMNR_UDP_client.Close()
-                                        $LLMNR_learning_log.Add("$(Get-Date -format 's') $LLMNR_query_string")
+                                        $LLMNR_learning_log.Add("$(Get-Date -format 's') $LLMNR_transaction_ID $LLMNR_query_string")
                                         $inveigh.console_queue.Add("$(Get-Date -format 's') - LLMNR request for $LLMNR_query_string sent to 224.0.0.252")
                                         $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - LLMNR request for $LLMNR_query_string sent to 224.0.0.252")])
                                     }
@@ -1884,10 +1888,15 @@ $sniffer_scriptblock =
                         }
                     }
 
-                    $LLMNR_UDP_client_port # LLMNR Random Port
-                    {
+                }
 
-                        if($SpooferLearning -eq 'Y' -and [System.BitConverter]::ToString($LLMNR_transaction_ID_bytes) -eq [System.BitConverter]::ToString($payload_bytes[0..1]))
+                switch($endpoint_source_port)
+                {
+
+                    5355 # LLMNR Response
+                    {
+                    
+                        if($SpooferLearning -eq 'Y' -and $LLMNR_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
                         {
                             $LLMNR_query = [System.BitConverter]::ToString($payload_bytes[13..($payload_bytes[12] + 13)])
                             $LLMNR_query = $LLMNR_query -replace "-00",""

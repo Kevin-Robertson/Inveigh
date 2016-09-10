@@ -460,7 +460,7 @@ if($inveigh.status_output)
                     $inveigh.status_queue.RemoveAt(0)
                 }
                 
-                "Run Stop-Inveigh to stop Inveigh"
+                "Run Stop-Inveigh to stop Inveigh-Relay"
                 {
                     Write-Warning($inveigh.status_queue[0])
                     $inveigh.status_queue.RemoveAt(0)
