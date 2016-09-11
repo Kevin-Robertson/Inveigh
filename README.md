@@ -35,13 +35,6 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 ##### Privilege Requirements:
 * Elevated Administrator or SYSTEM
 
-## Miscellaneous Notes
-* The local LLMNR/NBNS services do not need to be disabled on the host system.   
-* LLMNR/NBNS spoofer will point victims to host system's SMB service, keep account lockout scenarios in mind.  
-* Kerberos should downgrade for SMB authentication due to spoofed hostnames not being valid in DNS.  
-* Ensure that any needed LMMNR,NBNS,SMB,HTTP,HTTPS ports are open within any local firewall on the host system.  
-* If you copy/paste challenge/response captures from the console window for password cracking, ensure that there are no extra carriage returns.
-
 ##### Features:
 * IPv4 LLMNR/NBNS spoofer with granular control     
 * NTLMv1/NTLMv2 challenge/response capture over HTTP/HTTPS/SMB  
@@ -56,7 +49,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * SMB challenge/response captures are performed by sniffing over the host system's SMB service.  
 * The local LLMNR/NBNS services do not need to be disabled on the host system.   
 * LLMNR/NBNS spoofer will point victims to host system's SMB service, keep account lockout scenarios in mind.  
-* Ensure that any needed LMMNR,NBNS,SMB,HTTP,HTTPS ports are open within any local firewall on the host system.  
+* Ensure that any needed LMMNR, NBNS, SMB, HTTP, HTTPS ports are open within any local firewall on the host system.  
 * If you copy/paste challenge/response captures from the console window for password cracking, ensure that there are no extra carriage returns.  
 
 ##### Examples:
@@ -139,7 +132,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 
 ##### Notes:  
 * The local NBNS service does not need to be disabled on the host system.   
-* Ensure that any needed LMMNR,NBNS,HTTP ports are open within any local firewall on the host system.  
+* Ensure that any needed LMMNR, NBNS, HTTP ports are open within any local firewall on the host system.  
 * If you copy/paste challenge/response captures from the console window for password cracking, ensure that there are no extra carriage returns.
 * Microsoft released patches in June 2016 that will likely prevent some of this function's brute force features from working the way they did before June.  
 
@@ -241,7 +234,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __Tool__ - Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Metasploit's Interactive Powershell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire   
 
 ##### Notes:  
-* Ensure that any needed HTTP,HTTPS ports are open within any local firewall on the host system.  
+* Ensure that any needed HTTP, HTTPS ports are open within any local firewall on the host system.  
 * If you copy/paste challenge/response captures from the console window for password cracking, ensure that there are no extra carriage returns.
 
 ### Support Functions
