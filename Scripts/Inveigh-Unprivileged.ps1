@@ -227,7 +227,7 @@ param
     [parameter(Mandatory=$false)][String]$HTTPBasicRealm = "IIS",
     [parameter(Mandatory=$false)][String]$HTTPResponse = "",
     [parameter(Mandatory=$false)][String]$WPADResponse = "",   
-    [parameter(Mandatory=$false)][String]$NBNSBruteForceHost = "WPAD", 
+    [parameter(Mandatory=$false)][String]$NBNSBruteForceHost = "WPAD",
     [parameter(ValueFromRemainingArguments=$true)]$invalid_parameter
 )
 
@@ -236,9 +236,10 @@ if ($invalid_parameter)
     throw "$($invalid_parameter) is not a valid parameter."
 }
 
-if($NBNS -eq 'Y' -or $LLMNR -eq 'Y' -and $NBNSBruteForce -eq 'Y')
+if($NBNSBruteForce -eq 'Y')
 {
-    throw "You cannot use NBNSBruteForce with NBNS or LLMNR enabled"
+    $NBNS = 'N'
+    $LLMNR = 'N'
 }
 
 if($NBNSBruteForce -eq 'Y' -and !$NBNSBruteForceTarget)
@@ -474,8 +475,12 @@ else
 
 if($HTTP -eq 'Y')
 {
-
-    $HTTP_port_check = netstat -anp TCP | findstr 0.0.0.0:$HTTPPort
+    $HTTP_port_check += netstat -anp TCP | findstr 0.0.0.0:$HTTPPort
+    
+    if($HTTPIP)
+    {
+        $HTTP_port_check += netstat -anp TCP | findstr $HTTPIP`:$HTTPPort
+    }
 
     if($HTTP_port_check)
     {
