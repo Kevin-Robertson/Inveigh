@@ -1061,7 +1061,7 @@ $HTTP_scriptblock =
             $HTTP_timestamp = Get-Date -format r
             $HTTP_timestamp = [System.Text.Encoding]::UTF8.GetBytes($HTTP_timestamp)
 
-            if((($WPADIP -and $WPADPort) -or $WPADResponse -or $WPADEmptyFile -eq 'y') -and $HTTP_request_raw_URL -match '/wpad.dat')
+            if((($WPADIP -and $WPADPort) -or $WPADResponse -or $WPADEmptyFile -eq 'Y') -and $HTTP_request_raw_URL -match '/wpad.dat')
             {
                 $HTTP_message = $HTTP_WPAD_response
             }

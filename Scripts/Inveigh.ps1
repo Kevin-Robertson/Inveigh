@@ -1663,7 +1663,11 @@ $sniffer_scriptblock =
                                     else
                                     {
 
-                                        if($SpooferHostsReply -and $SpooferHostsReply -notcontains $NBNS_query_string)
+                                        if($source_IP -eq $IP -and $NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
+                                        {
+                                            $NBNS_request_ignore = $true
+                                        }
+                                        elseif($SpooferHostsReply -and $SpooferHostsReply -notcontains $NBNS_query_string)
                                         {
                                             $NBNS_response_message = "- $NBNS_query_string is not on reply list"
                                         }
@@ -1698,10 +1702,6 @@ $sniffer_scriptblock =
                                         elseif($source_IP -eq $IP -and !$NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
                                         {
                                             $NBNS_response_message = "- request is local"
-                                        }
-                                        elseif($source_IP -eq $IP -and $NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
-                                        {
-                                            $NBNS_request_ignore = $true
                                         }
                                         else
                                         {

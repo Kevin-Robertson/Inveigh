@@ -28,7 +28,15 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 ## System Requirements
 * Tested minimums are PowerShell 2.0 and .NET 3.5
 	
-## Functions
+## Functions  
+* Invoke-Inveigh  
+* Invoke-InveighUnprivileged  
+* Invoke-InveighRelay  
+* Clear-Inveigh  
+* Get-Inveigh  
+* Stop-Inveigh  
+* Watch-Inveigh  
+
 ### Invoke-Inveigh
 * The main Inveigh LLMNR/NBNS spoofer function.
 
@@ -72,7 +80,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __SpooferHostsIgnore__ - Default = All: Comma separated list of requested hostnames to ignore when spoofing with LLMNR and NBNS.  
 * __SpooferIPsReply__ - Default = All: Comma separated list of source IP addresses to respond to when spoofing with LLMNR and NBNS.  
 * __SpooferIPsIgnore__ - Default = All: Comma separated list of source IP addresses to ignore when spoofing with LLMNR and NBNS.  
-* __SpooferLearning__ - Default = Disabled: (Y/N) Enable/Disable LLMNR/NBNS valid host learning. If enabled, Inveigh will send out LLMNR/NBNS requests for any received LLMNR/NBNS requests. If a response is received, Inveigh will add the hostname to a spoofing blacklist.  
+* __SpooferLearning__ - Default = Disabled: (Y/N) Enable/Disable LLMNR/NBNS valid host learning. If enabled, Inveigh will send out LLMNR/NBNS requests for any received LLMNR/NBNS requests. If a response is received, Inveigh will add the hostname to a spoofing blacklist. The valid system must respond to the protocol type that matches the protocol of the original request in order to be blacklisted.  
 * __SpooferLearningDelay__ - (Interger) Time in minutes that Inveigh will delay spoofing while valid hosts are being blacklisted through SpooferLearning.  
 * __SpooferLearningInterval__ - Default = 30 Minutes: (Interger) Time in minutes that Inveigh wait before sending out a LLMNR/NBNS request for a hostname that has already been checked if SpooferLearning is enabled.  
 * __SpooferRepeat__ - Default = Enabled: (Y/N) Enable/Disable repeated LLMNR/NBNS spoofs to a victim system after one user challenge/response has been captured.  
@@ -133,6 +141,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 ##### Notes:  
 * The local NBNS service does not need to be disabled on the host system.   
 * Ensure that any needed LMMNR, NBNS, HTTP ports are open within any local firewall on the host system.  
+* Migrating/injecting into a process that has already been allowed incoming/outgoing firewall access should also work.  
 * If you copy/paste challenge/response captures from the console window for password cracking, ensure that there are no extra carriage returns.
 * Microsoft released patches in June 2016 that will likely prevent some of this function's brute force features from working the way they did before June.  
 
