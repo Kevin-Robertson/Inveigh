@@ -82,7 +82,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __SpooferIPsIgnore__ - Default = All: Comma separated list of source IP addresses to ignore when spoofing with LLMNR and NBNS.  
 * __SpooferLearning__ - Default = Disabled: (Y/N) Enable/Disable LLMNR/NBNS valid host learning. If enabled, Inveigh will send out LLMNR/NBNS requests for any received LLMNR/NBNS requests. If a response is received, Inveigh will add the hostname to a spoofing blacklist. The valid system must respond to the protocol type that matches the protocol of the original request in order to be blacklisted.  
 * __SpooferLearningDelay__ - (Interger) Time in minutes that Inveigh will delay spoofing while valid hosts are being blacklisted through SpooferLearning.  
-* __SpooferLearningInterval__ - Default = 30 Minutes: (Interger) Time in minutes that Inveigh wait before sending out a LLMNR/NBNS request for a hostname that has already been checked if SpooferLearning is enabled.  
+* __SpooferLearningInterval__ - Default = 30 Minutes: (Interger) Time in minutes that Inveigh wait before sending out an LLMNR/NBNS request for a hostname that has already been checked if SpooferLearning is enabled.  
 * __SpooferRepeat__ - Default = Enabled: (Y/N) Enable/Disable repeated LLMNR/NBNS spoofs to a victim system after one user challenge/response has been captured.  
 * __LLMNR__ - Default = Enabled: (Y/N) Enable/Disable LLMNR spoofer.  
 * __LLMNRTTL__ - Default = 30 Seconds: LLMNR TTL in seconds for the response packet.  

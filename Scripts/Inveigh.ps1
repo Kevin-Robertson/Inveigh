@@ -45,7 +45,7 @@ hostname to a spoofing blacklist.
 SpooferLearning.
 
 .PARAMETER SpooferLearningInterval
-Default = 30 Minutes: (Interger) Time in minutes that Inveigh wait before sending out a LLMNR/NBNS request for a
+Default = 30 Minutes: (Interger) Time in minutes that Inveigh wait before sending out an LLMNR/NBNS request for a
 hostname that has already been checked if SpooferLearning is enabled.   
 
 .PARAMETER SpooferRepeat
@@ -1499,7 +1499,7 @@ $sniffer_scriptblock =
                     137 # NBNS
                     {
                      
-                        if([System.BitConverter]::ToString($payload_bytes[4..7]) -eq '00-01-00-00' -or [System.BitConverter]::ToString($payload_bytes[4..7]) -eq '00-00-00-01')
+                        if(([System.BitConverter]::ToString($payload_bytes[4..7]) -eq '00-01-00-00' -or [System.BitConverter]::ToString($payload_bytes[4..7]) -eq '00-00-00-01') -and [System.BitConverter]::ToString($payload_bytes[10..11]) -ne '00-01')
                         {
                             $UDP_length[0] += 12
                         
@@ -1635,85 +1635,81 @@ $sniffer_scriptblock =
                                     }
 
                                 }
-
-                                if($NBNSTypes -contains $NBNS_query_type)
-                                {
                                  
-                                    if(($inveigh.valid_host_list -notcontains $NBNS_query_string -or $SpooferHostsReply -contains $NBNS_query_string) -and (!$SpooferHostsReply -or $SpooferHostsReply -contains $NBNS_query_string) -and (
-                                    !$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $NBNS_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (
-                                    !$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and ($inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP.IPAddressToString) -and ($NBNS_query_string.Trim() -ne '*') -and (
-                                    $SpooferLearning -eq 'N' -or ($SpooferLearning -eq 'Y' -and !$SpooferLearningDelay) -or ($SpooferLearningDelay -and $spoofer_learning_stopwatch.Elapsed -ge $spoofer_learning_delay)) -and ($source_IP -ne $IP))
-                                    {
+                                if(($inveigh.valid_host_list -notcontains $NBNS_query_string -or $SpooferHostsReply -contains $NBNS_query_string) -and (!$SpooferHostsReply -or $SpooferHostsReply -contains $NBNS_query_string) -and (
+                                !$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $NBNS_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (
+                                !$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and ($inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP.IPAddressToString) -and ($NBNS_query_string.Trim() -ne '*') -and (
+                                $SpooferLearning -eq 'N' -or ($SpooferLearning -eq 'Y' -and !$SpooferLearningDelay) -or ($SpooferLearningDelay -and $spoofer_learning_stopwatch.Elapsed -ge $spoofer_learning_delay)) -and ($source_IP -ne $IP) -and (
+                                $NBNSTypes -contains $NBNS_query_type))
+                                {
 
-                                        if($SpooferLearning -eq 'N' -or !$NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
-                                        {
-                                            $NBNS_send_socket = New-Object Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork,[System.Net.Sockets.SocketType]::Raw,[System.Net.Sockets.ProtocolType]::Udp)
-                                            $NBNS_send_socket.SendBufferSize = 1024
-                                            $NBNS_destination_point = New-Object Net.IPEndpoint($source_IP,$endpoint_source_port)
-                                            $NBNS_send_socket.SendTo($NBNS_response_packet,$NBNS_destination_point)
-                                            $NBNS_send_socket.Close()
-                                            $NBNS_response_message = "- response sent"
-                                        }
-                                        else
-                                        {
-                                            $NBNS_request_ignore = $true
-                                        }
-                                    
+                                    if($SpooferLearning -eq 'N' -or !$NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
+                                    {
+                                        $NBNS_send_socket = New-Object Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork,[System.Net.Sockets.SocketType]::Raw,[System.Net.Sockets.ProtocolType]::Udp)
+                                        $NBNS_send_socket.SendBufferSize = 1024
+                                        $NBNS_destination_point = New-Object Net.IPEndpoint($source_IP,$endpoint_source_port)
+                                        $NBNS_send_socket.SendTo($NBNS_response_packet,$NBNS_destination_point)
+                                        $NBNS_send_socket.Close()
+                                        $NBNS_response_message = "- response sent"
                                     }
                                     else
                                     {
-
-                                        if($source_IP -eq $IP -and $NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
-                                        {
-                                            $NBNS_request_ignore = $true
-                                        }
-                                        elseif($SpooferHostsReply -and $SpooferHostsReply -notcontains $NBNS_query_string)
-                                        {
-                                            $NBNS_response_message = "- $NBNS_query_string is not on reply list"
-                                        }
-                                        elseif($SpooferHostsIgnore -and $SpooferHostsIgnore -contains $NBNS_query_string)
-                                        {
-                                            $NBNS_response_message = "- $NBNS_query_string is on ignore list"
-                                        }
-                                        elseif($SpooferIPsReply -and $SpooferIPsReply -notcontains $source_IP)
-                                        {
-                                            $NBNS_response_message = "- $source_IP is not on reply list"
-                                        }
-                                        elseif($SpooferIPsIgnore -and $SpooferIPsIgnore -contains $source_IP)
-                                        {
-                                            $NBNS_response_message = "- $source_IP is on ignore list"
-                                        }
-                                        elseif($NBNS_query_string.Trim() -eq '*')
-                                        {
-                                            $NBNS_response_message = "- NBSTAT request"
-                                        }
-                                        elseif($inveigh.valid_host_list -contains $NBNS_query_string)
-                                        {
-                                            $NBNS_response_message = "- $NBNS_query_string is a valid host"
-                                        }
-                                        elseif($inveigh.IP_capture_list -contains $source_IP.IPAddressToString)
-                                        {
-                                            $NBNS_response_message = "- previous capture from $source_IP"
-                                        }
-                                        elseif($SpooferLearningDelay -and $spoofer_learning_stopwatch.Elapsed -lt $spoofer_learning_delay)
-                                        {
-                                            $NBNS_response_message = "- " + [Int]($SpooferLearningDelay - $spoofer_learning_stopwatch.Elapsed.TotalMinutes) + " minute(s) until spoofing starts"
-                                        }
-                                        elseif($source_IP -eq $IP -and !$NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
-                                        {
-                                            $NBNS_response_message = "- request is local"
-                                        }
-                                        else
-                                        {
-                                            $NBNS_response_message = "- something went wrong"
-                                        }
-                                    
+                                        $NBNS_request_ignore = $true
                                     }
-
+                                    
                                 }
                                 else
                                 {
-                                    $NBNS_response_message = "- disabled NBNS type"
+
+                                    if($source_IP -eq $IP -and $NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
+                                    {
+                                        $NBNS_request_ignore = $true
+                                    }
+                                    elseif($NBNSTypes -notcontains $NBNS_query_type)
+                                    {
+                                        $NBNS_response_message = "- disabled NBNS type"
+                                    }
+                                    elseif($SpooferHostsReply -and $SpooferHostsReply -notcontains $NBNS_query_string)
+                                    {
+                                        $NBNS_response_message = "- $NBNS_query_string is not on reply list"
+                                    }
+                                    elseif($SpooferHostsIgnore -and $SpooferHostsIgnore -contains $NBNS_query_string)
+                                    {
+                                        $NBNS_response_message = "- $NBNS_query_string is on ignore list"
+                                    }
+                                    elseif($SpooferIPsReply -and $SpooferIPsReply -notcontains $source_IP)
+                                    {
+                                        $NBNS_response_message = "- $source_IP is not on reply list"
+                                    }
+                                    elseif($SpooferIPsIgnore -and $SpooferIPsIgnore -contains $source_IP)
+                                    {
+                                        $NBNS_response_message = "- $source_IP is on ignore list"
+                                    }
+                                    elseif($NBNS_query_string.Trim() -eq '*')
+                                    {
+                                        $NBNS_response_message = "- NBSTAT request"
+                                    }
+                                    elseif($inveigh.valid_host_list -contains $NBNS_query_string)
+                                    {
+                                        $NBNS_response_message = "- $NBNS_query_string is a valid host"
+                                    }
+                                    elseif($inveigh.IP_capture_list -contains $source_IP.IPAddressToString)
+                                    {
+                                        $NBNS_response_message = "- previous capture from $source_IP"
+                                    }
+                                    elseif($SpooferLearningDelay -and $spoofer_learning_stopwatch.Elapsed -lt $spoofer_learning_delay)
+                                    {
+                                        $NBNS_response_message = "- " + [Int]($SpooferLearningDelay - $spoofer_learning_stopwatch.Elapsed.TotalMinutes) + " minute(s) until spoofing starts"
+                                    }
+                                    elseif($source_IP -eq $IP -and !$NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
+                                    {
+                                        $NBNS_response_message = "- request is local"
+                                    }
+                                    else
+                                    {
+                                        $NBNS_response_message = "- something went wrong"
+                                    }
+
                                 }
 
                             }
