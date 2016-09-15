@@ -1775,7 +1775,7 @@ $sniffer_scriptblock =
                             if($LLMNR -eq 'Y')
                             {
 
-                                if($SpooferLearning -eq 'Y' -and $inveigh.valid_host_list -contains $LLMNR_query_string -and $source_IP -ne $IP)
+                                if($SpooferLearning -eq 'Y' -and $inveigh.valid_host_list -notcontains $LLMNR_query_string -and $source_IP -ne $IP)
                                 {
 
                                     if(($LLMNR_learning_log.Exists({param($s) $s -like "20* $LLMNR_query_string"})))
