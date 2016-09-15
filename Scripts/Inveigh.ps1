@@ -41,11 +41,11 @@ LLMNR/NBNS requests for any received LLMNR/NBNS requests. If a response is recei
 hostname to a spoofing blacklist.
 
 .PARAMETER SpooferLearningDelay
-(Interger) Time in minutes that Inveigh will delay spoofing while valid hosts are being blacklisted through
+(Integer) Time in minutes that Inveigh will delay spoofing while valid hosts are being blacklisted through
 SpooferLearning.
 
 .PARAMETER SpooferLearningInterval
-Default = 30 Minutes: (Interger) Time in minutes that Inveigh wait before sending out an LLMNR/NBNS request for a
+Default = 30 Minutes: (Integer) Time in minutes that Inveigh wait before sending out an LLMNR/NBNS request for a
 hostname that has already been checked if SpooferLearning is enabled.   
 
 .PARAMETER SpooferRepeat

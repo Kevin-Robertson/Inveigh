@@ -81,8 +81,8 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __SpooferIPsReply__ - Default = All: Comma separated list of source IP addresses to respond to when spoofing with LLMNR and NBNS.  
 * __SpooferIPsIgnore__ - Default = All: Comma separated list of source IP addresses to ignore when spoofing with LLMNR and NBNS.  
 * __SpooferLearning__ - Default = Disabled: (Y/N) Enable/Disable LLMNR/NBNS valid host learning. If enabled, Inveigh will send out LLMNR/NBNS requests for any received LLMNR/NBNS requests. If a response is received, Inveigh will add the hostname to a spoofing blacklist. The valid system must respond to the protocol type that matches the protocol of the original request in order to be blacklisted.  
-* __SpooferLearningDelay__ - (Interger) Time in minutes that Inveigh will delay spoofing while valid hosts are being blacklisted through SpooferLearning.  
-* __SpooferLearningInterval__ - Default = 30 Minutes: (Interger) Time in minutes that Inveigh wait before sending out an LLMNR/NBNS request for a hostname that has already been checked if SpooferLearning is enabled.  
+* __SpooferLearningDelay__ - (Integer) Time in minutes that Inveigh will delay spoofing while valid hosts are being blacklisted through SpooferLearning.  
+* __SpooferLearningInterval__ - Default = 30 Minutes: (Integer) Time in minutes that Inveigh wait before sending out an LLMNR/NBNS request for a hostname that has already been checked if SpooferLearning is enabled.  
 * __SpooferRepeat__ - Default = Enabled: (Y/N) Enable/Disable repeated LLMNR/NBNS spoofs to a victim system after one user challenge/response has been captured.  
 * __LLMNR__ - Default = Enabled: (Y/N) Enable/Disable LLMNR spoofer.  
 * __LLMNRTTL__ - Default = 30 Seconds: LLMNR TTL in seconds for the response packet.  
@@ -119,7 +119,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __ShowHelp__ - Default = Enabled: (Y/N) Enable/Disable the help messages at startup.  
 * __RunTime__ - Default = Unlimited: (Integer) Run time duration in minutes.  
 * __Inspect__ - (Switch) Disable LLMNR, NBNS, HTTP, HTTPS, and SMB in order to only inspect LLMNR/NBNS traffic.  
-* __Tool__ - Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Metasploit's Interactive Powershell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire 
+* __Tool__ - Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Metasploit's Interactive PowerShell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire 
   
 ### Invoke-InveighUnprivileged
 * Inveigh LLMNR/NBNS spoofer function that does not require local administrator access.  
@@ -195,7 +195,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __ShowHelp__ - Default = Enabled: (Y/N) Enable/Disable the help messages at startup. 
 * __RunCount__ - Default = Unlimited: (Integer) Number of captures to perform before auto-exiting.  
 * __RunTime__ - Default = Unlimited: (Integer) Run time duration in minutes.  
-* __Tool__ - Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Metasploit's Interactive Powershell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire
+* __Tool__ - Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Metasploit's Interactive PowerShell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire
   
 ### Invoke-InveighRelay
 * The NTLMv2 HTTP/HTTPS to SMB relay command execution function. This function can be used with or without Invoke-Inveigh.
@@ -240,7 +240,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 * __OutputDir__ - Default = Working Directory: Valid path to an output directory for log and capture files. FileOutput must also be enabled.  
 * __ShowHelp__ - Default = Enabled: (Y/N) Enable/Disable the help messages at startup.  
 * __RunTime__ - Default = Unlimited: (Integer) Run time duration in minutes.  
-* __Tool__ - Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Metasploit's Interactive Powershell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire   
+* __Tool__ - Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Metasploit's Interactive PowerShell Sessions and Empire. 0 = None, 1 = Metasploit, 2 = Empire   
 
 ##### Notes:  
 * Ensure that any needed HTTP, HTTPS ports are open within any local firewall on the host system.  
