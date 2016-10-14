@@ -8,7 +8,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 
 ## Special Thanks  
 * Anyone that posted .NET packet sniffing examples.  
-* Responder - https://github.com/SpiderLabs/Responder  
+* Responder - https://github.com/lgandx/Responder  
 * Impacket - https://github.com/CoreSecurity/impacket  
 
 ## Import  
