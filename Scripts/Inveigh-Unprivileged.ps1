@@ -802,6 +802,7 @@ $HTTP_scriptblock =
         $HTTP_endpoint = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::any,$HTTPPort)
     }
 
+    $HTTP_running = $true
     $HTTP_listener = New-Object System.Net.Sockets.TcpListener $HTTP_endpoint
     
     try
@@ -812,7 +813,7 @@ $HTTP_scriptblock =
     {
         $inveigh.console_queue.Add("$(Get-Date -format 's') - Error starting HTTP listener")
         $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Error starting HTTP listener")])
-        break HTTP_listener_loop
+        $HTTP_running = $false
     }
 
     $HTTP_WWW_authenticate_header = 0x57,0x57,0x57,0x2d,0x41,0x75,0x74,0x68,0x65,0x6e,0x74,0x69,0x63,0x61,0x74,0x65,0x3a,0x20 # WWW-Authenticate
@@ -850,7 +851,7 @@ $HTTP_scriptblock =
 
     $HTTP_client_close = $true
 
-    :HTTP_listener_loop while ($inveigh.unprivileged_running)
+    :HTTP_listener_loop while ($inveigh.unprivileged_running -and $HTTP_running)
     {
         $TCP_request = ""
         $TCP_request_bytes = New-Object System.Byte[] 1024
@@ -1227,26 +1228,28 @@ $LLMNR_spoofer_scriptblock =
 {
     param ($LLMNR_response_message,$SpooferIP,$SpooferHostsReply,$SpooferHostsIgnore,$SpooferIPsReply,$SpooferIPsIgnore,$LLMNRTTL)
 
+    $LLMNR_running = $true
     $LLMNR_listener_endpoint = New-object System.Net.IPEndPoint ([IPAddress]::Any,5355)
-    $LLMNR_UDP_client = New-Object System.Net.Sockets.UdpClient 5355
+
+    try
+    {
+        $LLMNR_UDP_client = New-Object System.Net.Sockets.UdpClient 5355
+    }
+    catch
+    {
+        $inveigh.console_queue.Add("$(Get-Date -format 's') - Error starting LLMNR spoofer")
+        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Error starting LLMNR spoofer")])
+        $LLMNR_running = $false
+    }
+
     $LLMNR_multicast_group = [IPAddress]"224.0.0.252"
     $LLMNR_UDP_client.JoinMulticastGroup($LLMNR_multicast_group)
     $LLMNR_UDP_client.Client.ReceiveTimeout = 5000
 
-    :LLMNR_spoofer_loop while($inveigh.unprivileged_running)
+    while($inveigh.unprivileged_running -and $LLMNR_running)
     {   
 
-        try
-        {
-            $LLMNR_request_data = $LLMNR_UDP_client.Receive([Ref]$LLMNR_listener_endpoint) # need to switch to async
-        }
-        catch
-        {
-            $inveigh.console_queue.Add("$(Get-Date -format 's') - Error starting LLMNR spoofer")
-            $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Error starting LLMNR spoofer")])
-            break LLMNR_spoofer_loop
-        }
-
+        $LLMNR_request_data = $LLMNR_UDP_client.Receive([Ref]$LLMNR_listener_endpoint) # need to switch to async
 
         if([System.BitConverter]::ToString($LLMNR_request_data[($LLMNR_request_data.Length - 4)..($LLMNR_request_data.Length - 3)]) -ne '00-1c') # ignore AAAA for now
         {
@@ -1326,11 +1329,23 @@ $NBNS_spoofer_scriptblock =
 {
     param ($NBNS_response_message,$SpooferIP,$NBNSTypes,$SpooferHostsReply,$SpooferHostsIgnore,$SpooferIPsReply,$SpooferIPsIgnore,$NBNSTTL)
 
+    $NBNS_running = $true
     $NBNS_listener_endpoint = New-Object System.Net.IPEndPoint ([IPAddress]::Broadcast,137)
-    $NBNS_UDP_client = New-Object System.Net.Sockets.UdpClient 137
+
+    try
+    {
+        $NBNS_UDP_client = New-Object System.Net.Sockets.UdpClient 137
+    }
+    catch
+    {
+        $inveigh.console_queue.Add("$(Get-Date -format 's') - Error starting NBNS spoofer")
+        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Error starting NBNS spoofer")])
+        $NBNS_running = $false
+    }
+
     $NBNS_UDP_client.Client.ReceiveTimeout = 5000
 
-    while($inveigh.unprivileged_running)
+    while($inveigh.unprivileged_running -and $NBNS_running)
     {
         
         $NBNS_request_data = $NBNS_UDP_client.Receive([Ref]$NBNS_listener_endpoint) # need to switch to async
