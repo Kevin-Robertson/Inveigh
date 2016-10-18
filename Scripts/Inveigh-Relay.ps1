@@ -80,6 +80,9 @@ enabled.
 .PARAMETER RunTime
 (Integer) Run time duration in minutes.
 
+.PARAMETER StartupChecks
+Default = Enabled: (Y/N) Enable/Disable checks for in use ports and running services on startup.
+
 .PARAMETER ShowHelp
 Default = Enabled: (Y/N) Enable/Disable the help messages at startup.
 
@@ -111,6 +114,7 @@ param
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$MachineAccounts = "N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$ShowHelp = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$SMBRelayAutoDisable = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$StartupChecks = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Anonymous","NTLM")][String]$WPADAuth = "NTLM",
     [parameter(Mandatory=$false)][ValidateSet("0","1","2")][String]$Tool = "0",
     [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$OutputDir = "",
@@ -242,7 +246,10 @@ else
 $inveigh.status_queue.Add("Inveigh Relay started at $(Get-Date -format 's')") > $null
 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh Relay started")]) > $null
 
-$firewall_status = netsh advfirewall show allprofiles state | Where-Object {$_ -match 'ON'}
+if($StartupChecks -eq 'Y')
+{
+    $firewall_status = netsh advfirewall show allprofiles state | Where-Object {$_ -match 'ON'}
+}
 
 if($firewall_status)
 {
@@ -260,7 +267,10 @@ if($firewall_status)
 if($HTTP -eq 'Y')
 {
 
-    $HTTP_port_check = netstat -anp TCP | findstr 0.0.0.0:80
+    if($StartupChecks -eq 'Y')
+    {
+        $HTTP_port_check = netstat -anp TCP | findstr LISTENING | findstr /C:":80 "
+    }
 
     if($HTTP_port_check)
     {
@@ -283,11 +293,14 @@ else
 if($HTTPS -eq 'Y')
 {
     
-    $HTTPS_port_check = netstat -anp TCP | findstr 0.0.0.0:443
+    if($StartupChecks -eq 'Y')
+    {
+        $HTTPS_port_check = netstat -anp TCP | findstr LISTENING | findstr /C:":443 "
+    }
 
     if($HTTPS_port_check)
     {
-        $inveigh.HTTP = $true
+        $inveigh.HTTPS = $false
         $inveigh.status_queue.Add("HTTPS Capture/Relay Disabled Due To In Use Port 443")  > $null
     }
     else

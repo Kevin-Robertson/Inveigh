@@ -178,6 +178,9 @@ also be enabled.
 .PARAMETER RunTime
 (Integer) Run time duration in minutes.
 
+.PARAMETER StartupChecks
+Default = Enabled: (Y/N) Enable/Disable checks for in use ports and running services on startup.
+
 .PARAMETER ShowHelp
 Default = Enabled: (Y/N) Enable/Disable the help messages at startup.
 
@@ -254,6 +257,7 @@ param
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$MachineAccounts = "N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$ShowHelp = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$WPADEmptyFile = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$StartupChecks = "Y",
     [parameter(Mandatory=$false)][ValidateSet("0","1","2")][String]$Tool = "0",
     [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM")][String]$HTTPAuth = "NTLM",
     [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM")][String]$WPADAuth = "NTLM",
@@ -290,6 +294,11 @@ param
 if ($invalid_parameter)
 {
     throw "$($invalid_parameter) is not a valid parameter."
+}
+
+if($inveigh.HTTP -or $inveigh.HTTPS)
+{
+    throw "You must stop stop other Inveigh HTTP/HTTPS listeners before running this module."
 }
 
 if(!$IP)
@@ -438,11 +447,22 @@ else
 $inveigh.status_queue.Add("Inveigh started at $(Get-Date -format 's')")  > $null
 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh started")]) > $null
 
-$firewall_status = netsh advfirewall show allprofiles state | Where-Object {$_ -match 'ON'}
+if($StartupChecks -eq 'Y')
+{
+    $firewall_status = netsh advfirewall show allprofiles state | Where-Object {$_ -match 'ON'}
+}
 
 if($firewall_status)
 {
     $inveigh.status_queue.Add("Windows Firewall = Enabled")  > $null
+    $firewall_rules = New-Object -comObject HNetCfg.FwPolicy2
+    $firewall_powershell = $firewall_rules.rules | Where-Object {$_.Enabled -eq $true -and $_.Direction -eq 1} |Select-Object -Property Name | Select-String "Windows PowerShell}"
+
+    if($firewall_powershell)
+    {
+        $inveigh.status_queue.Add("Windows Firewall - PowerShell.exe = Allowed")  > $null
+    }
+
 }
 
 $inveigh.status_queue.Add("Listening IP Address = $IP")  > $null
@@ -551,8 +571,11 @@ else
 
 if($HTTP -eq 'Y')
 {
-
-    $HTTP_port_check = netstat -anp TCP | findstr 0.0.0.0:80
+    
+    if($StartupChecks -eq 'Y')
+    {
+        $HTTP_port_check = netstat -anp TCP | findstr LISTENING | findstr /C:":80 "
+    }
 
     if($HTTP_port_check)
     {
@@ -574,12 +597,15 @@ else
 
 if($HTTPS -eq 'Y')
 {
-
-    $HTTPS_port_check = netstat -anp TCP | findstr 0.0.0.0:443
+    
+    if($StartupChecks -eq 'Y')
+    {
+        $HTTPS_port_check = netstat -anp TCP | findstr LISTENING | findstr /C:":443 "
+    }
 
     if($HTTPS_port_check)
     {
-        $inveigh.HTTP = $true
+        $inveigh.HTTPS = $false
         $inveigh.status_queue.Add("HTTPS Capture Disabled Due To In Use Port 443")  > $null
     }
     else
