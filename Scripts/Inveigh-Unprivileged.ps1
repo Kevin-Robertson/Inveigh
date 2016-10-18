@@ -1330,20 +1330,10 @@ $NBNS_spoofer_scriptblock =
     $NBNS_UDP_client = New-Object System.Net.Sockets.UdpClient 137
     $NBNS_UDP_client.Client.ReceiveTimeout = 5000
 
-    :NBNS_spoofer_loop while($inveigh.unprivileged_running)
+    while($inveigh.unprivileged_running)
     {
         
-        try
-        {
-            $NBNS_request_data = $NBNS_UDP_client.Receive([Ref]$NBNS_listener_endpoint) # need to switch to async
-        }
-        catch
-        {
-            $inveigh.console_queue.Add("$(Get-Date -format 's') - Error starting NBNS spoofer")
-            $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Error starting NBNS spoofer")])
-            break NBNS_spoofer_loop
-        }
-
+        $NBNS_request_data = $NBNS_UDP_client.Receive([Ref]$NBNS_listener_endpoint) # need to switch to async
 
         if([System.BitConverter]::ToString($NBNS_request_data[10..11]) -ne '00-01')
         {
