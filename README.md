@@ -4,7 +4,10 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 ## Included In
 * PowerShell Empire - https://github.com/PowerShellEmpire/Empire  
 * PS>Attack - https://github.com/jaredhaight/psattack  
-* p0wnedShell - https://github.com/Cn33liz/p0wnedShell   
+* p0wnedShell - https://github.com/Cn33liz/p0wnedShell  
+* PowerUpSQL - https://github.com/NetSPI/PowerUpSQL  
+* PoshC2 - https://github.com/nettitude/PoshC2  
+* pupy - https://github.com/n1nj4sec/pupy  
 
 ## Special Thanks  
 * Anyone that posted .NET packet sniffing examples.  
