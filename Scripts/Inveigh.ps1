@@ -1840,7 +1840,7 @@ $sniffer_scriptblock =
                                     }
                                     elseif($source_IP -eq $IP -and !$NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
                                     {
-                                        $NBNS_response_message = "- request is local"
+                                        $NBNS_response_message = "- local request"
                                     }
                                     else
                                     {
@@ -2457,11 +2457,53 @@ if($inveigh)
             $inveigh.HTTP_listener.Stop()
             $inveigh.HTTP_listener.Close()
         }
+
+        if($inveigh.HTTPS)
+        {
+            $certificate_check = & "netsh" http show sslcert
+
+            if($certificate_check)
+            {
+                $netsh_ipport = "ipport=" + $inveigh.HTTPS_IP + ":" + $inveigh.HTTPS_port
+                $netsh_arguments = @("http","delete","sslcert",$netsh_ipport)
+                & "netsh" $netsh_arguments > $null
+            }
+
+            if(!$inveigh.HTTPS_existing_certificate -or ($inveigh.HTTPS_existing_certificate -and $inveigh.HTTPS_force_certificate_delete))
+            {
+
+                try
+                {
+                    $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
+                    $certificate_store.Open('ReadWrite')
+                    $certificates = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Issuer -Like "CN=" + $inveigh.certificate_issuer})
+
+                    ForEach($certificate in $certificates)
+                    {
+                        $certificate_store.Remove($certificate)
+                    }
+
+                    $certificate_store.Close()
+                }
+                catch
+                {
+                    Write-Output("SSL Certificate Deletion Error - Remove Manually")
+                    $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")  > $null
+
+                    if($inveigh.file_output)
+                    {
+                        "$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually" | Out-File $Inveigh.log_out_file -Append   
+                    }
+
+                }
+
+            }
+
+        }
             
         if($inveigh.unprivileged_running)
         {
             $inveigh.unprivileged_running = $false
-            Start-Sleep -S 2
             Write-Output("Inveigh Unprivileged exited at $(Get-Date -format 's')")
             $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Unprivileged exited")  > $null
 
@@ -2475,7 +2517,6 @@ if($inveigh)
         if($inveigh.relay_running)
         {
             $inveigh.relay_running = $false
-            Start-Sleep -S 2
             Write-Output("Inveigh Relay exited at $(Get-Date -format 's')")
             $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Relay exited")  > $null
 
@@ -2497,66 +2538,21 @@ if($inveigh)
                 "$(Get-Date -format 's') - Inveigh exited" | Out-File $Inveigh.log_out_file -Append
             }
 
-        } 
+        }
+
+        $inveigh.HTTP = $false
+        $inveigh.HTTPS = $false
+        Start-Sleep -S 5
 
     }
     else
     {
         Write-Output("There are no running Inveigh functions")
     }
-    
-    if($inveigh.HTTPS)
-    {
-        $certificate_check = & "netsh" http show sslcert
 
-        if($certificate_check)
-        {
-            $netsh_ipport = "ipport=" + $inveigh.HTTPS_IP + ":" + $inveigh.HTTPS_port
-            $netsh_arguments = @("http","delete","sslcert",$netsh_ipport)
-            & "netsh" $netsh_arguments > $null
-        }
-
-        if(!$inveigh.HTTPS_existing_certificate -or ($inveigh.HTTPS_existing_certificate -and $inveigh.HTTPS_force_certificate_delete))
-        {
-
-            try
-            {
-                $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
-                $certificate_store.Open('ReadWrite')
-                $certificates = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Issuer -Like "CN=" + $inveigh.certificate_issuer})
-
-                ForEach($certificate in $certificates)
-                {
-                    $certificate_store.Remove($certificate)
-                }
-
-                $certificate_store.Close()
-            }
-            catch
-            {
-                Write-Output("SSL Certificate Deletion Error - Remove Manually")
-                $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")  > $null
-
-                if($inveigh.file_output)
-                {
-                    "$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually" | Out-File $Inveigh.log_out_file -Append   
-                }
-
-            }
-
-        }
-
-    }
-
-    $inveigh.HTTP = $false
-    $inveigh.HTTPS = $false
-}
-else
-{
-    Write-Output("There are no running Inveigh functions")|Out-Null
 }
 
-}  
+}
 
 function Get-Inveigh
 {

@@ -1362,6 +1362,7 @@ $NBNS_spoofer_scriptblock =
     {
         
         $NBNS_request_data = $NBNS_UDP_client.Receive([Ref]$NBNS_listener_endpoint) # need to switch to async
+        $IP = (Test-Connection 127.0.0.1 -count 1 | Select-Object -ExpandProperty Ipv4Address)
 
         if([System.BitConverter]::ToString($NBNS_request_data[10..11]) -ne '00-01')
         {
@@ -1447,7 +1448,7 @@ $NBNS_spoofer_scriptblock =
                                  
             if (($NBNS_request_data -and $NBNS_listener_endpoint.Address.IPAddressToString -ne '255.255.255.255') -and (!$SpooferHostsReply -or $SpooferHostsReply -contains $NBNS_query_string) -and (
             !$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $NBNS_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (!$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and (
-            $inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP) -and ($NBNSTypes -contains $NBNS_query_type))
+            $inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP) -and ($NBNSTypes -contains $NBNS_query_type) -and ($source_IP -ne $IP))
             {
                 $NBNS_destination_endpoint = New-Object System.Net.IPEndpoint($NBNS_listener_endpoint.Address,137)
                 $NBNS_UDP_client.Connect($NBNS_destination_endpoint)
@@ -1483,6 +1484,10 @@ $NBNS_spoofer_scriptblock =
                 elseif($inveigh.IP_capture_list -contains $source_IP)
                 {
                     $NBNS_response_message = "- previous capture from $source_IP"
+                }
+                elseif($source_IP -eq $IP)
+                {
+                    $NBNS_response_message = "- local request"
                 }
                 else
                 {
@@ -2034,11 +2039,53 @@ if($inveigh)
             $inveigh.HTTP_listener.Stop()
             $inveigh.HTTP_listener.Close()
         }
+
+        if($inveigh.HTTPS)
+        {
+            $certificate_check = & "netsh" http show sslcert
+
+            if($certificate_check)
+            {
+                $netsh_ipport = "ipport=" + $inveigh.HTTPS_IP + ":" + $inveigh.HTTPS_port
+                $netsh_arguments = @("http","delete","sslcert",$netsh_ipport)
+                & "netsh" $netsh_arguments > $null
+            }
+
+            if(!$inveigh.HTTPS_existing_certificate -or ($inveigh.HTTPS_existing_certificate -and $inveigh.HTTPS_force_certificate_delete))
+            {
+
+                try
+                {
+                    $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
+                    $certificate_store.Open('ReadWrite')
+                    $certificates = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Issuer -Like "CN=" + $inveigh.certificate_issuer})
+
+                    ForEach($certificate in $certificates)
+                    {
+                        $certificate_store.Remove($certificate)
+                    }
+
+                    $certificate_store.Close()
+                }
+                catch
+                {
+                    Write-Output("SSL Certificate Deletion Error - Remove Manually")
+                    $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")  > $null
+
+                    if($inveigh.file_output)
+                    {
+                        "$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually" | Out-File $Inveigh.log_out_file -Append   
+                    }
+
+                }
+
+            }
+
+        }
             
         if($inveigh.unprivileged_running)
         {
             $inveigh.unprivileged_running = $false
-            Start-Sleep -S 2
             Write-Output("Inveigh Unprivileged exited at $(Get-Date -format 's')")
             $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Unprivileged exited")  > $null
 
@@ -2052,7 +2099,6 @@ if($inveigh)
         if($inveigh.relay_running)
         {
             $inveigh.relay_running = $false
-            Start-Sleep -S 2
             Write-Output("Inveigh Relay exited at $(Get-Date -format 's')")
             $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Relay exited")  > $null
 
@@ -2074,66 +2120,21 @@ if($inveigh)
                 "$(Get-Date -format 's') - Inveigh exited" | Out-File $Inveigh.log_out_file -Append
             }
 
-        } 
+        }
+
+        $inveigh.HTTP = $false
+        $inveigh.HTTPS = $false
+        Start-Sleep -S 5
 
     }
     else
     {
         Write-Output("There are no running Inveigh functions")
     }
-    
-    if($inveigh.HTTPS)
-    {
-        $certificate_check = & "netsh" http show sslcert
 
-        if($certificate_check)
-        {
-            $netsh_ipport = "ipport=" + $inveigh.HTTPS_IP + ":" + $inveigh.HTTPS_port
-            $netsh_arguments = @("http","delete","sslcert",$netsh_ipport)
-            & "netsh" $netsh_arguments > $null
-        }
-
-        if(!$inveigh.HTTPS_existing_certificate -or ($inveigh.HTTPS_existing_certificate -and $inveigh.HTTPS_force_certificate_delete))
-        {
-
-            try
-            {
-                $certificate_store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My","LocalMachine")
-                $certificate_store.Open('ReadWrite')
-                $certificates = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Issuer -Like "CN=" + $inveigh.certificate_issuer})
-
-                ForEach($certificate in $certificates)
-                {
-                    $certificate_store.Remove($certificate)
-                }
-
-                $certificate_store.Close()
-            }
-            catch
-            {
-                Write-Output("SSL Certificate Deletion Error - Remove Manually")
-                $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")  > $null
-
-                if($inveigh.file_output)
-                {
-                    "$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually" | Out-File $Inveigh.log_out_file -Append   
-                }
-
-            }
-
-        }
-
-    }
-
-    $inveigh.HTTP = $false
-    $inveigh.HTTPS = $false
-}
-else
-{
-    Write-Output("There are no running Inveigh functions")|Out-Null
 }
 
-} 
+}
 
 function Get-Inveigh
 {
