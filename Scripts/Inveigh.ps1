@@ -103,7 +103,7 @@ wpad.dat requests. NTLMNoESS turns off the 'Extended Session Security' flag duri
 Realm name for Basic authentication. This parameter applies to both HTTPAuth and WPADAuth.
 
 .PARAMETER HTTPContentType
-Default = none: Content type for HTTP/HTTPS responses. Does not apply to EXEs and wpad.dat. Set to "application/hta"
+Default = text/html: Content type for HTTP/HTTPS responses. Does not apply to EXEs and wpad.dat. Set to "application/hta"
 for HTA files or when using HTA code with HTTPResponse.
 
 .PARAMETER HTTPDir
@@ -195,7 +195,7 @@ challenge will be generated for each request.
 Default = Disabled: (Y/N) Enable/Disable showing NTLM challenge/response captures from machine accounts.
 
 .PARAMETER ConsoleOutput
-Default = Disabled: (Y/N) Enable/Disable real time console output. If using this option through a shell, test to
+Default = Disabled: (Low,Medium,Y,N) Enable/Disable real time console output. If using this option through a shell, test to
 ensure that it doesn't hang the shell. Medium and Low can be used to reduce output.
 
 .PARAMETER ConsoleStatus
@@ -535,6 +535,7 @@ if(!$elevated_privilege)
 
 }
 
+$inveigh.hostname_spoof = $false
 $inveigh.running = $true
 
 if($StatusOutput -eq 'Y')
@@ -945,6 +946,10 @@ if($HTTP -eq 'Y' -or $HTTPS -eq 'Y')
         {
             $proxy_WPAD_IP = $IP
         }
+        else
+        {
+            $proxy_WPAD_IP = $ProxyIP
+        }
 
         if($WPADIP -and $WPADPort)
         {
@@ -1330,7 +1335,7 @@ $SMB_NTLM_functions_scriptblock =
 # HTTP Server ScriptBlock - HTTP/HTTPS/Proxy listener
 $HTTP_scriptblock = 
 { 
-    param ($Challenge,$HTTPAuth,$HTTPBasicRealm,$HTTPContentType,$HTTPIP,$HTTPPort,$HTTPDefaultEXE,$HTTPDefaultFile,$HTTPDir,$HTTPResponse,$HTTPS_listener,$ProxyIgnore,$proxy_listener,$WPADAuth,$WPADResponse)
+    param ($Challenge,$HTTPAuth,$HTTPBasicRealm,$HTTPContentType,$HTTPIP,$HTTPPort,$HTTPDefaultEXE,$HTTPDefaultFile,$HTTPDir,$HTTPResponse,$HTTPS_listener,$NBNSBruteForcePause,$ProxyIgnore,$proxy_listener,$WPADAuth,$WPADResponse)
 
     function NTLMChallengeBase64
     {
@@ -1576,8 +1581,8 @@ $HTTP_scriptblock =
 
                     if($ProxyIgnore.Count -gt 0 -and ($ProxyIgnore | ForEach-Object{$HTTP_header_user_agent.contains($_)}))
                     {
-                        $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type ignoring wpad.dat request from $HTTP_source_IP")
-                        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type ignoring wpad.dat request from $HTTP_source_IP")])
+                        $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type ignoring wpad.dat request due to user agent from $HTTP_source_IP")
+                        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type ignoring wpad.dat request due to user agent from $HTTP_source_IP")])
                     }
 
                 }
@@ -3088,8 +3093,8 @@ function HTTPListener()
     $HTTP_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($HTTPAuth).AddArgument(
         $HTTPBasicRealm).AddArgument($HTTPContentType).AddArgument($HTTPIP).AddArgument($HTTPPort).AddArgument(
         $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDir).AddArgument(
-        $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
-        $proxy_listener).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
+        $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($NBNSBruteForcePause).AddArgument(
+        $ProxyIgnore).AddArgument($proxy_listener).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
     $HTTP_powershell.BeginInvoke() > $null
 }
 
@@ -3109,8 +3114,8 @@ function HTTPSListener()
     $HTTPS_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($HTTPAuth).AddArgument(
         $HTTPBasicRealm).AddArgument($HTTPContentType).AddArgument($HTTPIP).AddArgument($HTTPSPort).AddArgument(
         $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDir).AddArgument(
-        $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
-        $proxy_listener).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
+        $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($NBNSBruteForcePause).AddArgument(
+        $ProxyIgnore).AddArgument($proxy_listener).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
     $HTTPS_powershell.BeginInvoke() > $null
 }
 
@@ -3130,8 +3135,8 @@ function ProxyListener()
     $proxy_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($HTTPAuth).AddArgument(
         $HTTPBasicRealm).AddArgument($HTTPContentType).AddArgument($ProxyIP).AddArgument($ProxyPort).AddArgument(
         $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDir).AddArgument(
-        $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
-        $proxy_listener).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
+        $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($NBNSBruteForcePause).AddArgument(
+        $ProxyIgnore).AddArgument($proxy_listener).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
     $proxy_powershell.BeginInvoke() > $null
 }
 
@@ -3262,6 +3267,12 @@ elseif(($LLMNR -eq 'Y' -or $NBNS -eq 'Y' -or $SMB -eq 'Y') -and !$elevated_privi
 
 }
 
+# NBNSBruteForce Spoofer Start
+if($NBNSBruteForce -eq 'Y')
+{
+    NBNSBruteForceSpoofer
+}
+
 # Control Loop Start
 if($RunCount -or $RunTime -or $inveigh.file_output -or $NBNSBruteForcePause)
 {
@@ -3292,7 +3303,7 @@ if($inveigh.console_output)
                     $inveigh.console_queue.RemoveAt(0)
                 }
 
-                {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent *"}
+                {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
                 {
 
                     if($ConsoleOutput -eq 'Y')
@@ -3769,7 +3780,7 @@ if($inveigh.tool -ne 1)
                     $inveigh.console_queue.RemoveAt(0)
                 }
 
-                {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent *"}
+                {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
                 {
 
                     if($ConsoleOutput -eq 'Y')
