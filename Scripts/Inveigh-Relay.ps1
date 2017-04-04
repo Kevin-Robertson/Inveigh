@@ -23,8 +23,8 @@ pulled from the SMB relay target.
 Command to execute on SMB relay target. Use PowerShell character escapes where necessary.
 
 .PARAMETER ConsoleOutput
-Default = Disabled: (Low/Medium/Y/N) Enable/Disable real time console output. If using this option through a shell, test to
-ensure that it doesn't hang the shell. Medium and Low can be used to reduce output.
+Default = Disabled: (Low/Medium/Y/N) Enable/Disable real time console output. If using this option through a
+shell, test to ensure that it doesn't hang the shell. Medium and Low can be used to reduce output.
 
 .PARAMETER ConsoleQueueLimit
 Default = Unlimited: Maximum number of queued up console log entries when not using the real time console.
@@ -68,7 +68,8 @@ Default = Inveigh: The issuer field for the cert that will be installed for HTTP
 Default = localhost: The subject field for the cert that will be installed for HTTPS.
 
 .PARAMETER HTTPSForceCertDelete
-Default = Disabled: (Y/N) Force deletion of an existing certificate that matches HTTPSCertIssuer and HTTPSCertSubject.
+Default = Disabled: (Y/N) Force deletion of an existing certificate that matches HTTPSCertIssuer and
+HTTPSCertSubject.
 
 .PARAMETER LogOutput
 Default = Enabled: (Y/N) Enable/Disable storing log messages in memory.
@@ -4303,7 +4304,7 @@ if($inveigh.tool -ne 1)
                     $inveigh.console_queue.RemoveAt(0)
                 }
 
-                {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent *"}
+                {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
                 {
 
                     if($ConsoleOutput -eq 'Y')
