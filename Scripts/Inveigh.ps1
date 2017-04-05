@@ -1093,6 +1093,16 @@ if($HTTP -eq 'Y' -or $HTTPS -eq 'Y')
         $inveigh.status_queue.Add("WPAD Response = Enabled")  > $null
         $inveigh.status_queue.Add("WPAD = $WPADIP`:$WPADPort")  > $null
         
+        if($WPADDirectHosts)
+        {
+            ForEach($WPAD_direct_host in $WPADDirectHosts)
+            {
+                $WPAD_direct_hosts_function += 'if (dnsDomainIs(host, "' + $WPAD_direct_host + '")) return "DIRECT";'
+            }
+
+            $WPADResponse = "function FindProxyForURL(url,host){" + $WPAD_direct_hosts_function + "return `"PROXY " + $WPADIP + ":" + $WPADPort + "`";}"
+            $inveigh.status_queue.Add("WPAD Direct Hosts = " + ($WPADDirectHosts -join ","))  > $null
+        }
         else
         {
             $WPADResponse = "function FindProxyForURL(url,host){$WPAD_direct_hosts_function return `"PROXY $WPADIP`:$WPADPort; DIRECT`";}"
