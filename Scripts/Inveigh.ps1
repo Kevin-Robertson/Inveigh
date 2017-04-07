@@ -104,13 +104,13 @@ Default = Disabled: (Y/N) Force deletion of an existing certificate that matches
 HTTPSCertSubject.
 
 .PARAMETER Inspect
-(Switch) Inspect LLMNR an NBNS traffic only. With elevated privilege, SMB must be disabled with -smb if you do not
-want NTLMv1/NTLMv2 captures over SMB. Without elevated privilege, the desired inspect listeners must be enabled
-with -LLMNR and/or -NBNS.
+(Switch) Inspect LLMNR/mDNS/NBNS traffic only. With elevated privilege, SMB must be disabled with -smb if you do
+not want NTLMv1/NTLMv2 captures over SMB. Without elevated privilege, the desired inspect listeners must be
+enabled.
 
 .PARAMETER IP
-Local IP address for listening and packet sniffing. This IP address will also be used for LLMNR/NBNS spoofing if
-the SpooferIP parameter is not set.
+Local IP address for listening and packet sniffing. This IP address will also be used for LLMNR/mDNS/NBNS spoofing
+if the SpooferIP parameter is not set.
 
 .PARAMETER LogOutput
 Default = Enabled: (Y/N) Enable/Disable storing log messages in memory.
@@ -191,20 +191,20 @@ direct targets to the host system's SMB server. Block TCP ports 445/139 or kill 
 prevent login requests from being processed by the Inveigh host.  
 
 .PARAMETER SpooferHostsIgnore
-Default = All: Comma separated list of requested hostnames to ignore when spoofing with LLMNR and NBNS.
+Default = All: Comma separated list of requested hostnames to ignore when spoofing with LLMNR/mDNS/NBNS.
 
 .PARAMETER SpooferHostsReply
-Default = All: Comma separated list of requested hostnames to respond to when spoofing with LLMNR and NBNS.
+Default = All: Comma separated list of requested hostnames to respond to when spoofing with LLMNR/mDNS/NBNS.
 
 .PARAMETER SpooferIP
-IP address for LLMNR/NBNS spoofing. This parameter is only necessary when redirecting victims to a system other
-than the Inveigh host.
+IP address for LLMNR/mDNS/NBNS spoofing. This parameter is only necessary when redirecting victims to a system
+other than the Inveigh host.
 
 .PARAMETER SpooferIPsIgnore
-Default = All: Comma separated list of source IP addresses to ignore when spoofing with LLMNR and NBNS.
+Default = All: Comma separated list of source IP addresses to ignore when spoofing with LLMNR/mDNS/NBNS.
 
 .PARAMETER SpooferIPsReply
-Default = All: Comma separated list of source IP addresses to respond to when spoofing with LLMNR and NBNS.
+Default = All: Comma separated list of source IP addresses to respond to when spoofing with LLMNR/mDNS/NBNS.
 
 .PARAMETER SpooferLearning
 Default = Disabled: (Y/N) Enable/Disable LLMNR/NBNS valid host learning. If enabled, Inveigh will send out
@@ -289,7 +289,7 @@ Execute with the stealthiest options.
 
 .EXAMPLE
 Invoke-Inveigh -Inspect
-Execute with LLMNR, NBNS, SMB, HTTP, and HTTPS disabled in order to only inpect LLMNR/NBNS traffic.
+Execute in order to only inpect LLMNR/mDNS/NBNS traffic.
 
 .EXAMPLE
 Invoke-Inveigh -IP 192.168.1.10 -SpooferIP 192.168.2.50 -HTTP N
@@ -588,6 +588,7 @@ if($Inspect)
     if($elevated_privilege)
     {
         $LLMNR = "N"
+        $mDNS = "N"
         $NBNS = "N"
         $HTTP = "N"
         $HTTPS = "N"
@@ -615,7 +616,7 @@ elseif($Tool -eq 2) # PowerShell Empire
     $inveigh.tool = 2
     $inveigh.output_stream_only = $true
     $inveigh.console_input = $false
-    $inveigh.newline = "`n"
+    $inveigh.newline = "`n" # remove for Empire 2.0
     $LogOutput = "N"
     $ShowHelp = "N"
 
@@ -1230,19 +1231,29 @@ if($inveigh.status_output)
     while($inveigh.status_queue.Count -gt 0)
     {
 
-        switch -Wildcard ($inveigh.status_queue[0])
+        if($inveigh.output_stream_only)
+        {
+            Write-Output($inveigh.status_queue[0] + $inveigh.newline)
+            $inveigh.status_queue.RemoveAt(0)
+        }
+        else
         {
 
-            {$_ -like "* Disabled Due To *" -or $_ -like "Run Stop-Inveigh to stop Inveigh" -or $_ -like "Windows Firewall = Enabled"}
+            switch -Wildcard ($inveigh.status_queue[0])
             {
-                Write-Warning ($inveigh.status_queue[0] + $inveigh.newline)
-                $inveigh.status_queue.RemoveAt(0)
-            }
 
-            default
-            {
-                Write-Output ($inveigh.status_queue[0] + $inveigh.newline)
-                $inveigh.status_queue.RemoveAt(0)
+                {$_ -like "* Disabled Due To *" -or $_ -like "Run Stop-Inveigh to stop Inveigh" -or $_ -like "Windows Firewall = Enabled"}
+                {
+                    Write-Warning ($inveigh.status_queue[0])
+                    $inveigh.status_queue.RemoveAt(0)
+                }
+
+                default
+                {
+                    Write-Output ($inveigh.status_queue[0])
+                    $inveigh.status_queue.RemoveAt(0)
+                }
+
             }
 
         }
@@ -3696,21 +3707,24 @@ $control_scriptblock =
 
         }
         
-        Start-Sleep -S 1
-        $inveigh.console_queue.Add("Inveigh exited at $(Get-Date -format 's')")
-
-        if($inveigh.file_output)
+        if($inveigh.running)
         {
-            $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")
-        }
+            Start-Sleep -S 1
+            $inveigh.console_queue.Add("Inveigh exited at $(Get-Date -format 's')")
 
-        if($inveigh.log_output)
-        {
-            $inveigh.log.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")
-        }
+            if($inveigh.file_output)
+            {
+                $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")
+            }
 
-        Start-Sleep -S 1
-        $inveigh.running = $false
+            if($inveigh.log_output)
+            {
+                $inveigh.log.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")
+            }
+
+            Start-Sleep -S 1
+            $inveigh.running = $false
+        }
 
         if($inveigh.relay_running)
         {
@@ -4082,46 +4096,56 @@ if($inveigh.console_output)
         while($inveigh.console_queue.Count -gt 0)
         {
 
-            switch -wildcard ($inveigh.console_queue[0])
+            if($inveigh.output_stream_only)
+            {
+                Write-Output($inveigh.console_queue[0] + $inveigh.newline)
+                $inveigh.console_queue.RemoveAt(0)
+            }
+            else
             {
 
-                {$_ -like "* written to *" -or $_ -like "* for relay *" -or $_ -like "*SMB relay *" -or $_ -like "* local administrator *"}
-                {
-                    Write-Warning ($inveigh.console_queue[0] + $inveigh.newline)
-                    $inveigh.console_queue.RemoveAt(0)
-                }
-
-                {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
+                switch -wildcard ($inveigh.console_queue[0])
                 {
 
-                    if($ConsoleOutput -eq 'Y')
+                    {$_ -like "* written to *" -or $_ -like "* for relay *" -or $_ -like "*SMB relay *" -or $_ -like "* local administrator *"}
                     {
-                        Write-Output ($inveigh.console_queue[0] + $inveigh.newline)
+                        Write-Warning ($inveigh.console_queue[0])
+                        $inveigh.console_queue.RemoveAt(0)
                     }
 
-                    $inveigh.console_queue.RemoveAt(0)
+                    {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
+                    {
 
-                } 
+                        if($ConsoleOutput -eq 'Y')
+                        {
+                            Write-Output ($inveigh.console_queue[0])
+                        }
 
-                {$_ -like "* response sent" -or $_ -like "* ignoring *" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy request for *"}
-                {
+                        $inveigh.console_queue.RemoveAt(0)
+
+                    } 
+
+                    {$_ -like "* response sent" -or $_ -like "* ignoring *" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy request for *"}
+                    {
                     
-                    if($ConsoleOutput -ne "Low")
+                        if($ConsoleOutput -ne "Low")
+                        {
+                            Write-Output ($inveigh.console_queue[0])
+                        }
+
+                        $inveigh.console_queue.RemoveAt(0)
+
+                    } 
+
+                    default
                     {
-                        Write-Output ($inveigh.console_queue[0] + $inveigh.newline)
+                        Write-Output ($inveigh.console_queue[0])
+                        $inveigh.console_queue.RemoveAt(0)
                     }
 
-                    $inveigh.console_queue.RemoveAt(0)
-
-                } 
-
-                default
-                {
-                    Write-Output ($inveigh.console_queue[0] + $inveigh.newline)
-                    $inveigh.console_queue.RemoveAt(0)
                 }
 
-            } 
+            }
 
         }
 

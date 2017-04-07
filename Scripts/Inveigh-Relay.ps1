@@ -675,19 +675,29 @@ if($inveigh.status_output)
     while($inveigh.status_queue.Count -gt 0)
     {
 
-        switch -Wildcard ($inveigh.status_queue[0])
+        if($inveigh.output_stream_only)
         {
-                
-            {$_ -like "* Disabled Due To *" -or $_ -like "Run Stop-Inveigh to stop Inveigh-Relay" -or $_ -like "Windows Firewall = Enabled"}
-            {
-                Write-Warning ($inveigh.status_queue[0] + $inveigh.newline)
-                $inveigh.status_queue.RemoveAt(0)
-            }
+            Write-Output($inveigh.status_queue[0] + $inveigh.newline)
+            $inveigh.status_queue.RemoveAt(0)
+        }
+        else
+        {
 
-            default
+            switch -Wildcard ($inveigh.status_queue[0])
             {
-                Write-Output ($inveigh.status_queue[0] + $inveigh.newline)
-                $inveigh.status_queue.RemoveAt(0)
+
+                {$_ -like "* Disabled Due To *" -or $_ -like "Run Stop-Inveigh to stop Inveigh-Relay" -or $_ -like "Windows Firewall = Enabled"}
+                {
+                    Write-Warning ($inveigh.status_queue[0])
+                    $inveigh.status_queue.RemoveAt(0)
+                }
+
+                default
+                {
+                    Write-Output ($inveigh.status_queue[0])
+                    $inveigh.status_queue.RemoveAt(0)
+                }
+
             }
 
         }
@@ -3579,21 +3589,24 @@ $control_relay_scriptblock =
 
         }
         
-        Start-Sleep -S 1
-        $inveigh.console_queue.Add("Inveigh exited at $(Get-Date -format 's')")
-
-        if($inveigh.file_output)
+        if($inveigh.running)
         {
-            $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")
-        }
+            Start-Sleep -S 1
+            $inveigh.console_queue.Add("Inveigh exited at $(Get-Date -format 's')")
 
-        if($inveigh.log_output)
-        {
-            $inveigh.log.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")
-        }
+            if($inveigh.file_output)
+            {
+                $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")
+            }
 
-        Start-Sleep -S 1
-        $inveigh.running = $false
+            if($inveigh.log_output)
+            {
+                $inveigh.log.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")
+            }
+
+            Start-Sleep -S 1
+            $inveigh.running = $false
+        }
 
         if($inveigh.relay_running)
         {
@@ -3823,46 +3836,56 @@ if($inveigh.console_output)
         while($inveigh.console_queue.Count -gt 0)
         {
 
-            switch -wildcard ($inveigh.console_queue[0])
+            if($inveigh.output_stream_only)
+            {
+                Write-Output($inveigh.console_queue[0] + $inveigh.newline)
+                $inveigh.console_queue.RemoveAt(0)
+            }
+            else
             {
 
-                {$_ -like "* written to *" -or $_ -like "* for relay *" -or $_ -like "*SMB relay *" -or $_ -like "* local administrator *"}
-                {
-                    Write-Warning ($inveigh.console_queue[0] + $inveigh.newline)
-                    $inveigh.console_queue.RemoveAt(0)
-                }
-
-                {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent *"}
+                switch -wildcard ($inveigh.console_queue[0])
                 {
 
-                    if($ConsoleOutput -eq 'Y')
+                    {$_ -like "* written to *" -or $_ -like "* for relay *" -or $_ -like "*SMB relay *" -or $_ -like "* local administrator *"}
                     {
-                        Write-Output ($inveigh.console_queue[0] + $inveigh.newline)
+                        Write-Warning ($inveigh.console_queue[0])
+                        $inveigh.console_queue.RemoveAt(0)
                     }
 
-                    $inveigh.console_queue.RemoveAt(0)
+                    {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent *"}
+                    {
 
-                } 
+                        if($ConsoleOutput -eq 'Y')
+                        {
+                            Write-Output ($inveigh.console_queue[0])
+                        }
 
-                {$_ -like "* response sent" -or $_ -like "* ignoring *" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy request for *"}
-                {
+                        $inveigh.console_queue.RemoveAt(0)
+
+                    } 
+
+                    {$_ -like "* response sent" -or $_ -like "* ignoring *" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy request for *"}
+                    {
                     
-                    if($ConsoleOutput -ne "Low")
+                        if($ConsoleOutput -ne "Low")
+                        {
+                            Write-Output ($inveigh.console_queue[0])
+                        }
+
+                        $inveigh.console_queue.RemoveAt(0)
+
+                    } 
+
+                    default
                     {
-                        Write-Output ($inveigh.console_queue[0] + $inveigh.newline)
+                        Write-Output ($inveigh.console_queue[0])
+                        $inveigh.console_queue.RemoveAt(0)
                     }
 
-                    $inveigh.console_queue.RemoveAt(0)
-
-                } 
-
-                default
-                {
-                    Write-Output ($inveigh.console_queue[0] + $inveigh.newline)
-                    $inveigh.console_queue.RemoveAt(0)
                 }
 
-            } 
+            }
 
         }
 
