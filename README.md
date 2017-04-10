@@ -20,7 +20,7 @@ Inveigh is a PowerShell LLMNR/mDNS/NBNS spoofer and man-in-the-middle tool desig
 
 ## Overview
 
-At its core, Inveigh is a .NET packet sniffer that listens for and responds to LLMNR/mDNS/NBNS requests while also capturing incoming NTLMv1/NTLMv2 authentication attempts over the Windows SMB service. The primary advantage of this packet sniffing method on Windows is that port conflicts with default running services are avoided. Inveigh’s HTTP/HTTPS/Proxy based features are not provided through the packet sniffer, they are provided through TCP listeners. Inveigh relies on creating multiple runspaces to load the sniffer, listeners, and control functions within a single shell and PowerShell process.
+At its core, Inveigh is a .NET packet sniffer that listens for and responds to LLMNR/mDNS/NBNS requests while also capturing incoming NTLMv1/NTLMv2 authentication attempts over the Windows SMB service. The primary advantage of this packet sniffing method on Windows is that port conflicts with default running services are avoided. Inveigh also contains HTTP/HTTPS/Proxy listeners for capturing incoming authentication requests and performing attacks. Inveigh relies on creating multiple runspaces to load the sniffer, listeners, and control functions within a single shell and PowerShell process.
 
 ##### Inveigh running with elevated privilege
 ![Inveigh](https://github.com/Kevin-Robertson/Inveigh/wiki/images/Inveigh.PNG)
