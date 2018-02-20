@@ -12,7 +12,7 @@
 ModuleToProcess = 'Inveigh.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.0'
+ModuleVersion = '1.4'
 
 # ID used to uniquely identify this module
 GUID = '4f991a73-c574-44b7-85df-da769f39d45d'
