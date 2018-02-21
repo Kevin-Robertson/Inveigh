@@ -156,6 +156,8 @@ function New-PacketSMBHeader
 {
     param([Byte[]]$packet_command,[Byte[]]$packet_flags,[Byte[]]$packet_flags2,[Byte[]]$packet_tree_ID,[Byte[]]$packet_process_ID,[Byte[]]$packet_user_ID)
 
+    $packet_process_ID = $packet_process_ID[0,1]
+
     $packet_SMBHeader = New-Object System.Collections.Specialized.OrderedDictionary
     $packet_SMBHeader.Add("Protocol",[Byte[]](0xff,0x53,0x4d,0x42))
     $packet_SMBHeader.Add("Command",$packet_command)
@@ -209,7 +211,7 @@ function New-PacketSMBNegotiateProtocolRequest
 
 function New-PacketSMB2Header
 {
-    param([Byte[]]$packet_command,[Byte[]]$packet_credit_request,[Int]$packet_message_ID,[Byte[]]$packet_tree_ID,[Byte[]]$packet_session_ID)
+    param([Byte[]]$packet_command,[Byte[]]$packet_credit_request,[Int]$packet_message_ID,[Byte[]]$packet_process_ID,[Byte[]]$packet_tree_ID,[Byte[]]$packet_session_ID)
 
     [Byte[]]$packet_message_ID = [System.BitConverter]::GetBytes($packet_message_ID) + 0x00,0x00,0x00,0x00
 
@@ -224,7 +226,7 @@ function New-PacketSMB2Header
     $packet_SMB2Header.Add("Flags",[Byte[]](0x00,0x00,0x00,0x00))
     $packet_SMB2Header.Add("NextCommand",[Byte[]](0x00,0x00,0x00,0x00))
     $packet_SMB2Header.Add("MessageID",$packet_message_ID)
-    $packet_SMB2Header.Add("ProcessID",[Byte[]](0x00,0x00,0x00,0x00))
+    $packet_SMB2Header.Add("ProcessID",$packet_process_ID)
     $packet_SMB2Header.Add("TreeID",$packet_tree_ID)
     $packet_SMB2Header.Add("SessionID",$packet_session_ID)
     $packet_SMB2Header.Add("Signature",[Byte[]](0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00))
@@ -746,15 +748,20 @@ elseif($Source -is [String])
 
 [String]$session_string = $session
 
-if($session_string -and !$Inveigh -or !$inveigh.session_socket_table[$session])
+if($session_string)
 {
-    Write-Output "[-] Inveigh Relay session not found"
-    $startup_error = $true
-}
-elseif($session_string -and !$inveigh.session_socket_table[$session].Connected)
-{
-    Write-Output "[-] Inveigh Relay session not connected"
-    $startup_error = $true
+
+    if(!$Inveigh -or !$inveigh.session_socket_table[$session])
+    {
+        Write-Output "[-] Inveigh Relay session not found"
+        $startup_error = $true
+    }
+    elseif(!$inveigh.session_socket_table[$session].Connected)
+    {
+        Write-Output "[-] Inveigh Relay session not connected"
+        $startup_error = $true
+    }
+
 }
 
 $destination = $Destination.Replace('.\','')
@@ -775,8 +782,7 @@ else
 
 $process_ID = [System.Diagnostics.Process]::GetCurrentProcess() | Select-Object -expand id
 $process_ID = [System.BitConverter]::ToString([System.BitConverter]::GetBytes($process_ID))
-#[Byte[]]$process_ID_bytes = $process_ID.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
-[Byte[]]$process_ID_bytes = 0x00,0x00,0x00,0x00
+[Byte[]]$process_ID_bytes = $process_ID.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
 
 if(!$session_string_string)
 {
@@ -997,7 +1003,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
 
                 'NegotiateSMB'
                 {          
-                    $packet_SMB_header = New-PacketSMBHeader 0x72 0x18 0x01,0x48 0xff,0xff $process_ID_bytes[0,1] 0x00,0x00       
+                    $packet_SMB_header = New-PacketSMBHeader 0x72 0x18 0x01,0x48 0xff,0xff $process_ID_bytes 0x00,0x00       
                     $packet_SMB_data = New-PacketSMBNegotiateProtocolRequest $SMB_version
                     $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                     $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
@@ -1042,8 +1048,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     $SMB2_tree_ID = 0x00,0x00,0x00,0x00
                     $SMB_session_ID = 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
                     $SMB2_message_ID = 1
-                    $packet_SMB2_header = New-PacketSMB2Header 0x00,0x00 0x00,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                    $packet_SMB2_header["ProcessID"] = $process_ID_bytes
+                    $packet_SMB2_header = New-PacketSMB2Header 0x00,0x00 0x00,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     $packet_SMB2_data = New-PacketSMB2NegotiateProtocolRequest
                     $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                     $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data
@@ -1058,9 +1063,8 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     
                 'NTLMSSPNegotiate'
                 { 
-                    $SMB2_message_ID ++
-                    $packet_SMB2_header = New-PacketSMB2Header 0x01,0x00 0x1f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                    $packet_SMB2_header["ProcessID"] = $process_ID_bytes
+                    $SMB2_message_ID++
+                    $packet_SMB2_header = New-PacketSMB2Header 0x01,0x00 0x00,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     $packet_NTLMSSP_negotiate = New-PacketNTLMSSPNegotiate $SMB_negotiate_flags
                     $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                     $NTLMSSP_negotiate = ConvertFrom-PacketOrderedDictionary $packet_NTLMSSP_negotiate       
@@ -1173,9 +1177,8 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                                     0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 +
                                     $NTLMv2_response
 
-            $SMB2_message_ID ++
-            $packet_SMB2_header = New-PacketSMB2Header 0x01,0x00 0x1f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-            $packet_SMB2_header["ProcessID"] = $process_ID_bytes
+            $SMB2_message_ID++
+            $packet_SMB2_header = New-PacketSMB2Header 0x01,0x00 0x00,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
             $packet_NTLMSSP_auth = New-PacketNTLMSSPAuth $NTLMSSP_response
             $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
             $NTLMSSP_auth = ConvertFrom-PacketOrderedDictionary $packet_NTLMSSP_auth        
@@ -1240,8 +1243,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                 'TreeConnect'
                 {
                     $SMB2_message_ID++
-                    $packet_SMB2_header = New-PacketSMB2Header 0x03,0x00 0x1f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                    $packet_SMB2_header["ProcessID"] = $process_ID_bytes
+                    $packet_SMB2_header = New-PacketSMB2Header 0x03,0x00 0x1f,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
 
                     if($SMB_signing)
                     {
@@ -1354,8 +1356,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     $SMB_ioctl_path = "\" + $Target + "\" + $Share
                     $SMB_ioctl_path_bytes = [System.Text.Encoding]::Unicode.GetBytes($SMB_ioctl_path) + 0x00,0x00
                     $SMB2_message_ID++
-                    $packet_SMB2_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                    $packet_SMB2_header["ProcessID"] = $process_ID_bytes
+                    $packet_SMB2_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
 
                     if($SMB_signing)
                     {
@@ -1388,8 +1389,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                 'CreateRequest'
                 {
                     $SMB2_message_ID++
-                    $packet_SMB2_header = New-PacketSMB2Header 0x05,0x00 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                    $packet_SMB2_header["ProcessID"] = $process_ID_bytes
+                    $packet_SMB2_header = New-PacketSMB2Header 0x05,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                 
                     if($SMB_signing)
                     {
@@ -1686,8 +1686,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                 'QueryInfoRequest'
                 {
                     $SMB2_message_ID++
-                    $packet_SMB2_header = New-PacketSMB2Header 0x10,0x00 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                    $packet_SMB2_header["ProcessID"] = $process_ID_bytes
+                    $packet_SMB2_header = New-PacketSMB2Header 0x10,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     $packet_SMB2_header["NextCommand"] = $header_next_command
 
                     if($SMB_signing)
@@ -1709,8 +1708,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     }
 
                     $SMB2_message_ID++
-                    $packet_SMB2b_header = New-PacketSMB2Header 0x10,0x00 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                    $packet_SMB2b_header["ProcessID"] = $process_ID_bytes
+                    $packet_SMB2b_header = New-PacketSMB2Header 0x10,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
 
                     if($SMB_signing)
                     {
@@ -1859,8 +1857,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                 'SetInfoRequest'
                 {
                     $SMB2_message_ID++
-                    $packet_SMB2_header = New-PacketSMB2Header 0x11,0x00 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                    $packet_SMB2_header["ProcessID"] = $process_ID_bytes
+                    $packet_SMB2_header = New-PacketSMB2Header 0x11,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
 
                     if($SMB_signing)
                     {
@@ -1920,8 +1917,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                 'CreateRequestFindRequest'
                 {
                     $SMB2_message_ID++
-                    $packet_SMB2_header = New-PacketSMB2Header 0x05,0x00 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                    $packet_SMB2_header["ProcessID"] = $process_ID_bytes
+                    $packet_SMB2_header = New-PacketSMB2Header 0x05,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
 
                     if($SMB_signing)
                     {
@@ -1947,8 +1943,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     }
 
                     $SMB2_message_ID++
-                    $packet_SMB2b_header = New-PacketSMB2Header 0x0e,0x00 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                    $packet_SMB2b_header["ProcessID"] = $process_ID_bytes
+                    $packet_SMB2b_header = New-PacketSMB2Header 0x0e,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     $packet_SMB2b_header["NextCommand"] = 0x68,0x00,0x00,0x00
 
                     if($SMB_signing)
@@ -1974,8 +1969,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     }
 
                     $SMB2_message_ID++
-                    $packet_SMB2c_header = New-PacketSMB2Header 0x0e,0x00 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                    $packet_SMB2c_header["ProcessID"] = $process_ID_bytes
+                    $packet_SMB2c_header = New-PacketSMB2Header 0x0e,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
 
                     if($SMB_signing)
                     {
@@ -2229,8 +2223,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                 {
                     $SMB_file_ID = $SMB_client_receive[132..147]
                     $SMB2_message_ID++
-                    $packet_SMB2_header = New-PacketSMB2Header 0x0e,0x00 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                    $packet_SMB2_header["ProcessID"] = $process_ID_bytes
+                    $packet_SMB2_header = New-PacketSMB2Header 0x0e,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     $packet_SMB2_header["NextCommand"] = 0x68,0x00,0x00,0x00
 
                     if($SMB_signing)
@@ -2252,8 +2245,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     }
 
                     $SMB2_message_ID++
-                    $packet_SMB2b_header = New-PacketSMB2Header 0x0e,0x00 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                    $packet_SMB2b_header["ProcessID"] = $process_ID_bytes
+                    $packet_SMB2b_header = New-PacketSMB2Header 0x0e,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
 
                     if($SMB_signing)
                     {
@@ -2322,8 +2314,8 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                         $SMB_file_ID = $SMB_client_receive[132..147]
                     }
 
-                    $SMB2_message_ID ++
-                    $packet_SMB2_header = New-PacketSMB2Header 0x06,0x00 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                    $SMB2_message_ID++
+                    $packet_SMB2_header = New-PacketSMB2Header 0x06,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                 
                     if($SMB_signing)
                     {
@@ -2443,7 +2435,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                 'ReadRequest'
                 {
                     $SMB2_message_ID++
-                    $packet_SMB2_header = New-PacketSMB2Header 0x08,0x00 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                    $packet_SMB2_header = New-PacketSMB2Header 0x08,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     $packet_SMB2_header["CreditCharge"] = 0x01,0x00
                 
                     if($SMB_signing)
@@ -2576,7 +2568,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     }
 
                     $SMB2_message_ID++
-                    $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                    $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     $packet_SMB2_header["CreditCharge"] = 0x01,0x00
                 
                     if($SMB_signing)
@@ -2653,7 +2645,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                 'TreeDisconnect'
                 {
                     $SMB2_message_ID++
-                    $packet_SMB2_header = New-PacketSMB2Header 0x04,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                    $packet_SMB2_header = New-PacketSMB2Header 0x04,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                 
                     if($SMB_signing)
                     {
@@ -2694,7 +2686,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                 'Logoff'
                 {
                     $SMB2_message_ID += 20
-                    $packet_SMB2_header = New-PacketSMB2Header 0x02,0x00 0x7f,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                    $packet_SMB2_header = New-PacketSMB2Header 0x02,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                 
                     if($SMB_signing)
                     {

