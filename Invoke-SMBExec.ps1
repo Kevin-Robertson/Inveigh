@@ -340,32 +340,7 @@ function New-PacketSMBLogoffAndXRequest
 }
 
 #SMB2
-<#
-function New-PacketSMB2Header
-{
-    param([Byte[]]$packet_command,[Int]$packet_message_ID,[Byte[]]$packet_tree_ID,[Byte[]]$packet_session_ID)
 
-    [Byte[]]$packet_message_ID = [System.BitConverter]::GetBytes($packet_message_ID) + 0x00,0x00,0x00,0x00
-
-    $packet_SMB2Header = New-Object System.Collections.Specialized.OrderedDictionary
-    $packet_SMB2Header.Add("ProtocolID",[Byte[]](0xfe,0x53,0x4d,0x42))
-    $packet_SMB2Header.Add("StructureSize",[Byte[]](0x40,0x00))
-    $packet_SMB2Header.Add("CreditCharge",[Byte[]](0x01,0x00))
-    $packet_SMB2Header.Add("ChannelSequence",[Byte[]](0x00,0x00))
-    $packet_SMB2Header.Add("Reserved",[Byte[]](0x00,0x00))
-    $packet_SMB2Header.Add("Command",$packet_command)
-    $packet_SMB2Header.Add("CreditRequest",[Byte[]](0x01,0x00))
-    $packet_SMB2Header.Add("Flags",[Byte[]](0x00,0x00,0x00,0x00))
-    $packet_SMB2Header.Add("NextCommand",[Byte[]](0x00,0x00,0x00,0x00))
-    $packet_SMB2Header.Add("MessageID",$packet_message_ID)
-    $packet_SMB2Header.Add("Reserved2",[Byte[]](0x00,0x00,0x00,0x00))
-    $packet_SMB2Header.Add("TreeID",$packet_tree_ID)
-    $packet_SMB2Header.Add("SessionID",$packet_session_ID)
-    $packet_SMB2Header.Add("Signature",[Byte[]](0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00))
-
-    return $packet_SMB2Header
-}
-#>
 function New-PacketSMB2Header
 {
     param([Byte[]]$packet_command,[Byte[]]$packet_credit_request,[Int]$packet_message_ID,[Byte[]]$packet_process_ID,[Byte[]]$packet_tree_ID,[Byte[]]$packet_session_ID)
@@ -876,12 +851,15 @@ else
     $output_username = $Username
 }
 
-[String]$session_string = $session
+if($PSBoundParameters.ContainsKey('Session'))
+{
+    $inveigh_session = $true
+}
 
-if($session_string)
+if($PSBoundParameters.ContainsKey('Session'))
 {
 
-    if(!$Inveigh -or !$inveigh.session_socket_table[$session])
+    if(!$Inveigh)
     {
         Write-Output "[-] Inveigh Relay session not found"
         $startup_error = $true
@@ -899,13 +877,13 @@ $process_ID = [System.Diagnostics.Process]::GetCurrentProcess() | Select-Object 
 $process_ID = [System.BitConverter]::ToString([System.BitConverter]::GetBytes($process_ID))
 [Byte[]]$process_ID_bytes = $process_ID.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
 
-if(!$session_string)
+if(!$inveigh_session)
 {
     $SMB_client = New-Object System.Net.Sockets.TCPClient
     $SMB_client.Client.ReceiveTimeout = 60000
 }
 
-if(!$startup_error -and !$session_string)
+if(!$startup_error -and !$inveigh_session)
 {
 
     try
@@ -923,7 +901,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
 {
     $SMB_client_receive = New-Object System.Byte[] 1024
 
-    if(!$session_string)
+    if(!$inveigh_session)
     {
         $SMB_client_stream = $SMB_client.GetStream()
         $SMB_client_stage = 'NegotiateSMB'
@@ -1258,13 +1236,13 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
 
     }
 
-    if($login_successful -or $session_string)
+    if($login_successful -or $inveigh_session)
     {
 
-        if($session_string)
+        if($inveigh_session)
         {
 
-            if($session_string -and $inveigh.session_lock_table[$session] -eq 'locked')
+            if($inveigh_session -and $inveigh.session_lock_table[$session] -eq 'locked')
             {
                 Write-Output "[*] Pausing due to Inveigh Relay session lock"
                 Start-Sleep -s 2
@@ -2713,7 +2691,7 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
                         $SMB_client_stream.Flush()
                         $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
 
-                        if($session_string -and !$Logoff)
+                        if($inveigh_session -and !$Logoff)
                         {
                             $SMB_client_stage = 'Exit'
                         }
@@ -2769,14 +2747,14 @@ if($SMB_client.Connected -or (!$startup_error -and $inveigh.session_socket_table
 
     }
 
-    if($session_string -and $Inveigh)
+    if($inveigh_session -and $Inveigh)
     {
         $inveigh.session_lock_table[$session] = 'open'
         $inveigh.session_message_ID_table[$session] = $SMB2_message_ID
         $inveigh.session_list[$session] | Where-Object {$_."Last Activity" = Get-Date -format s}
     }
 
-    if(!$session_string -or $Logoff)
+    if(!$inveigh_session -or $Logoff)
     {
         $SMB_client.Close()
         $SMB_client_stream.Close()
