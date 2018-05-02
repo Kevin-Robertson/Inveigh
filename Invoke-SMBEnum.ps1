@@ -96,7 +96,7 @@ function New-PacketNetBIOSSessionService
 
     $NetBIOSSessionService = New-Object System.Collections.Specialized.OrderedDictionary
     $NetBIOSSessionService.Add("MessageType",[Byte[]](0x00))
-    $NetBIOSSessionService.Add("Length",[Byte[]]($length))
+    $NetBIOSSessionService.Add("Length",$length)
 
     return $NetBIOSSessionService
 }
@@ -162,7 +162,16 @@ function New-PacketSMBNegotiateProtocolRequest
 
 function New-PacketSMB2Header
 {
-    param([Byte[]]$Command,[Byte[]]$CreditRequest,[Int]$MessageID,[Byte[]]$ProcessID,[Byte[]]$TreeID,[Byte[]]$SessionID)
+    param([Byte[]]$Command,[Byte[]]$CreditRequest,[Bool]$Signing,[Int]$MessageID,[Byte[]]$ProcessID,[Byte[]]$TreeID,[Byte[]]$SessionID)
+
+    if($Signing)
+    {
+        $flags = 0x08,0x00,0x00,0x00      
+    }
+    else
+    {
+        $flags = 0x00,0x00,0x00,0x00
+    }
 
     [Byte[]]$message_ID = [System.BitConverter]::GetBytes($MessageID)
 
@@ -179,7 +188,7 @@ function New-PacketSMB2Header
     $SMB2Header.Add("Reserved",[Byte[]](0x00,0x00))
     $SMB2Header.Add("Command",$Command)
     $SMB2Header.Add("CreditRequest",$CreditRequest)
-    $SMB2Header.Add("Flags",[Byte[]](0x00,0x00,0x00,0x00))
+    $SMB2Header.Add("Flags",$flags)
     $SMB2Header.Add("NextCommand",[Byte[]](0x00,0x00,0x00,0x00))
     $SMB2Header.Add("MessageID",$message_ID)
     $SMB2Header.Add("ProcessID",$ProcessID)
@@ -590,52 +599,6 @@ function New-PacketRPCRequest
     return $RPCRequest
 }
 
-function New-PacketSRVSVCNetSessEnum
-{
-    param([String]$ServerUNC)
-
-    [Byte[]]$server_UNC = [System.Text.Encoding]::Unicode.GetBytes($ServerUNC)
-    [Byte[]]$max_count = [System.BitConverter]::GetBytes($ServerUNC.Length + 1)
-       
-    if($ServerUNC.Length % 2)
-    {
-        $server_UNC += 0x00,0x00
-    }
-    else
-    {
-        $server_UNC += 0x00,0x00,0x00,0x00
-    }
-
-    $SRVSVCNetSessEnum = New-Object System.Collections.Specialized.OrderedDictionary
-    $SRVSVCNetSessEnum.Add("PointerToServerUNC_ReferentID",[Byte[]](0x00,0x00,0x02,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToServerUNC_MaxCount",$max_count)
-    $SRVSVCNetSessEnum.Add("PointerToServerUNC_Offset",[Byte[]](0x00,0x00,0x00,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToServerUNC_ActualCount",$max_count)
-    $SRVSVCNetSessEnum.Add("PointerToServerUNC_ServerUNC",$server_UNC)
-    $SRVSVCNetSessEnum.Add("PointerToClient_ReferentID",[Byte[]](0x04,0x00,0x02,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToClient_MaxCount",[Byte[]](0x01,0x00,0x00,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToClient_Offset",[Byte[]](0x00,0x00,0x00,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToClient_ActualCount",[Byte[]](0x01,0x00,0x00,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToClient_Client",[Byte[]](0x00,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToUser",[Byte[]](0x00,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToUser_ReferentID",[Byte[]](0x08,0x00,0x02,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToUser_MaxCount",[Byte[]](0x01,0x00,0x00,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToUser_Offset",[Byte[]](0x00,0x00,0x00,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToUser_ActualCount",[Byte[]](0x01,0x00,0x00,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToUser_User",[Byte[]](0x00,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToLevel",[Byte[]](0x00,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToLevel_Level",[Byte[]](0x0a,0x00,0x00,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToCtr_NetSessCtr_Ctr",[Byte[]](0x0a,0x00,0x00,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToCtr_NetSessCtr_PointerToCtr10_ReferentID",[Byte[]](0x0c,0x00,0x02,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToCtr_NetSessCtr_PointerToCtr10_Ctr10_Count",[Byte[]](0x00,0x00,0x00,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToCtr_NetSessCtr_PointerToCtr10_Ctr10_NullPointer",[Byte[]](0x00,0x00,0x00,0x00))
-    $SRVSVCNetSessEnum.Add("MaxBuffer",[Byte[]](0xff,0xff,0xff,0xff))
-    $SRVSVCNetSessEnum.Add("PointerToResumeHandle_ReferentID",[Byte[]](0x10,0x00,0x02,0x00))
-    $SRVSVCNetSessEnum.Add("PointerToResumeHandle_ResumeHandle",[Byte[]](0x00,0x00,0x00,0x00))
-
-    return $SRVSVCNetSessEnum
-}
-
 # LSA
 function New-PacketLSAOpenPolicy
 {
@@ -875,6 +838,53 @@ function New-PacketSAMRLookupRids
     return $SAMRLookupRIDS
 }
 
+# SRVSVC
+function New-PacketSRVSVCNetSessEnum
+{
+    param([String]$ServerUNC)
+
+    [Byte[]]$server_UNC = [System.Text.Encoding]::Unicode.GetBytes($ServerUNC)
+    [Byte[]]$max_count = [System.BitConverter]::GetBytes($ServerUNC.Length + 1)
+       
+    if($ServerUNC.Length % 2)
+    {
+        $server_UNC += 0x00,0x00
+    }
+    else
+    {
+        $server_UNC += 0x00,0x00,0x00,0x00
+    }
+
+    $SRVSVCNetSessEnum = New-Object System.Collections.Specialized.OrderedDictionary
+    $SRVSVCNetSessEnum.Add("PointerToServerUNC_ReferentID",[Byte[]](0x00,0x00,0x02,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToServerUNC_MaxCount",$max_count)
+    $SRVSVCNetSessEnum.Add("PointerToServerUNC_Offset",[Byte[]](0x00,0x00,0x00,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToServerUNC_ActualCount",$max_count)
+    $SRVSVCNetSessEnum.Add("PointerToServerUNC_ServerUNC",$server_UNC)
+    $SRVSVCNetSessEnum.Add("PointerToClient_ReferentID",[Byte[]](0x04,0x00,0x02,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToClient_MaxCount",[Byte[]](0x01,0x00,0x00,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToClient_Offset",[Byte[]](0x00,0x00,0x00,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToClient_ActualCount",[Byte[]](0x01,0x00,0x00,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToClient_Client",[Byte[]](0x00,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToUser",[Byte[]](0x00,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToUser_ReferentID",[Byte[]](0x08,0x00,0x02,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToUser_MaxCount",[Byte[]](0x01,0x00,0x00,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToUser_Offset",[Byte[]](0x00,0x00,0x00,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToUser_ActualCount",[Byte[]](0x01,0x00,0x00,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToUser_User",[Byte[]](0x00,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToLevel",[Byte[]](0x00,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToLevel_Level",[Byte[]](0x0a,0x00,0x00,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToCtr_NetSessCtr_Ctr",[Byte[]](0x0a,0x00,0x00,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToCtr_NetSessCtr_PointerToCtr10_ReferentID",[Byte[]](0x0c,0x00,0x02,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToCtr_NetSessCtr_PointerToCtr10_Ctr10_Count",[Byte[]](0x00,0x00,0x00,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToCtr_NetSessCtr_PointerToCtr10_Ctr10_NullPointer",[Byte[]](0x00,0x00,0x00,0x00))
+    $SRVSVCNetSessEnum.Add("MaxBuffer",[Byte[]](0xff,0xff,0xff,0xff))
+    $SRVSVCNetSessEnum.Add("PointerToResumeHandle_ReferentID",[Byte[]](0x10,0x00,0x02,0x00))
+    $SRVSVCNetSessEnum.Add("PointerToResumeHandle_ResumeHandle",[Byte[]](0x00,0x00,0x00,0x00))
+
+    return $SRVSVCNetSessEnum
+}
+
 function New-PacketSRVSVCNetShareEnumAll
 {
     param([String]$ServerUNC)
@@ -910,13 +920,25 @@ function New-PacketSRVSVCNetShareEnumAll
     return $SRVSVCNetShareEnum
 }
 
-function DataLength2
+function Get-UInt16DataLength
 {
-    param ([Int]$length_start,[Byte[]]$string_extract_data)
+    param ([Int]$Start,[Byte[]]$Data)
 
-    $string_length = [System.BitConverter]::ToUInt16($string_extract_data[$length_start..($length_start + 1)],0)
+    $data_length = [System.BitConverter]::ToUInt16($Data[$Start..($Start + 1)],0)
 
-    return $string_length
+    return $data_length
+}
+
+function Get-StatusPending
+{
+    param ([Byte[]]$Status)
+
+    if([System.BitConverter]::ToString($Status) -eq '03-01-00-00')
+    {
+        $status_pending = $true
+    }
+
+    return $status_pending
 }
 
 if($hash -like "*:*")
@@ -990,209 +1012,192 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
 
         while($stage -ne 'Exit')
         {
-            
-            switch ($stage)
+
+            try
             {
-
-                'NegotiateSMB'
-                {          
-                    $packet_SMB_header = New-PacketSMBHeader 0x72 0x18 0x01,0x48 0xff,0xff $process_ID 0x00,0x00       
-                    $packet_SMB_data = New-PacketSMBNegotiateProtocolRequest $SMB_version
-                    $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                    $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
-                    $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
-                    $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                    $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-
-                    try
-                    {
-                        $client_stream.Write($client_send,0,$client_send.Length) > $null
-                        $client_stream.Flush()    
-                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                    }
-                    catch
-                    {
-                        Write-Output "[-] Something went wrong"
-                        throw
-                    }
-
-                    if([System.BitConverter]::ToString($client_receive[4..7]) -eq 'ff-53-4d-42')
-                    {
-                        $SMB_version = 'SMB1'
-                        $stage = 'NTLMSSPNegotiate'
-
-                        if([System.BitConverter]::ToString($client_receive[39]) -eq '0f')
-                        {
-
-                            if($SigningCheck)
-                            {
-                                Write-Output "[+] SMB signing is required"
-                                $stage = 'exit'
-                            }
-                            else
-                            {    
-                                Write-Verbose "[+] SMB signing is required"
-                                $SMB_signing = $true
-                                $SMB_session_key_length = 0x00,0x00
-                                $SMB_negotiate_flags = 0x15,0x82,0x08,0xa0
-                            }
-
-                        }
-                        else
-                        {
-
-                            if($SigningCheck)
-                            {
-                                Write-Output "[+] SMB signing is not required"
-                                $stage = 'exit'
-                            }
-                            else
-                            {    
-                                $SMB_signing = $false
-                                $SMB_session_key_length = 0x00,0x00
-                                $SMB_negotiate_flags = 0x05,0x82,0x08,0xa0
-                            }
-
-                        }
-
-                    }
-                    else
-                    {
-                        $stage = 'NegotiateSMB2'
-
-                        if([System.BitConverter]::ToString($client_receive[70]) -eq '03')
-                        {
-
-                            if($SigningCheck)
-                            {
-                                Write-Output "[+] SMB signing is required"
-                                $stage = 'exit'
-                            }
-                            else
-                            {    
-                                Write-Verbose "[+] SMB signing is required"
-                                $SMB_signing = $true
-                                $SMB_session_key_length = 0x00,0x00
-                                $SMB_negotiate_flags = 0x15,0x82,0x08,0xa0
-                            }
-
-                        }
-                        else
-                        {
-
-                            if($SigningCheck)
-                            {
-                                Write-Output "[+] SMB signing is not required"
-                                $stage = 'exit'
-                            }
-                            else
-                            {    
-                                $SMB_signing = $false
-                                $SMB_session_key_length = 0x00,0x00
-                                $SMB_negotiate_flags = 0x05,0x80,0x08,0xa0
-                            }
-
-                        }
-
-                    }
-
-                }
-
-                'NegotiateSMB2'
-                {
-                    $tree_ID = 0x00,0x00,0x00,0x00
-                    $session_ID = 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
-                    $message_ID = 1
-                    $packet_SMB_header = New-PacketSMB2Header 0x00,0x00 0x00,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    $packet_SMB_data = New-PacketSMB2NegotiateProtocolRequest
-                    $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                    $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
-                    $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
-                    $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                    $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-
-                    try
-                    {
-                        $client_stream.Write($client_send,0,$client_send.Length) > $null
-                        $client_stream.Flush()    
-                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                        $stage = 'NTLMSSPNegotiate'
-                    }
-                    catch
-                    {
-                        Write-Output "[-] Something went wrong"
-                        throw
-                    }
-
-                }
-                    
-                'NTLMSSPNegotiate'
-                { 
-                    
-                    if($SMB_version -eq 'SMB1')
-                    {
-                        $packet_SMB_header = New-PacketSMBHeader 0x73 0x18 0x07,0xc8 0xff,0xff $process_ID 0x00,0x00
-
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags2"] = 0x05,0x48
-                        }
-
-                        $packet_NTLMSSP_negotiate = New-PacketNTLMSSPNegotiate $SMB_negotiate_flags
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $NTLMSSP_negotiate = ConvertFrom-PacketOrderedDictionary $packet_NTLMSSP_negotiate       
-                        $packet_SMB_data = New-PacketSMBSessionSetupAndXRequest $NTLMSSP_negotiate
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-                    }
-                    else
-                    {
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x01,0x00 0x1f,0x00 $message_ID $process_ID $tree_ID $session_ID
-                        $packet_NTLMSSP_negotiate = New-PacketNTLMSSPNegotiate $SMB_negotiate_flags 0x06,0x01,0xb1,0x1d,0x00,0x00,0x00,0x0f
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $NTLMSSP_negotiate = ConvertFrom-PacketOrderedDictionary $packet_NTLMSSP_negotiate       
-                        $packet_SMB_data = New-PacketSMB2SessionSetupRequest $NTLMSSP_negotiate
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-                    }
-
-                    try
-                    {
-                        $client_stream.Write($client_send,0,$client_send.Length) > $null
-                        $client_stream.Flush()    
-                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                        $stage = 'exit'
-                        
-                    }
-                    catch
-                    {
-                        Write-Output "[-] Something went wrong"
-                        throw
-                    }
-                    
-                }
                 
+                switch ($stage)
+                {
+
+                    'NegotiateSMB'
+                    {          
+                        $packet_SMB_header = New-PacketSMBHeader 0x72 0x18 0x01,0x48 0xff,0xff $process_ID 0x00,0x00       
+                        $packet_SMB_data = New-PacketSMBNegotiateProtocolRequest $SMB_version
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()    
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if([System.BitConverter]::ToString($client_receive[4..7]) -eq 'ff-53-4d-42')
+                        {
+                            $SMB_version = 'SMB1'
+                            $stage = 'NTLMSSPNegotiate'
+
+                            if([System.BitConverter]::ToString($client_receive[39]) -eq '0f')
+                            {
+
+                                if($SigningCheck)
+                                {
+                                    Write-Output "[+] SMB signing is required"
+                                    $stage = 'Exit'
+                                }
+                                else
+                                {    
+                                    Write-Verbose "[+] SMB signing is required"
+                                    $SMB_signing = $true
+                                    $session_key_length = 0x00,0x00
+                                    $negotiate_flags = 0x15,0x82,0x08,0xa0
+                                }
+
+                            }
+                            else
+                            {
+
+                                if($SigningCheck)
+                                {
+                                    Write-Output "[+] SMB signing is not required"
+                                    $stage = 'Exit'
+                                }
+                                else
+                                {    
+                                    $SMB_signing = $false
+                                    $session_key_length = 0x00,0x00
+                                    $negotiate_flags = 0x05,0x82,0x08,0xa0
+                                }
+
+                            }
+
+                        }
+                        else
+                        {
+                            $stage = 'NegotiateSMB2'
+
+                            if([System.BitConverter]::ToString($client_receive[70]) -eq '03')
+                            {
+
+                                if($SigningCheck)
+                                {
+                                    Write-Output "[+] SMB signing is required"
+                                    $stage = 'Exit'
+                                }
+                                else
+                                {    
+                                    Write-Verbose "[+] SMB signing is required"
+                                    $SMB_signing = $true
+                                    $session_key_length = 0x00,0x00
+                                    $negotiate_flags = 0x15,0x82,0x08,0xa0
+                                }
+
+                            }
+                            else
+                            {
+
+                                if($SigningCheck)
+                                {
+                                    Write-Output "[+] SMB signing is not required"
+                                    $stage = 'Exit'
+                                }
+                                else
+                                {    
+                                    $SMB_signing = $false
+                                    $session_key_length = 0x00,0x00
+                                    $negotiate_flags = 0x05,0x80,0x08,0xa0
+                                }
+
+                            }
+
+                        }
+
+                        Write-Verbose "[+] SMB version is $SMB_version"
+                    }
+
+                    'NegotiateSMB2'
+                    {
+                        $tree_ID = 0x00,0x00,0x00,0x00
+                        $session_ID = 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+                        $message_ID = 1
+                        $packet_SMB_header = New-PacketSMB2Header 0x00,0x00 0x00,0x00 $false $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SMB_data = New-PacketSMB2NegotiateProtocolRequest
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()    
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+                        $stage = 'NTLMSSPNegotiate'
+                    }
+                        
+                    'NTLMSSPNegotiate'
+                    { 
+                        
+                        if($SMB_version -eq 'SMB1')
+                        {
+                            $packet_SMB_header = New-PacketSMBHeader 0x73 0x18 0x07,0xc8 0xff,0xff $process_ID 0x00,0x00
+
+                            if($SMB_signing)
+                            {
+                                $packet_SMB_header["Flags2"] = 0x05,0x48
+                            }
+
+                            $packet_NTLMSSP_negotiate = New-PacketNTLMSSPNegotiate $negotiate_flags
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                            $NTLMSSP_negotiate = ConvertFrom-PacketOrderedDictionary $packet_NTLMSSP_negotiate       
+                            $packet_SMB_data = New-PacketSMBSessionSetupAndXRequest $NTLMSSP_negotiate
+                            $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
+                            $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
+                            $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
+                        }
+                        else
+                        {
+                            $message_ID++
+                            $packet_SMB_header = New-PacketSMB2Header 0x01,0x00 0x1f,0x00 $false $message_ID $process_ID $tree_ID $session_ID
+                            $packet_NTLMSSP_negotiate = New-PacketNTLMSSPNegotiate $negotiate_flags 0x06,0x01,0xb1,0x1d,0x00,0x00,0x00,0x0f
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                            $NTLMSSP_negotiate = ConvertFrom-PacketOrderedDictionary $packet_NTLMSSP_negotiate       
+                            $packet_SMB_data = New-PacketSMB2SessionSetupRequest $NTLMSSP_negotiate
+                            $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
+                            $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
+                            $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
+                        }
+
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()    
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+                        $stage = 'Exit'
+                    }
+                    
+                }
+
+            }
+            catch
+            {
+                $error_message = $_.Exception.Message
+                $error_message = $error_message -replace "`n",""
+                Write-Output "[-] $error_message"
             }
 
         }
 
         if(!$SigningCheck)
         {
-            $SMB_NTLMSSP = [System.BitConverter]::ToString($client_receive)
-            $SMB_NTLMSSP = $SMB_NTLMSSP -replace "-",""
-            $SMB_NTLMSSP_index = $SMB_NTLMSSP.IndexOf("4E544C4D53535000")
-            $SMB_NTLMSSP_bytes_index = $SMB_NTLMSSP_index / 2
-            $SMB_domain_length = DataLength2 ($SMB_NTLMSSP_bytes_index + 12) $client_receive
-            $SMB_target_length = DataLength2 ($SMB_NTLMSSP_bytes_index + 40) $client_receive
+            $NTLMSSP = [System.BitConverter]::ToString($client_receive)
+            $NTLMSSP = $NTLMSSP -replace "-",""
+            $NTLMSSP_index = $NTLMSSP.IndexOf("4E544C4D53535000")
+            $NTLMSSP_bytes_index = $NTLMSSP_index / 2
+            $domain_length = Get-UInt16DataLength ($NTLMSSP_bytes_index + 12) $client_receive
+            $target_length = Get-UInt16DataLength ($NTLMSSP_bytes_index + 40) $client_receive
             $session_ID = $client_receive[44..51]
-            $SMB_NTLM_challenge = $client_receive[($SMB_NTLMSSP_bytes_index + 24)..($SMB_NTLMSSP_bytes_index + 31)]
-            $SMB_target_details = $client_receive[($SMB_NTLMSSP_bytes_index + 56 + $SMB_domain_length)..($SMB_NTLMSSP_bytes_index + 55 + $SMB_domain_length + $SMB_target_length)]
-            $SMB_target_time_bytes = $SMB_target_details[($SMB_target_details.Length - 12)..($SMB_target_details.Length - 5)]
+            $NTLM_challenge = $client_receive[($NTLMSSP_bytes_index + 24)..($NTLMSSP_bytes_index + 31)]
+            $target_details = $client_receive[($NTLMSSP_bytes_index + 56 + $domain_length)..($NTLMSSP_bytes_index + 55 + $domain_length + $target_length)]
+            $target_time_bytes = $target_details[($target_details.Length - 12)..($target_details.Length - 5)]
             $NTLM_hash_bytes = (&{for ($i = 0;$i -lt $hash.Length;$i += 2){$hash.SubString($i,2)}}) -join "-"
             $NTLM_hash_bytes = $NTLM_hash_bytes.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
             $auth_hostname = (Get-ChildItem -path env:computername).Value
@@ -1223,14 +1228,14 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
 
             $security_blob_bytes = 0x01,0x01,0x00,0x00,
                                     0x00,0x00,0x00,0x00 +
-                                    $SMB_target_time_bytes +
+                                    $target_time_bytes +
                                     $client_challenge_bytes +
                                     0x00,0x00,0x00,0x00 +
-                                    $SMB_target_details +
+                                    $target_details +
                                     0x00,0x00,0x00,0x00,
                                     0x00,0x00,0x00,0x00
 
-            $server_challenge_and_security_blob_bytes = $SMB_NTLM_challenge + $security_blob_bytes
+            $server_challenge_and_security_blob_bytes = $NTLM_challenge + $security_blob_bytes
             $HMAC_MD5.key = $NTLMv2_hash
             $NTLMv2_response = $HMAC_MD5.ComputeHash($server_challenge_and_security_blob_bytes)
 
@@ -1264,10 +1269,10 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                                     $auth_hostname_length +
                                     $auth_hostname_length +
                                     $auth_hostname_offset +
-                                    $SMB_session_key_length +
-                                    $SMB_session_key_length +
+                                    $session_key_length +
+                                    $session_key_length +
                                     $SMB_session_key_offset +
-                                    $SMB_negotiate_flags +
+                                    $negotiate_flags +
                                     $auth_domain_bytes +
                                     $auth_username_bytes +
                                     $auth_hostname_bytes +
@@ -1298,7 +1303,7 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
             else
             {
                 $message_ID++
-                $packet_SMB_header = New-PacketSMB2Header 0x01,0x00 0x01,0x00 $message_ID  $process_ID $tree_ID $session_ID
+                $packet_SMB_header = New-PacketSMB2Header 0x01,0x00 0x01,0x00 $false $message_ID  $process_ID $tree_ID $session_ID
                 $packet_NTLMSSP_auth = New-PacketNTLMSSPAuth $NTLMSSP_response
                 $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                 $NTLMSSP_auth = ConvertFrom-PacketOrderedDictionary $packet_NTLMSSP_auth        
@@ -1321,7 +1326,8 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                     if([System.BitConverter]::ToString($client_receive[9..12]) -eq '00-00-00-00')
                     {
                         Write-Verbose "[+] $output_username successfully authenticated on $Target"
-                        $login_successful = $true
+                        Write-Output "[-] SMB1 is not supported"
+                        $login_successful = $false
                     }
                     else
                     {
@@ -1348,7 +1354,9 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
             }
             catch
             {
-                Write-Output "[-] Something went wrong"
+                $error_message = $_.Exception.Message
+                $error_message = $error_message -replace "`n",""
+                Write-Output "[-] $error_message"
                 $login_successful = $false
             }
 
@@ -1374,6 +1382,7 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
             $session_ID = $inveigh.session_table[$session]
             $message_ID =  $inveigh.session_message_ID_table[$session]
             $tree_ID = 0x00,0x00,0x00,0x00
+            $SMB_signing = $false
         }
 
         if($Action -eq 'All')
@@ -1385,58 +1394,34 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
             $action_stage = $Action    
         }
 
-        $SMB_path = "\\" + $Target + "\IPC$"
-        $SMB_path_bytes = [System.Text.Encoding]::Unicode.GetBytes($SMB_path)
+        $path = "\\" + $Target + "\IPC$"
+        $path_bytes = [System.Text.Encoding]::Unicode.GetBytes($path)
         $j = 0
+        $stage = 'TreeConnect'
 
-        if($SMB_version -eq 'SMB1')
+        while ($stage -ne 'Exit')
         {
-            Write-Output "[-] SMB1 is not supported"
-            throw
-        }  
-        else
-        {
-            $stage = 'TreeConnect'
 
-            :SMB_execute_loop while ($stage -ne 'exit')
+            try
             {
-
+                
                 switch ($stage)
                 {
             
-                    'TreeConnect'
+                    'CloseRequest'
                     {
                         $message_ID++
-
-                        if($share_list.Count -gt 0)
-                        {
-
-                            if($share_list[$j] -eq 'IPC$')
-                            {
-                                $j++
-                            }
-
-                            $SMB_path = "\\" + $Target + "\" + $share_list[$j]
-                            $SMB_path_bytes = [System.Text.Encoding]::Unicode.GetBytes($SMB_path)
-
-                        }
-
-                        $packet_SMB_header = New-PacketSMB2Header 0x03,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_SMB_data = New-PacketSMB2TreeConnectRequest $SMB_path_bytes
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x06,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SMB_data = New-PacketSMB2CloseRequest $file_ID
                         $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data    
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
                         $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
                         $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
 
                         if($SMB_signing)
                         {
-                            $SMB_sign = $SMB_header + $SMB_data 
+                            $SMB_sign = $SMB_header + $SMB_data
                             $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
                             $SMB_signature = $SMB_signature[0..15]
                             $packet_SMB_header["Signature"] = $SMB_signature
@@ -1444,74 +1429,111 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                         }
 
                         $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
 
-                        try
+                        if(Get-StatusPending $client_receive[12..15])
                         {
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $tree_ID = $client_receive[40..43]
-                            $access_mask = $null
-
-                            if($client_receive[76] -eq 92)
-                            {
-                                $tree_access_mask = 0x00,0x00,0x00,0x00
-                            }
-                            else
-                            {
-                                $tree_access_mask = $client_receive[80..83]
-                            }
-
-                            if($share_list.Count -gt 0)
-                            {
-
-                                ForEach($byte in $tree_access_mask)
-                                {
-                                    $access_mask = [System.Convert]::ToString($byte,2).PadLeft(8,'0') + $access_mask
-                                }
-
-                                $response_object_list | Where-Object {$_.Share -eq $share_list[$j]} | ForEach-Object {$_."Access Mask"=$access_mask}
-                                $stage = 'TreeDisconnect'
-                            }
-                            else
-                            {
-                                $tree_IPC = $tree_ID
-                                $stage = 'CreateRequest'
-                            }
-
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Session connection is closed"
-                            $stage = 'Exit'
-                        }
-                        
-                    }
-                  
-                    'CreateRequest'
-                    {
-                        
-                        if($action_stage -eq 'Share' -or $action_stage -eq 'NetSession')
-                        {
-                            $named_pipe = 0x73,0x00,0x72,0x00,0x76,0x00,0x73,0x00,0x76,0x00,0x63,0x00 # srvsvc
-                        }
-                        elseif($step -eq 1)
-                        {
-                            $named_pipe = 0x73,0x00,0x61,0x00,0x6d,0x00,0x72,0x00 # samr
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
                         }
                         else
                         {
-                            $named_pipe = 0x6c,0x00,0x73,0x00,0x61,0x00,0x72,0x00,0x70,0x00,0x63,0x00 # lsarpc
+                            $stage = 'StatusReceived'
                         }
+                        
+                    }
 
+                    'Connect2'
+                    {
                         $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x05,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SAMR_data = New-PacketSAMRConnect2 $Target
+                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x06,0x00,0x00,0x00 0x00,0x00 0x39,0x00
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+
                         if($SMB_signing)
                         {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                         }
 
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+
+                    }
+
+                    'Connect5'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SAMR_data = New-PacketSAMRConnect5 $Target
+                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x06,0x00,0x00,0x00 0x00,0x00 0x40,0x00
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+                        
+                    }
+
+                    'CreateRequest'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x05,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
                         $packet_SMB_data = New-PacketSMB2CreateRequestFile $named_pipe
                         $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                         $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data  
@@ -1534,7 +1556,17 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                             $client_stream.Write($client_send,0,$client_send.Length) > $null
                             $client_stream.Flush()
                             $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $file_ID = $client_receive[132..147]
+                            
+                            if(Get-StatusPending $client_receive[12..15])
+                            {
+                                $stage = 'StatusPending'
+                                $stage_next = 'StatusReceived'
+                            }
+                            else
+                            {
+                                $stage = 'StatusReceived'
+                            }
+                            
                         }
                         catch
                         {
@@ -1542,982 +1574,13 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                             $stage = 'Exit'
                         }
 
-                        if($Refresh -and $stage -ne 'Exit')
-                        {
-                            Write-Output "[+] Session refreshed"
-                            $stage = 'Exit'
-                        }
-                        elseif($step -ge 2)
-                        {
-                            $stage = 'RPCBind'
-                        }
-                        elseif($stage -ne 'Exit')
-                        {
-                            $stage = 'QueryInfoRequest'
-                        }
-
-                    }
-
-                    'QueryInfoRequest'
-                    {          
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x10,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_SMB_data = New-PacketSMB2QueryInfoRequest 0x01 0x05 0x18,0x00,0x00,0x00 0x68,0x00 $file_ID
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data    
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data 
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-
-                        try
-                        {
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $file_ID = $client_receive[132..147]
-                            $stage = 'RPCBind'
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-                
-                    'RPCBind'
-                    {
-                        $named_pipe = 0x73,0x00,0x72,0x00,0x76,0x00,0x73,0x00,0x76,0x00,0x63,0x00 # srvsvc
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        if($action_stage -eq 'Share')
-                        {
-                            $named_pipe_UUID = 0xc8,0x4f,0x32,0x4b,0x70,0x16,0xd3,0x01,0x12,0x78,0x5a,0x47,0xbf,0x6e,0xe1,0x88
-                            $packet_RPC_data = New-PacketRPCBind 0x48,0x00 2 0x01 0x00,0x00 $named_pipe_UUID 0x03,0x00
-                            $stage_next = 'NetShareEnumAll'
-                        }
-                        elseif($action_stage -eq 'NetSession')
-                        {
-                            $named_pipe_UUID = 0xc8,0x4f,0x32,0x4b,0x70,0x16,0xd3,0x01,0x12,0x78,0x5a,0x47,0xbf,0x6e,0xe1,0x88
-                            $packet_RPC_data = New-PacketRPCBind 0x74,0x00 2 0x02 0x00,0x00 $named_pipe_UUID 0x03,0x00
-                            $stage_next = 'NetSessEnum'
-                        }
-                        elseif($step -eq 1)
-                        {
-                            $named_pipe_UUID = 0x78,0x57,0x34,0x12,0x34,0x12,0xcd,0xab,0xef,0x00,0x01,0x23,0x45,0x67,0x89,0xac
-                            $packet_RPC_data = New-PacketRPCBind 0x48,0x00 5 0x01 0x00,0x00 $named_pipe_UUID 0x01,0x00
-
-                            if($action_stage -eq 'User')
-                            {
-                                $stage_next = 'Connect5'
-                            }
-                            else
-                            {
-                                $stage_next = 'Connect2'
-                            }
-
-                        }
-                        elseif($step -gt 2)
-                        {
-                            $named_pipe_UUID = 0x78,0x57,0x34,0x12,0x34,0x12,0xcd,0xab,0xef,0x00,0x01,0x23,0x45,0x67,0x89,0xab
-                            $named_pipe = 0x78,0x57,0x34,0x12,0x34,0x12,0xcd,0xab,0x76,0x00,0x63,0x00
-                            $packet_RPC_data = New-PacketRPCBind 0x48,0x00 14 0x01 0x00,0x00 $named_pipe_UUID 0x00,0x00
-                            $stage_next = 'LSAOpenPolicy'
-                        }
-                        else
-                        {
-                            $named_pipe_UUID = 0x78,0x57,0x34,0x12,0x34,0x12,0xcd,0xab,0xef,0x00,0x01,0x23,0x45,0x67,0x89,0xab
-                            $named_pipe = 0x78,0x57,0x34,0x12,0x34,0x12,0xcd,0xab,0x76,0x00,0x63,0x00
-                            $packet_RPC_data = New-PacketRPCBind 0x48,0x00 1 0x01 0x00,0x00 $named_pipe_UUID 0x00,0x00
-                            $stage_next = 'LSAOpenPolicy'
-                        }
-                        
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $packet_SMB_data = New-PacketSMB2WriteRequest $file_ID $RPC_data.Length
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try 
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $stage = 'ReadRequest'
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-                        
-                    }
-               
-                    'ReadRequest'
-                    {
-                        Start-Sleep -m $Sleep
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x08,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_SMB_data = New-PacketSMB2ReadRequest $file_ID
-                        $packet_SMB_data["Length"] = 0x00,0x04,0x00,0x00
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data 
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try 
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data 
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-
-                            if([System.BitConverter]::ToString($client_receive[12..15]) -ne '03-01-00-00')
-                            {
-                                $stage = $stage_next
-                            }
-                            else
-                            {
-                                $stage = 'StatusPending'
-                            }
-
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-
-                    'StatusPending'
-                    {
-                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-
-                        if([System.BitConverter]::ToString($client_receive[12..15]) -ne '03-01-00-00')
-                        {
-                            $stage = $stage_next
-                        }
-
-                    }
-
-                    'LSAOpenPolicy'
-                    {
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_LSARPC_data = New-PacketLSAOpenPolicy
-                        $LSARPC_data = ConvertFrom-PacketOrderedDictionary $packet_LSARPC_data 
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $LSARPC_data.Length 4280
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $LSARPC_data.Length 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x06,0x00
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $LSARPC_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            [Byte[]]$policy_handle = $client_receive[140..159]
-
-                            if($step -gt 2)
-                            {
-                                $stage = 'LSALookupSids'
-                            }
-                            else
-                            {
-                                $stage = 'LSAQueryInfoPolicy'    
-                            }
-                            
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-
-                    'LSALookupSids'
-                    {
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_LSARPC_data = New-PacketLSALookupSids $policy_handle $SID_array
-                        $LSARPC_data = ConvertFrom-PacketOrderedDictionary $packet_LSARPC_data
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $LSARPC_data.Length 4280
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $LSARPC_data.Length 0 0 0x10,0x00,0x00,0x00 0x00,0x00 0x0f,0x00
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data   
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $LSARPC_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $stage = 'ParseLookupSids'
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-                           
-                    }
-
-                    'LSAQueryInfoPolicy'
-                    {
-                        [Byte[]]$policy_handle = $client_receive[140..159]
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_LSARPC_data = New-PacketLSAQueryInfoPolicy $policy_handle
-                        $LSARPC_data = ConvertFrom-PacketOrderedDictionary $packet_LSARPC_data
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $LSARPC_data.Length 4280
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $LSARPC_data.Length 0 0 0x03,0x00,0x00,0x00 0x00,0x00 0x07,0x00
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data   
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $LSARPC_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $stage = 'LSAClose'
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-
-                    'LSAClose'
-                    {
-                        [Byte[]]$LSA_domain_length_bytes = $client_receive[148..149]
-                        $LSA_domain_length = [System.BitConverter]::ToInt16($LSA_domain_length_bytes,0)
-                        [Byte[]]$LSA_domain_actual_count_bytes = $client_receive[168..171]
-                        $LSA_domain_actual_count = [System.BitConverter]::ToInt32($LSA_domain_actual_count_bytes,0)
-                        
-                        if($LSA_domain_actual_count % 2)
-                        {
-                            $LSA_domain_length += 2
-                        }
-
-                        [Byte[]]$LSA_domain_SID = $client_receive[(176 + $LSA_domain_length)..(199 + $LSA_domain_length)]
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_LSARPC_data = New-PacketLSAClose $policy_handle
-                        $LSARPC_data = ConvertFrom-PacketOrderedDictionary $packet_LSARPC_data 
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $LSARPC_data.Length 4280
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $LSARPC_data.Length 0 0 0x04,0x00,0x00,0x00 0x00,0x00 0x00,0x00
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $LSARPC_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                        
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $stage = 'CloseRequest'
-                            $step++
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-
-                    'Connect2'
-                    {
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_SAMR_data = New-PacketSAMRConnect2 $Target
-                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x06,0x00,0x00,0x00 0x00,0x00 0x39,0x00
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $stage = 'OpenDomain'
-                            $step++
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-
-                    'Connect5'
-                    {
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_SAMR_data = New-PacketSAMRConnect5 $Target
-                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x06,0x00,0x00,0x00 0x00,0x00 0x40,0x00
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $stage = 'OpenDomain'
-                            $step++
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-
-                    'OpenDomain'
-                    {
-
-                        if($step -eq 5 -and $action_stage -eq 'Group')
-                        {
-                            $LSA_domain_SID = 0x01,0x01,0x00,0x00,0x00,0x00,0x00,0x05,0x20,0x00,0x00,0x00
-                            $SID_count = 0x01,0x00,0x00,0x00
-                        }
-                        elseif($action_stage -eq 'Group')
-                        {
-                            $SID_count = 0x04,0x00,0x00,0x00
-                            [Byte[]]$SAMR_connect_handle = $client_receive[140..159]
-                        }
-                        else
-                        {
-                            $SID_count = 0x04,0x00,0x00,0x00
-                            [Byte[]]$SAMR_connect_handle = $client_receive[156..175]
-                        }
-                           
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_SAMR_data = New-PacketSAMROpenDomain $SAMR_connect_handle $SID_count $LSA_domain_SID
-                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x07,0x00,0x00,0x00 0x00,0x00 0x07,0x00
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            [Byte[]]$SAMR_domain_handle = $client_receive[140..159]
-                            $step++
-
-                            if($action_stage -eq 'User')
-                            {
-                                $stage = 'EnumDomainUsers'
-                            }
-                            else
-                            {
-                                $stage = 'LookupNames'
-                            }
-
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-
-                    'LookupNames'
-                    {
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-                        
-                        $packet_SAMR_data = New-PacketSAMRLookupNames $SAMR_domain_handle $Group
-                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x08,0x00,0x00,0x00 0x00,0x00 0x11,0x00
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                        
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            [Byte[]]$SAMR_RID = $client_receive[152..155]
-                            $step++
-                            
-                            if([System.BitConverter]::ToString($client_receive[156..159]) -eq '73-00-00-c0')
-                            {
-                                $stage = 'SAMRCloseRequest'
-                            }
-                            else
-                            {
-                                
-                                if($step -eq 4)
-                                {
-                                    $stage = 'OpenGroup'
-                                }
-                                else
-                                {
-                                    $stage = 'OpenAlias'
-                                }
-
-                            }
-
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-
-                    'OpenAlias'
-                    {  
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_SAMR_data = New-PacketSAMROpenAlias $SAMR_domain_handle $SAMR_RID
-                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x0c,0x00,0x00,0x00 0x00,0x00 0x1b,0x00
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                        
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $step++
-                            
-                            if([System.BitConverter]::ToString($client_receive[156..159]) -eq '73-00-00-c0')
-                            {
-                                $stage = 'SAMRCloseRequest'
-                            }
-                            else
-                            {
-                                $stage = 'GetMembersInAlias'
-                            }
-
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-
-                    'OpenGroup'
-                    {
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_SAMR_data = New-PacketSAMROpenGroup $SAMR_domain_handle $SAMR_RID
-                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x09,0x00,0x00,0x00 0x00,0x00 0x13,0x00
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                        
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            [Byte[]]$group_handle = $client_receive[140..159]
-                            $step++
-                            $stage = 'QueryGroupMember'
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-
-                    'QueryGroupMember'
-                    {
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_SAMR_data = New-PacketSAMRQueryGroupMember $group_handle
-                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x10,0x00,0x00,0x00 0x00,0x00 0x19,0x00
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                        
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            [Byte[]]$RID_count_bytes = $client_receive[144..147]
-                            $RID_count = [System.BitConverter]::ToInt16($RID_count_bytes,0)
-                            [Byte[]]$RID_list = $client_receive[160..(159 + ($RID_count * 4))]
-                            $step++
-                            $stage = 'LookupRids'
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-
-                    'LookupRids'
-                    {
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_SAMR_data = New-PacketSAMRLookupRids $SAMR_domain_handle $RID_count_bytes $RID_list
-                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x0b,0x00,0x00,0x00 0x00,0x00 0x12,0x00
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                        
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $step++
-                            $stage = 'ParseLookupRids'
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-
-                    'GetMembersInAlias'
-                    {
-                        [Byte[]]$SAMR_policy_handle = $client_receive[140..159]
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_SAMR_data = New-PacketSAMRGetMembersInAlias $SAMR_policy_handle
-                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x0d,0x00,0x00,0x00 0x00,0x00 0x21,0x00
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                        
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            [Byte[]]$SID_array = $client_receive[140..([System.BitConverter]::ToInt16($client_receive[3..1],0) - 1)]
-                            $step++
-                            
-                            if([System.BitConverter]::ToString($client_receive[156..159]) -eq '73-00-00-c0')
-                            {
-                                $stage = 'SAMRCloseRequest'
-                            }
-                            else
-                            {
-                                $stage = 'CreateRequest'
-                            }
-
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-
-                    'SAMRCloseRequest'
-                    {
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_SAMR_data = New-PacketSAMRClose $SAMR_domain_handle
-                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x09,0x00,0x00,0x00 0x00,0x00 0x01,0x00
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                        
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $step++
-
-                            if($step -eq 8)
-                            {
-                                Write-Output "[-] $Group group not found"
-                                $stage = 'TreeDisconnect'
-                            }
-                            else
-                            {
-                                $stage = 'OpenDomain'
-                            }
-
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
                     }
 
                     'EnumDomainUsers'
                     {
-                        [Byte[]]$SAMR_domain_handle = $client_receive[140..159]
                         $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
                         $packet_SAMR_data = New-PacketSAMREnumDomainUsers $SAMR_domain_handle
                         $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
                         $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x08,0x00,0x00,0x00 0x00,0x00 0x0d,0x00
@@ -2538,74 +1601,553 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                             $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                         }
 
-                        try
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
                         {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $step++
-                            $stage = 'ParseUsers'
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
                         }
-                        catch
+                        else
                         {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
+                            $stage = 'StatusReceived'
+                        }
+                        
+                    }
+
+                    'GetMembersInAlias'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SAMR_data = New-PacketSAMRGetMembersInAlias $SAMR_policy_handle
+                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x0d,0x00,0x00,0x00 0x00,0x00 0x21,0x00
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                        
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
                         }
 
                     }
 
-                    'ParseUsers'
+                    'Logoff'
                     {
-                        [Byte[]]$response_user_count_bytes = $client_receive[148..151]
-                        $response_user_count = [System.BitConverter]::ToInt16($response_user_count_bytes,0)
-                        $response_user_start = $response_user_count * 12 + 172
-                        $response_user_end = $response_user_start
-                        $response_RID_start = 160
-                        $response_user_length_start = 164
-                        $response_user_list = @()
-                        $i = 0
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x02,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SMB_data = New-PacketSMB2SessionLogoffRequest
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
 
-                        while($i -lt $response_user_count)
+                        if($SMB_signing)
                         {
-                            $response_user_object = New-Object PSObject
-                            [Byte[]]$response_user_length_bytes = $client_receive[$response_user_length_start..($response_user_length_start + 1)]
-                            $response_user_length = [System.BitConverter]::ToInt16($response_user_length_bytes,0)
-                            [Byte[]]$response_RID_bytes = $client_receive[$response_RID_start..($response_RID_start + 3)]
-                            $response_RID = [System.BitConverter]::ToInt16($response_RID_bytes,0)
-                            $response_user_end = $response_user_start + $response_user_length
-                            [Byte[]]$response_actual_count_bytes = $client_receive[($response_user_start - 4)..($response_user_start - 1)]
-                            $response_actual_count = [System.BitConverter]::ToInt16($response_actual_count_bytes,0)
-                            [Byte[]]$response_user_bytes = $client_receive[$response_user_start..($response_user_end - 1)]
-                            
-                            if($response_actual_count % 2)
-                            {
-                                $response_user_start += $response_user_length + 14
-                            }
-                            else
-                            {
-                                $response_user_start += $response_user_length + 12
-                            }
-
-                            $response_user = [System.BitConverter]::ToString($response_user_bytes)
-                            $response_user = $response_user -replace "-00",""
-                            $response_user = $response_user.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
-                            $response_user = New-Object System.String ($response_user,0,$response_user.Length)
-                            Add-Member -InputObject $response_user_object -MemberType NoteProperty -Name Username $response_user
-                            Add-Member -InputObject $response_user_object -MemberType NoteProperty -Name RID $response_RID
-                            $response_user_length_start = $response_user_length_start + 12
-                            $response_RID_start = $response_RID_start + 12
-                            $response_user_list += $response_user_object
-                            $i++
+                            $SMB_sign = $SMB_header + $SMB_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                         }
 
-                        if($Action -eq 'All')
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+                        $stage = 'Exit'
+                    }
+
+                    'LookupNames'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SAMR_data = New-PacketSAMRLookupNames $SAMR_domain_handle $Group
+                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x08,0x00,0x00,0x00 0x00,0x00 0x11,0x00
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                        
+                        if($SMB_signing)
                         {
-                            Write-Output "Local Users:"
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+                        
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+
+                    }
+
+                    'LookupRids'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SAMR_data = New-PacketSAMRLookupRids $SAMR_domain_handle $RID_count_bytes $RID_list
+                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x0b,0x00,0x00,0x00 0x00,0x00 0x12,0x00
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                        
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
                         }
                         
-                        Write-Output $response_user_list | Sort-Object -property Username |Format-Table -AutoSize
-                        $stage = 'CloseRequest'
+                    }
+
+                    'LSAClose'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_LSARPC_data = New-PacketLSAClose $policy_handle
+                        $LSARPC_data = ConvertFrom-PacketOrderedDictionary $packet_LSARPC_data 
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $LSARPC_data.Length 4280
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $LSARPC_data.Length 0 0 0x04,0x00,0x00,0x00 0x00,0x00 0x00,0x00
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $LSARPC_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                        
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+                        $step++
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+
+                    }
+
+                    'LSALookupSids'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_LSARPC_data = New-PacketLSALookupSids $policy_handle $SID_array
+                        $LSARPC_data = ConvertFrom-PacketOrderedDictionary $packet_LSARPC_data
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $LSARPC_data.Length 4280
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $LSARPC_data.Length 0 0 0x10,0x00,0x00,0x00 0x00,0x00 0x0f,0x00
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data   
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $LSARPC_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+                        
+                    }
+
+                    'LSAOpenPolicy'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_LSARPC_data = New-PacketLSAOpenPolicy
+                        $LSARPC_data = ConvertFrom-PacketOrderedDictionary $packet_LSARPC_data 
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $LSARPC_data.Length 4280
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $LSARPC_data.Length 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x06,0x00
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $LSARPC_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+                
+                    }
+
+                    'LSAQueryInfoPolicy'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_LSARPC_data = New-PacketLSAQueryInfoPolicy $policy_handle
+                        $LSARPC_data = ConvertFrom-PacketOrderedDictionary $packet_LSARPC_data
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $LSARPC_data.Length 4280
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $LSARPC_data.Length 0 0 0x03,0x00,0x00,0x00 0x00,0x00 0x07,0x00
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data   
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $LSARPC_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $LSARPC_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+                        
+                    }
+
+                    'NetSessEnum'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SRVSVC_data = New-PacketSRVSVCNetSessEnum $Target
+                        $SRVSVC_data = ConvertFrom-PacketOrderedDictionary $packet_SRVSVC_data
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SRVSVC_data.Length 1024
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SRVSVC_data.Length 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x0c,0x00                        
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SRVSVC_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                        
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SRVSVC_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SRVSVC_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+
+                    }
+                    
+                    'NetShareEnumAll'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SRVSVC_data = New-PacketSRVSVCNetShareEnumAll $Target
+                        $SRVSVC_data = ConvertFrom-PacketOrderedDictionary $packet_SRVSVC_data 
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SRVSVC_data.Length 4280
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SRVSVC_data.Length 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x0f,0x00
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SRVSVC_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                        
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SRVSVC_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SRVSVC_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+
+                    }
+
+                    'OpenAlias'
+                    {  
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SAMR_data = New-PacketSAMROpenAlias $SAMR_domain_handle $SAMR_RID
+                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x0c,0x00,0x00,0x00 0x00,0x00 0x1b,0x00
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                        
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+
+                    }
+
+                    'OpenDomain'
+                    {    
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SAMR_data = New-PacketSAMROpenDomain $SAMR_connect_handle $SID_count $LSA_domain_SID
+                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x07,0x00,0x00,0x00 0x00,0x00 0x07,0x00
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+
+                    }
+
+                    'OpenGroup'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SAMR_data = New-PacketSAMROpenGroup $SAMR_domain_handle $SAMR_RID
+                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x09,0x00,0x00,0x00 0x00,0x00 0x13,0x00
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                        
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+                        
                     }
 
                     'ParseLookupRids'
@@ -2743,62 +2285,6 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                         $stage = 'CloseRequest'
                     }
 
-                    'NetShareEnumAll'
-                    {
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-
-                        $packet_SRVSVC_data = New-PacketSRVSVCNetShareEnumAll $Target
-                        $SRVSVC_data = ConvertFrom-PacketOrderedDictionary $packet_SRVSVC_data 
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SRVSVC_data.Length 4280
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SRVSVC_data.Length 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x0f,0x00
-                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SRVSVC_data.Length
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                        
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SRVSVC_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SRVSVC_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $stage_next = 'ParseSRVSVC'
-                            
-                            if([System.BitConverter]::ToString($client_receive[12..15]) -ne '03-01-00-00')
-                            {
-                                $stage = $stage_next
-                            }
-                            else
-                            {
-                                $stage = 'StatusPending'
-                            }
-
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
-
-                    }
-
                     'ParseSRVSVC'
                     {
                         $response_object_list = @()
@@ -2871,22 +2357,7 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                                 $share_list += $response_item
                                 Add-Member -InputObject $response_item_object -MemberType NoteProperty -Name Share $response_item
                                 Add-Member -InputObject $response_item_object -MemberType NoteProperty -Name Description $response_item_2
-
-                                if($response_item -eq 'IPC$')
-                                {
-
-                                    ForEach($byte in $tree_access_mask)
-                                    {
-                                        $access_mask = [System.Convert]::ToString($byte,2).PadLeft(8,'0') + $access_mask
-                                    }
-
-                                    Add-Member -InputObject $response_item_object -MemberType NoteProperty -Name "Access Mask" $access_mask
-                                }
-                                else
-                                {
-                                    Add-Member -InputObject $response_item_object -MemberType NoteProperty -Name "Access Mask" ""
-                                }
-
+                                Add-Member -InputObject $response_item_object -MemberType NoteProperty -Name "Access Mask" ""
                             }
                             else
                             {
@@ -2905,122 +2376,795 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                         elseif($Action -eq 'All' -and $action_stage -eq 'NetSession')
                         {
                             Write-Output "NetSessions:"
-                            $response_object_list | Sort-Object -property Share |Format-Table -AutoSize
+                            Write-Output $response_object_list | Sort-Object -property Share |Format-Table -AutoSize
                         }
 
                         if($Action -eq 'NetSession')
                         {
-                            $response_object_list | Sort-Object -property Share |Format-Table -AutoSize
+                            Write-Output $response_object_list | Sort-Object -property Share |Format-Table -AutoSize
                         }
 
                         $stage = 'CloseRequest'
                     }
 
-                    'NetSessEnum'
+                    'ParseUsers'
                     {
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
+                        [Byte[]]$response_user_count_bytes = $client_receive[148..151]
+                        $response_user_count = [System.BitConverter]::ToInt16($response_user_count_bytes,0)
+                        $response_user_start = $response_user_count * 12 + 172
+                        $response_user_end = $response_user_start
+                        $response_RID_start = 160
+                        $response_user_length_start = 164
+                        $response_user_list = @()
+                        $i = 0
+
+                        while($i -lt $response_user_count)
                         {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
+                            $response_user_object = New-Object PSObject
+                            [Byte[]]$response_user_length_bytes = $client_receive[$response_user_length_start..($response_user_length_start + 1)]
+                            $response_user_length = [System.BitConverter]::ToInt16($response_user_length_bytes,0)
+                            [Byte[]]$response_RID_bytes = $client_receive[$response_RID_start..($response_RID_start + 3)]
+                            $response_RID = [System.BitConverter]::ToInt16($response_RID_bytes,0)
+                            $response_user_end = $response_user_start + $response_user_length
+                            [Byte[]]$response_actual_count_bytes = $client_receive[($response_user_start - 4)..($response_user_start - 1)]
+                            $response_actual_count = [System.BitConverter]::ToInt16($response_actual_count_bytes,0)
+                            [Byte[]]$response_user_bytes = $client_receive[$response_user_start..($response_user_end - 1)]
+                            
+                            if($response_actual_count % 2)
+                            {
+                                $response_user_start += $response_user_length + 14
+                            }
+                            else
+                            {
+                                $response_user_start += $response_user_length + 12
+                            }
+
+                            $response_user = [System.BitConverter]::ToString($response_user_bytes)
+                            $response_user = $response_user -replace "-00",""
+                            $response_user = $response_user.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+                            $response_user = New-Object System.String ($response_user,0,$response_user.Length)
+                            Add-Member -InputObject $response_user_object -MemberType NoteProperty -Name Username $response_user
+                            Add-Member -InputObject $response_user_object -MemberType NoteProperty -Name RID $response_RID
+                            $response_user_length_start = $response_user_length_start + 12
+                            $response_RID_start = $response_RID_start + 12
+                            $response_user_list += $response_user_object
+                            $i++
                         }
 
-                        $packet_SRVSVC_data = New-PacketSRVSVCNetSessEnum $Target
-                        $SRVSVC_data = ConvertFrom-PacketOrderedDictionary $packet_SRVSVC_data
-                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SRVSVC_data.Length 1024
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SRVSVC_data.Length 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x0c,0x00                        
+                        if($Action -eq 'All')
+                        {
+                            Write-Output "Local Users:"
+                        }
+
+                        Write-Output $response_user_list | Sort-Object -property Username |Format-Table -AutoSize
+                        $stage = 'CloseRequest'
+                    }
+                
+                    'QueryGroupMember'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SAMR_data = New-PacketSAMRQueryGroupMember $group_handle
+                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x10,0x00,0x00,0x00 0x00,0x00 0x19,0x00
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
                         $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
                         $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                         $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
-                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SRVSVC_data.Length
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
                         $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
                         $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
                         
                         if($SMB_signing)
                         {
-                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SRVSVC_data
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
                             $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
                             $SMB_signature = $SMB_signature[0..15]
                             $packet_SMB_header["Signature"] = $SMB_signature
                             $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                         }
 
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SRVSVC_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                            $stage_next = 'ParseSRVSVC'
-                            
-                            if([System.BitConverter]::ToString($client_receive[12..15]) -ne '03-01-00-00')
-                            {
-                                $stage = $stage_next
-                            }
-                            else
-                            {
-                                $stage = 'StatusPending'
-                            }
-                        
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
-                        }
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
 
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+                        
                     }
 
-                    'CloseRequest'
-                    {
+                    'QueryInfoRequest'
+                    {          
                         $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x06,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-      
-                        $packet_SMB_data = New-PacketSMB2CloseRequest $file_ID
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x10,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SMB_data = New-PacketSMB2QueryInfoRequest 0x01 0x05 0x18,0x00,0x00,0x00 0x68,0x00 $file_ID
                         $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data    
                         $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
                         $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
 
                         if($SMB_signing)
                         {
-                            $SMB_sign = $SMB_header + $SMB_data
+                            $SMB_sign = $SMB_header + $SMB_data 
                             $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
                             $SMB_signature = $SMB_signature[0..15]
                             $packet_SMB_header["Signature"] = $SMB_signature
                             $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                         }
 
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+
+                    }
+                
+                    'ReadRequest'
+                    {
+                        Start-Sleep -m $Sleep
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x08,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SMB_data = New-PacketSMB2ReadRequest $file_ID
+                        $packet_SMB_data["Length"] = 0x00,0x04,0x00,0x00
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data 
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data 
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+                        
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+
+                    }
+
+                    'RPCBind'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_RPC_data = New-PacketRPCBind $frag_length $call_ID $num_ctx_items 0x00,0x00 $named_pipe_UUID $named_pipe_UUID_version
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
+                        $packet_SMB_data = New-PacketSMB2WriteRequest $file_ID $RPC_data.Length
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+                        
+                    }
+
+                    'SAMRCloseRequest'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x0b,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SAMR_data = New-PacketSAMRClose $SAMR_domain_handle
+                        $SAMR_data = ConvertFrom-PacketOrderedDictionary $packet_SAMR_data 
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SAMR_data.Length 0 0 0x09,0x00,0x00,0x00 0x00,0x00 0x01,0x00
+                        $packet_SMB_data = New-PacketSMB2IoctlRequest 0x17,0xc0,0x11,0x00 $file_ID $SAMR_data.Length 4280
+                        $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data 
+                        $RPC_data_length = $SMB_data.Length + $RPC_data.Length + $SAMR_data.Length
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $RPC_data_length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                        
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data + $RPC_data + $SAMR_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
+                        {
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
+                        }
+                        else
+                        {
+                            $stage = 'StatusReceived'
+                        }
+
+                    }
+            
+                    'StatusPending'
+                    {
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if([System.BitConverter]::ToString($client_receive[12..15]) -ne '03-01-00-00')
+                        {
+                            $stage = $stage_next
+                        }
+
+                    }
+
+                    'StatusReceived'
+                    {
+                        
+                        switch ($stage_current)
+                        {
+
+                            'CloseRequest'
+                            {
+
+                                if($step -eq 1)
+                                {
+                                    $named_pipe = 0x73,0x00,0x61,0x00,0x6d,0x00,0x72,0x00 # samr
+                                    $stage = 'CreateRequest'
+                                }
+                                elseif($action_stage -eq 'Share' -and $share_list.Count -gt 0)
+                                {
+                                    $stage = 'TreeConnect'
+                                }
+                                else
+                                {
+                                    $stage = 'TreeDisconnect'
+                                }
+
+                            }
+
+                            'Connect2'
+                            {
+                                $step++
+                                $SID_count = 0x04,0x00,0x00,0x00
+                                [Byte[]]$SAMR_connect_handle = $client_receive[140..159]
+                                $stage = 'OpenDomain'
+                            }
+
+                            'Connect5'
+                            {
+                                $step++
+                                $SID_count = 0x04,0x00,0x00,0x00
+                                [Byte[]]$SAMR_connect_handle = $client_receive[156..175]
+                                $stage = 'OpenDomain'
+                            }
+
+                            'CreateRequest'
+                            {
+
+                                if($action_stage -eq 'Share')
+                                {
+                                    $frag_length = 0x48,0x00
+                                    $call_ID = 2
+                                    $num_ctx_items = 0x01
+                                    $named_pipe_UUID = 0xc8,0x4f,0x32,0x4b,0x70,0x16,0xd3,0x01,0x12,0x78,0x5a,0x47,0xbf,0x6e,0xe1,0x88
+                                    $named_pipe_UUID_version = 0x03,0x00
+                                    $stage_next = 'NetShareEnumAll'
+                                }
+                                elseif($action_stage -eq 'NetSession')
+                                {
+                                    $frag_length = 0x74,0x00
+                                    $call_ID = 2
+                                    $num_ctx_items = 0x02
+                                    $named_pipe_UUID = 0xc8,0x4f,0x32,0x4b,0x70,0x16,0xd3,0x01,0x12,0x78,0x5a,0x47,0xbf,0x6e,0xe1,0x88
+                                    $named_pipe_UUID_version = 0x03,0x00
+                                    $stage_next = 'NetSessEnum'
+                                }
+                                elseif($step -eq 1)
+                                {
+                                    $frag_length = 0x48,0x00
+                                    $call_ID = 5
+                                    $num_ctx_items = 0x01
+                                    $named_pipe_UUID = 0x78,0x57,0x34,0x12,0x34,0x12,0xcd,0xab,0xef,0x00,0x01,0x23,0x45,0x67,0x89,0xac
+                                    $named_pipe_UUID_version = 0x01,0x00
+
+                                    if($action_stage -eq 'User')
+                                    {
+                                        $stage_next = 'Connect5'
+                                    }
+                                    else
+                                    {
+                                        $stage_next = 'Connect2'
+                                    }
+
+                                }
+                                elseif($step -gt 2)
+                                {
+                                    $frag_length = 0x48,0x00
+                                    $call_ID = 14
+                                    $num_ctx_items = 0x01
+                                    $named_pipe_UUID = 0x78,0x57,0x34,0x12,0x34,0x12,0xcd,0xab,0xef,0x00,0x01,0x23,0x45,0x67,0x89,0xab
+                                    $named_pipe_UUID_version = 0x00,0x00
+                                    $named_pipe = 0x78,0x57,0x34,0x12,0x34,0x12,0xcd,0xab,0x76,0x00,0x63,0x00
+                                    $stage_next = 'LSAOpenPolicy'
+                                }
+                                else
+                                {
+                                    $frag_length = 0x48,0x00
+                                    $call_ID = 1
+                                    $num_ctx_items = 0x01
+                                    $named_pipe_UUID = 0x78,0x57,0x34,0x12,0x34,0x12,0xcd,0xab,0xef,0x00,0x01,0x23,0x45,0x67,0x89,0xab
+                                    $named_pipe_UUID_version = 0x00,0x00
+                                    $named_pipe = 0x78,0x57,0x34,0x12,0x34,0x12,0xcd,0xab,0x76,0x00,0x63,0x00
+                                    $stage_next = 'LSAOpenPolicy'
+                                }
+
+                                $file_ID = $client_receive[132..147]
+                        
+                                if($Refresh -and $stage -ne 'Exit')
+                                {
+                                    Write-Output "[+] Session refreshed"
+                                    $stage = 'Exit'
+                                }
+                                elseif($step -ge 2)
+                                {
+                                    $stage = 'RPCBind'
+                                }
+                                elseif($stage -ne 'Exit')
+                                {
+                                    $stage = 'QueryInfoRequest'
+                                }
+
+                            }
+
+                            'EnumDomainUsers'
+                            {
+                                $step++
+                                $stage = 'ParseUsers'
+                            }
+
+                            'GetMembersInAlias'
+                            {
+                                $step++
+                                [Byte[]]$SID_array = $client_receive[140..([System.BitConverter]::ToInt16($client_receive[3..1],0) - 1)]
+                        
+                                if([System.BitConverter]::ToString($client_receive[156..159]) -eq '73-00-00-c0')
+                                {
+                                    $stage = 'SAMRCloseRequest'
+                                }
+                                else
+                                {
+                                    $named_pipe = 0x6c,0x00,0x73,0x00,0x61,0x00,0x72,0x00,0x70,0x00,0x63,0x00 # lsarpc
+                                    $stage = 'CreateRequest'
+                                }
+
+                            }
+
+                            'LookupNames'
+                            {
+                                $step++
+                                [Byte[]]$SAMR_RID = $client_receive[152..155]
+                                
+                                if([System.BitConverter]::ToString($client_receive[156..159]) -eq '73-00-00-c0')
+                                {
+                                    $stage = 'SAMRCloseRequest'
+                                }
+                                else
+                                {
+                                    
+                                    if($step -eq 4)
+                                    {
+                                        $stage = 'OpenGroup'
+                                    }
+                                    else
+                                    {
+                                        $stage = 'OpenAlias'
+                                    }
+
+                                }
+
+                            }
+
+                            'LookupRids'
+                            {
+                                $step++
+                                $stage = 'ParseLookupRids'
+                            }
+
+                            'LSAClose'
+                            {
+                                $stage = 'CloseRequest'
+                            }
+
+                            'LSALookupSids'
+                            {
+                                $stage = 'ParseLookupSids'
+                            }
+
+                            'LSAOpenPolicy'
+                            {
+                                [Byte[]]$policy_handle = $client_receive[140..159]
+
+                                if($step -gt 2)
+                                {
+                                    $stage = 'LSALookupSids'
+                                }
+                                else
+                                {
+                                    $stage = 'LSAQueryInfoPolicy'    
+                                }
+
+                            }
+
+                            'LSAQueryInfoPolicy'
+                            {
+                                [Byte[]]$LSA_domain_length_bytes = $client_receive[148..149]
+                                $LSA_domain_length = [System.BitConverter]::ToInt16($LSA_domain_length_bytes,0)
+                                [Byte[]]$LSA_domain_actual_count_bytes = $client_receive[168..171]
+                                $LSA_domain_actual_count = [System.BitConverter]::ToInt32($LSA_domain_actual_count_bytes,0)
+                                
+                                if($LSA_domain_actual_count % 2)
+                                {
+                                    $LSA_domain_length += 2
+                                }
+
+                                [Byte[]]$LSA_domain_SID = $client_receive[(176 + $LSA_domain_length)..(199 + $LSA_domain_length)]
+                                $stage = 'LSAClose'
+                            }
+
+                            'NetSessEnum'
+                            {
+                                $stage = 'ParseSRVSVC'
+                            }
+
+                            'NetShareEnumAll'
+                            {
+                                $stage = 'ParseSRVSVC'
+                            }
+
+                            'OpenAlias'
+                            {
+                                $step++
+                                [Byte[]]$SAMR_policy_handle = $client_receive[140..159]
+                        
+                                if([System.BitConverter]::ToString($client_receive[156..159]) -eq '73-00-00-c0')
+                                {
+                                    $stage = 'SAMRCloseRequest'
+                                }
+                                else
+                                {
+                                    $stage = 'GetMembersInAlias'
+                                }
+
+                            }
+
+                            'OpenDomain'
+                            {
+                                $step++
+                                [Byte[]]$SAMR_domain_handle = $client_receive[140..159]
+
+                                if($action_stage -eq 'User')
+                                {
+                                    $stage = 'EnumDomainUsers'
+                                }
+                                else
+                                {
+                                    $stage = 'LookupNames'
+                                }
+
+                            }
+
+                            'OpenGroup'
+                            {
+                                $step++
+                                [Byte[]]$group_handle = $client_receive[140..159]
+                                $stage = 'QueryGroupMember'
+                            }
+
+                            'QueryGroupMember'
+                            {
+                                $step++
+                                [Byte[]]$RID_count_bytes = $client_receive[144..147]
+                                $RID_count = [System.BitConverter]::ToInt16($RID_count_bytes,0)
+                                [Byte[]]$RID_list = $client_receive[160..(159 + ($RID_count * 4))]
+                                $stage = 'LookupRids'
+                            }
+
+                            'QueryInfoRequest'
+                            {
+                                $file_ID = $client_receive[132..147]
+                                $stage = 'RPCBind'
+                            }
+
+                            'ReadRequest'
+                            {
+                                $stage = $stage_next
+                            }
+
+                            'RPCBind'
+                            {
+                                $stage = 'ReadRequest'
+                            }
+
+                            'SAMRCloseRequest'
+                            {
+                                $step++
+
+                                if($step -eq 8)
+                                {
+                                    Write-Output "[-] $Group group not found"
+                                    $stage = 'TreeDisconnect'
+                                }
+                                else
+                                {
+
+                                    if($step -eq 5 -and $action_stage -eq 'Group')
+                                    {
+                                        $LSA_domain_SID = 0x01,0x01,0x00,0x00,0x00,0x00,0x00,0x05,0x20,0x00,0x00,0x00
+                                        $SID_count = 0x01,0x00,0x00,0x00
+                                    }
+
+                                    $stage = 'OpenDomain'
+                                }
+
+                            }
+
+                            'TreeConnect'
+                            {
+                                $tree_ID = $client_receive[40..43]
+                                $access_mask = $null
+
+                                if($client_receive[76] -eq 92)
+                                {
+                                    $tree_access_mask = 0x00,0x00,0x00,0x00
+                                }
+                                else
+                                {
+                                    $tree_access_mask = $client_receive[80..83]
+                                }
+
+                                if($share_list.Count -gt 0)
+                                {
+
+                                    if($client_receive[76] -ne 92)
+                                    {
+
+                                        ForEach($byte in $tree_access_mask)
+                                        {
+                                            $access_mask = [System.Convert]::ToString($byte,2).PadLeft(8,'0') + $access_mask
+                                        }
+                                        
+                                        $response_object_list | Where-Object {$_.Share -eq $share_list[$j]} | ForEach-Object {$_."Access Mask" = $access_mask}
+                                        $stage = 'TreeDisconnect'
+                                    }
+                                    else
+                                    {
+                                        $access_mask = "00000000000000000000000000000000"
+                                        $response_object_list | Where-Object {$_.Share -eq $share_list[$j]} | ForEach-Object {$_."Access Mask" = $access_mask}
+                                        $stage = 'TreeConnect'
+                                        $j++
+                                    }
+
+                                }
+                                else
+                                {
+                                    
+                                    if($action_stage -eq 'Share' -or $action_stage -eq 'NetSession')
+                                    {
+                                        $named_pipe = 0x73,0x00,0x72,0x00,0x76,0x00,0x73,0x00,0x76,0x00,0x63,0x00 # srvsvc
+                                    }
+                                    else
+                                    {
+                                        $named_pipe = 0x6c,0x00,0x73,0x00,0x61,0x00,0x72,0x00,0x70,0x00,0x63,0x00 # lsarpc
+                                    }
+
+                                    $tree_IPC = $tree_ID
+                                    $stage = 'CreateRequest'
+                                }
+
+                            }
+
+                            'TreeDisconnect'
+                            {
+
+                                if($Action -eq 'All')
+                                {
+
+                                    switch ($action_stage) 
+                                    {
+
+                                        'group'
+                                        {
+                                            $action_stage = "user"
+                                            $stage = "treeconnect"
+                                            $step = 0
+                                        }
+
+                                        'user'
+                                        {
+                                            $action_stage = "netsession"
+                                            $stage = "treeconnect"
+                                        }
+
+                                        'netsession'
+                                        {
+                                            $action_stage = "share"
+                                            $stage = "treeconnect"
+                                        }
+
+                                        'share'
+                                        {
+
+                                            if($share_list.Count -gt 0 -and $j -lt $share_list.Count - 1)
+                                            {
+                                                $stage = 'TreeConnect'
+                                                $j++
+                                            }
+                                            elseif($share_list.Count -gt 0 -and $j -eq $share_list.Count - 1)
+                                            {
+                                                Write-Output $response_object_list | Sort-Object -property Share |Format-Table -AutoSize
+                                                $tree_ID = $tree_IPC
+                                                $stage = 'TreeDisconnect'
+                                                $j++
+                                            }
+                                            else
+                                            {
+                                                
+                                                if($inveigh_session -and !$Logoff)
+                                                {
+                                                    $stage = 'Exit'
+                                                }
+                                                else
+                                                {
+                                                    $stage = 'Logoff'
+                                                }
+
+                                            }
+                                            
+                                        }
+
+                                    }
+
+                                }
+                                else
+                                {
+                                    
+                                    if($action_stage -eq 'Share' -and $share_list.Count -gt 0 -and $j -lt $share_list.Count - 1)
+                                    {
+                                        $stage = 'TreeConnect'
+                                        $j++
+                                    }
+                                    elseif($action_stage -eq 'Share' -and $share_list.Count -gt 0 -and $j -eq $share_list.Count - 1)
+                                    {
+                                        Write-Output $response_object_list | Sort-Object -property Share |Format-Table -AutoSize
+                                        $tree_ID = $tree_IPC
+                                        $stage = 'TreeDisconnect'
+                                        $j++
+                                    }
+                                    else
+                                    {
+                                    
+                                        if($inveigh_session -and !$Logoff)
+                                        {
+                                            $stage = 'Exit'
+                                        }
+                                        else
+                                        {
+                                            $stage = 'Logoff'
+                                        }
+
+                                    }
+
+                                }
+                                
+                            }
+
+                        }
+
+                    }
+
+                    'TreeConnect'
+                    {
+                        $message_ID++
+                        $stage_current = $stage
+
+                        if($share_list.Count -gt 0)
+                        {
+                            $path = "\\" + $Target + "\" + $share_list[$j]
+                            $path_bytes = [System.Text.Encoding]::Unicode.GetBytes($path)
+                        }
+
+                        $packet_SMB_header = New-PacketSMB2Header 0x03,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
+                        $packet_SMB_data = New-PacketSMB2TreeConnectRequest $path_bytes
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data    
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+
+                        if($SMB_signing)
+                        {
+                            $SMB_sign = $SMB_header + $SMB_data 
+                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
+                            $SMB_signature = $SMB_signature[0..15]
+                            $packet_SMB_header["Signature"] = $SMB_signature
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        }
+
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
+
                         try
                         {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
                             $client_stream.Write($client_send,0,$client_send.Length) > $null
                             $client_stream.Flush()
                             $client_stream.Read($client_receive,0,$client_receive.Length) > $null
 
-                            if($step -eq 1)
+                            if(Get-StatusPending $client_receive[12..15])
                             {
-                                $stage = 'CreateRequest'
-                            }
-                            elseif($action_stage -eq 'Share' -and $share_list.Count -gt 0)
-                            {
-                                $stage = 'TreeConnect'
+                                $stage = 'StatusPending'
+                                $stage_next = 'StatusReceived'
                             }
                             else
                             {
-                                $stage = 'TreeDisconnect'
+                                $stage = 'StatusReceived'
                             }
 
                         }
                         catch
                         {
-                            Write-Output "[-] Something went wrong"
+                            Write-Output "[-] Session connection is closed"
                             $stage = 'Exit'
                         }
                         
@@ -3029,13 +3173,8 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                     'TreeDisconnect'
                     {
                         $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x04,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-          
+                        $stage_current = $stage
+                        $packet_SMB_header = New-PacketSMB2Header 0x04,0x00 0x01,0x00 $SMB_signing $message_ID $process_ID $tree_ID $session_ID
                         $packet_SMB_data = New-PacketSMB2TreeDisconnectRequest
                         $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                         $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
@@ -3051,157 +3190,35 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                             $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
                         }
 
-                        try
+                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
+                        $client_stream.Write($client_send,0,$client_send.Length) > $null
+                        $client_stream.Flush()
+                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                        if(Get-StatusPending $client_receive[12..15])
                         {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-
-                            if($Action -eq 'All')
-                            {
-
-                                switch ($action_stage) 
-                                {
-
-                                    'group'
-                                    {
-                                        $action_stage = "user"
-                                        $stage = "treeconnect"
-                                        $step = 0
-                                    }
-
-                                    'user'
-                                    {
-                                        $action_stage = "netsession"
-                                        $stage = "treeconnect"
-                                    }
-
-                                    'netsession'
-                                    {
-                                        $action_stage = "share"
-                                        $stage = "treeconnect"
-                                    }
-
-                                    'share'
-                                    {
-
-                                        if($share_list.Count -gt 0 -and $j -lt $share_list.Count - 1)
-                                        {
-                                            $stage = 'TreeConnect'
-                                            $j++
-                                        }
-                                        elseif($share_list.Count -gt 0 -and $j -eq $share_list.Count - 1)
-                                        {
-                                            $response_object_list | Sort-Object -property Share |Format-Table -AutoSize
-                                            $tree_ID = $tree_IPC
-                                            $stage = 'TreeDisconnect'
-                                            $j++
-                                        }
-                                        else
-                                        {
-                                            
-                                            if($inveigh_session -and !$Logoff)
-                                            {
-                                                $stage = 'Exit'
-                                            }
-                                            else
-                                            {
-                                                $stage = 'Logoff'
-                                            }
-
-                                        }
-                                        
-                                    }
-
-                                }
-
-                            }
-                            else
-                            {
-                                
-                                if($action_stage -eq 'Share' -and $share_list.Count -gt 0 -and $j -lt $share_list.Count - 1)
-                                {
-                                    $stage = 'TreeConnect'
-                                    $j++
-                                }
-                                elseif($action_stage -eq 'Share' -and $share_list.Count -gt 0 -and $j -eq $share_list.Count - 1)
-                                {
-                                    $response_object_list | Sort-Object -property Share |Format-Table -AutoSize
-                                    $tree_ID = $tree_IPC
-                                    $stage = 'TreeDisconnect'
-                                    $j++
-                                }
-                                else
-                                {
-                                
-                                    if($inveigh_session -and !$Logoff)
-                                    {
-                                        $stage = 'Exit'
-                                    }
-                                    else
-                                    {
-                                        $stage = 'Logoff'
-                                    }
-
-                                }
-
-                            }
-
+                            $stage = 'StatusPending'
+                            $stage_next = 'StatusReceived'
                         }
-                        catch
+                        else
                         {
-                            Write-Output "[-] Something went wrong"
-                            $stage = 'Exit'
+                            $stage = 'StatusReceived'
                         }
 
-                    }
-
-                    'Logoff'
-                    {
-                        $message_ID++
-                        $packet_SMB_header = New-PacketSMB2Header 0x02,0x00 0x01,0x00 $message_ID $process_ID $tree_ID $session_ID
-                    
-                        if($SMB_signing)
-                        {
-                            $packet_SMB_header["Flags"] = 0x08,0x00,0x00,0x00      
-                        }
-         
-                        $packet_SMB_data = New-PacketSMB2SessionLogoffRequest
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-
-                        if($SMB_signing)
-                        {
-                            $SMB_sign = $SMB_header + $SMB_data
-                            $SMB_signature = $HMAC_SHA256.ComputeHash($SMB_sign)
-                            $SMB_signature = $SMB_signature[0..15]
-                            $packet_SMB_header["Signature"] = $SMB_signature
-                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        }
-
-                        try
-                        {
-                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-                            $client_stream.Write($client_send,0,$client_send.Length) > $null
-                            $client_stream.Flush()
-                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                        }
-                        catch
-                        {
-                            Write-Output "[-] Something went wrong"
-                        }
-
-                        $stage = 'Exit'
                     }
 
                 }
-            
+        
+            }
+            catch
+            {
+                $error_message = $_.Exception.Message
+                $error_message = $error_message -replace "`n",""
+                Write-Output "[-] $error_message"
             }
 
         }
+
 
     }
 

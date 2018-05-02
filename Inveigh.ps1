@@ -479,17 +479,21 @@ if(!$inveigh)
     $inveigh.NTLMv2_list = New-Object System.Collections.ArrayList
     $inveigh.NTLMv2_username_list = New-Object System.Collections.ArrayList
     $inveigh.POST_request_list = New-Object System.Collections.ArrayList
-    $inveigh.SMBRelay_failed_list = New-Object System.Collections.ArrayList
+    $inveigh.relay_user_failed_list = New-Object System.Collections.ArrayList
     $inveigh.valid_host_list = New-Object System.Collections.ArrayList
     $inveigh.requested_host_list = New-Object System.Collections.ArrayList
     $inveigh.requested_host_IP_list = New-Object System.Collections.ArrayList
     $inveigh.DNS_list = New-Object System.Collections.ArrayList
-    $inveigh.session_list = @()
+    $inveigh.relay_privilege_table = [HashTable]::Synchronized(@{})
+    $inveigh.relay_failed_auth_table = [HashTable]::Synchronized(@{})
+    $inveigh.relay_history_table = [HashTable]::Synchronized(@{})
     $inveigh.session_socket_table = [HashTable]::Synchronized(@{})
     $inveigh.session_table = [HashTable]::Synchronized(@{})
     $inveigh.session_message_ID_table = [HashTable]::Synchronized(@{})
     $inveigh.session_lock_table = [HashTable]::Synchronized(@{})
     $inveigh.session_count = 0
+    $inveigh.session_list = @()
+    $inveigh.enumeration_list = @()
 }
 
 if($inveigh.running)
@@ -2395,7 +2399,7 @@ $sniffer_scriptblock =
                     
                     }
 
-                    445 
+                    445
                     {
 
                         if($SMB -eq 'Y')
@@ -4356,6 +4360,7 @@ Get relay session list.
         [parameter(Mandatory=$false)][Switch]$POSTRequest,
         [parameter(Mandatory=$false)][Switch]$POSTRequestUnique,
         [parameter(Mandatory=$false)][Switch]$Session,
+        [parameter(Mandatory=$false)][Switch]$Enumeration,
         [parameter(ValueFromRemainingArguments=$true)]$invalid_parameter
     )
 
@@ -4528,6 +4533,11 @@ Get relay session list.
         }
 
         Write-Output $inveigh.session_list | Format-Table -AutoSize
+    }
+
+    if($Enumeration)
+    {
+        Write-Output $inveigh.enumeration_list | Format-Table
     }
 
 }
