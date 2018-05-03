@@ -2158,11 +2158,12 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                         $response_user_end = $response_user_start
                         $response_user_length_start = 152
                         $response_user_list = @()
+                        $response_username_list = @()
+                        $response_user_type_list = @()
                         $i = 0
 
                         while($i -lt $response_user_count)
                         {
-                            $response_user_object = New-Object PSObject
                             [Byte[]]$response_user_length_bytes = $client_receive[$response_user_length_start..($response_user_length_start + 1)]
                             $response_user_length = [System.BitConverter]::ToInt16($response_user_length_bytes,0)
                             $response_user_end = $response_user_start + $response_user_length
@@ -2183,8 +2184,38 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                             $response_user = $response_user -replace "-00",""
                             $response_user = $response_user.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
                             $response_user = New-Object System.String ($response_user,0,$response_user.Length)
-                            Add-Member -InputObject $response_user_object -MemberType NoteProperty -Name Username $response_user
+                            $response_username_list += $response_user
                             $response_user_length_start = $response_user_length_start + 8
+                            $i++
+                        }
+
+                        $response_user_type_array_bytes = $client_receive[($response_user_end + 14)..($response_user_end + 13 + ($response_user_count * 4))]
+                        $response_user_type_start = 0
+
+                        for($i = 0; $i -lt $response_user_count; $i++)
+                        {  
+                            $response_user_type_bytes = $response_user_type_array_bytes[($response_user_type_start..($response_user_type_start + 3))]
+                            $response_user_type_start += 4
+                            $response_user_type = [System.BitConverter]::ToInt16($response_user_type_bytes,0)
+
+                            if($response_user_type -eq 1)
+                            {
+                                $response_user_type_list += "user"
+                            }
+                            else
+                            {
+                                $response_user_type_list += "group"
+                            }
+                            
+                        }
+
+                        $i = 0
+
+                        ForEach($user in $response_username_list)
+                        {
+                            $response_user_object = New-Object PSObject
+                            Add-Member -InputObject $response_user_object -MemberType NoteProperty -Name Username $user
+                            Add-Member -InputObject $response_user_object -MemberType NoteProperty -Name Type $response_user_type_list[$i]
                             $response_user_list += $response_user_object
                             $i++
                         }
@@ -2246,6 +2277,7 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                         while($i -lt $response_user_count)
                         {
                             $response_user_object = New-Object PSObject
+                            [Byte[]]$response_user_type_bytes = $client_receive[($response_user_length_start - 4)]
                             [Byte[]]$response_user_length_bytes = $client_receive[$response_user_length_start..($response_user_length_start + 1)]
                             $response_user_length = [System.BitConverter]::ToInt16($response_user_length_bytes,0)
                             $response_SID_index_start = $response_user_length_start + 8
@@ -2265,12 +2297,23 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                                 $response_user_start += $response_user_length + 12
                             }
 
+                            if($response_user_type_bytes -eq 1)
+                            {
+                                $response_user_type = "user"
+                            }
+                            else
+                            {
+                                $response_user_type = "group"
+                            }
+
+
                             $response_user = [System.BitConverter]::ToString($response_user_bytes)
                             $response_user = $response_user -replace "-00",""
                             $response_user = $response_user.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
                             $response_user = New-Object System.String ($response_user,0,$response_user.Length)
                             Add-Member -InputObject $response_user_object -MemberType NoteProperty -Name Username $response_user
                             Add-Member -InputObject $response_user_object -MemberType NoteProperty -Name Domain $response_domain_list[$response_SID_index]
+                            Add-Member -InputObject $response_user_object -MemberType NoteProperty -Name Type $response_user_type
                             $response_user_length_start = $response_user_length_start + 16
                             $response_user_list += $response_user_object
                             $i++

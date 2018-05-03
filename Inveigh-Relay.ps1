@@ -1998,24 +1998,15 @@ $SMB_relay_functions_scriptblock =
 
     function New-RelayEnumObject
     {
-        param ($IP,$Targeted,$Sessions,$Administrators,$Shares,$NetSessions,$LocalUsers,$SMB2,$Signing,$SMBServer,$LastActivity)
-
-        if(!$Sessions)
-        {
-            #$Sessions = New-Object System.Collections.ArrayList
-        }
-
-        if(!$Administrators)
-        {
-            #$Administrators = New-Object System.Collections.ArrayList
-        }
+        param ($IP,$Targeted,$Sessions,$AdministratorUsers,$AdministratorGroups,$Shares,$NetSessions,$LocalUsers,$SMB2,$Signing,$SMBServer,$LastActivity)
 
         $relay_object = New-Object PSObject
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Index" $inveigh.enumeration_list.Count
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "IP" $IP
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Targeted" $Targeted
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Sessions" $Sessions
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Administrators" $Administrators
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Administrator Users" $AdministratorUsers
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Administrator Groups" $AdministratorGroups
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Shares" $Shares
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "NetSessions" $NetSessions
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Local Users" $LocalUsers
@@ -2056,7 +2047,7 @@ $SMB_relay_functions_scriptblock =
 
             ForEach($session in $initiator_sessions)
             {
-                $targets = $inveigh.enumeration_list | Where-Object {$_.Administrators -contains $session} | Select-Object -expand IP
+                $targets = $inveigh.enumeration_list | Where-Object {$_."Administrator Users" -contains $session} | Select-Object -expand IP
                 $targets = Compare-Object -ReferenceObject $targets -DifferenceObject $targets_filtered -IncludeEqual -ExcludeDifferent -PassThru
                 
                 if($targets)
@@ -3531,7 +3522,8 @@ $SMB_relay_functions_scriptblock =
                         $response_domain_start = $response_domain_count * 12 + 172
                         $response_domain_end = $response_domain_start
                         $response_domain_length_start = 160
-                        $enumerate_group_list = New-Object System.Collections.ArrayList
+                        $enumerate_group_user_list = New-Object System.Collections.ArrayList
+                        $enumerate_group_group_list = New-Object System.Collections.ArrayList
                         $response_domain_list = @()
                         $i = 0
 
@@ -3572,7 +3564,8 @@ $SMB_relay_functions_scriptblock =
 
                         while($i -lt $response_user_count)
                         {
-                            $response_user_object = New-Object PSObject
+                            #$response_user_object = New-Object PSObject
+                            [Byte[]]$response_user_type_bytes = $client_receive[($response_user_length_start - 4)]
                             [Byte[]]$response_user_length_bytes = $client_receive[$response_user_length_start..($response_user_length_start + 1)]
                             $response_user_length = [System.BitConverter]::ToInt16($response_user_length_bytes,0)
                             $response_SID_index_start = $response_user_length_start + 8
@@ -3600,7 +3593,16 @@ $SMB_relay_functions_scriptblock =
                             #Add-Member -InputObject $response_user_object -MemberType NoteProperty -Name Domain $response_domain_list[$response_SID_index]
                             $response_user_length_start = $response_user_length_start + 16
                             $response_administrator = $response_domain_list[$response_SID_index] + "\" + $response_user
-                            $enumerate_group_list.Add($response_administrator) > $null
+
+                            if($response_user_type_bytes -eq 1)
+                            {
+                                $enumerate_group_user_list.Add($response_administrator) > $null
+                            }
+                            else
+                            {
+                                $enumerate_group_group_list.Add($response_administrator) > $null
+                            }
+                            
                             $i++
                         }
 
@@ -4469,7 +4471,8 @@ $SMB_relay_functions_scriptblock =
 
         #$inveigh.enumeration_list | Where-Object {$_.IP -eq $target} | ForEach-Object {$_.Administrators = $response_group_list} {$_.Users = $response_user_list} {$_.Shares = $response_share_list} {$_.NetSessions = $response_netsession_list}
         $target_index = $inveigh.enumeration_list | Where-Object {$_.IP -eq $target} | Select-Object -expand Index 
-        $inveigh.enumeration_list[$target_index].Administrators = $enumerate_group_list
+        $inveigh.enumeration_list[$target_index]."Administrator Users" = $enumerate_group_user_list
+        $inveigh.enumeration_list[$target_index]."Administrator Groups" = $enumerate_group_group_list
         $inveigh.enumeration_list[$target_index]."Local Users" = $enumerate_user_list
         $inveigh.enumeration_list[$target_index].Shares = $enumerate_share_list
         $inveigh.enumeration_list[$target_index].NetSessions = $enumerate_netsession_list
