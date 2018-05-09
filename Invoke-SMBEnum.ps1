@@ -2722,17 +2722,47 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
                             'Connect2'
                             {
                                 $step++
-                                $SID_count = 0x04,0x00,0x00,0x00
-                                [Byte[]]$SAMR_connect_handle = $client_receive[140..159]
-                                $stage = 'OpenDomain'
+                                
+                                if($client_receive[119] -eq 3 -and [System.BitConverter]::ToString($client_receive[140..143]) -eq '05-00-00-00')
+                                {
+                                    
+                                    if($Action -eq 'All')
+                                    {
+                                        Write-Output "[-] $username does not have permission to enumerate groups, users, and NetSessions on $target"
+                                    }
+                                    else
+                                    {
+                                        Write-Output "[-] $username does not have permission to enumerate groups on $target"
+                                    }
+                                    
+                                    $RPC_access_denied = $true 
+                                    $stage = 'CloseRequest'
+                                }
+                                else
+                                {
+                                    $SID_count = 0x04,0x00,0x00,0x00
+                                    [Byte[]]$SAMR_connect_handle = $client_receive[140..159]
+                                    $stage = 'OpenDomain'
+                                }
+
                             }
 
                             'Connect5'
                             {
                                 $step++
-                                $SID_count = 0x04,0x00,0x00,0x00
-                                [Byte[]]$SAMR_connect_handle = $client_receive[156..175]
-                                $stage = 'OpenDomain'
+
+                                if($client_receive[119] -eq 3 -and [System.BitConverter]::ToString($client_receive[140..143]) -eq '05-00-00-00')
+                                {
+                                    Write-Output "[-] $username does not have permission to enumerate users on $target"
+                                    $stage = 'CloseRequest'
+                                }
+                                else
+                                {
+                                    $SID_count = 0x04,0x00,0x00,0x00
+                                    [Byte[]]$SAMR_connect_handle = $client_receive[156..175]
+                                    $stage = 'OpenDomain'
+                                }
+
                             }
 
                             'CreateRequest'
@@ -2910,7 +2940,17 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
 
                             'NetSessEnum'
                             {
-                                $stage = 'ParseSRVSVC'
+
+                                if([System.BitConverter]::ToString($client_receive[172..175]) -eq '05-00-00-00')
+                                {
+                                    Write-Output "[-] $username does not have permission to enumerate NetSessions on $target"
+                                    $stage = 'CloseRequest'
+                                }
+                                else
+                                {
+                                    $stage = 'ParseSRVSVC'
+                                }
+
                             }
 
                             'NetShareEnumAll'
@@ -3071,15 +3111,25 @@ if($client.Connected -or (!$startup_error -and $inveigh.session_socket_table[$se
 
                                         'group'
                                         {
-                                            $action_stage = "user"
+
+                                            if($RPC_access_denied)
+                                            {
+                                                $action_stage = "share"
+                                            }
+                                            else
+                                            {
+                                                $action_stage = "user"
+                                                $step = 0
+                                            }
+
                                             $stage = "treeconnect"
-                                            $step = 0
                                         }
 
                                         'user'
                                         {
                                             $action_stage = "netsession"
                                             $stage = "treeconnect"
+                                            
                                         }
 
                                         'netsession'

