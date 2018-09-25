@@ -34,7 +34,9 @@ Inveigh provides NTLMv1/NTLMv2 HTTP/HTTPS/Proxy to SMB2.1 relay through the Inve
 ##### Inveigh Relay running with all attacks enabled  
 ![inveigh_relay1 4](https://user-images.githubusercontent.com/5897462/45662094-72fcce80-bace-11e8-8bc5-b546eedcb241.PNG)
 
+Inveigh Relay session attack requires SMB tools from Invoke-TheHash  
 
+* https://github.com/Kevin-Robertson/Inveigh/wiki
 
-
+https://github.com/Kevin-Robertson/Invoke-TheHash
 
