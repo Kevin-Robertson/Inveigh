@@ -36,6 +36,10 @@ displaying full capture lists when running through a shell that does not have ac
 Default = Enabled: (Y/N) Enable/Disable displaying challenge/response hashes for only unique IP, domain/hostname,
 and username combinations when real time console output is enabled.
 
+.PARAMETER DomainMapping
+Array to map one netBIOS domain to one DNS domain. Needed when attacking a domain from a non-domain
+attached system with data imported from BloodHound.
+
 .PARAMETER Enumerate
 Default = All: (All/Group/NetSession/Share/User) The action that will be used for the 'Enumerate' attack.
 
@@ -214,6 +218,7 @@ param
     [parameter(Mandatory=$false)][ValidateSet("All","NetSession","Share","User","Group")][String]$Enumerate = "All",
     [parameter(Mandatory=$false)][ValidateSet("Random","Strict")][String]$TargetMode = "Random",
     [parameter(Mandatory=$false)][String]$EnumerateGroup = "Administrators",
+    [parameter(Mandatory=$false)][Array]$DomainMapping = "",
     [parameter(Mandatory=$false)][Array]$Target = "",
     [parameter(Mandatory=$false)][Array]$TargetExclude = "",
     [parameter(Mandatory=$false)][Array]$ProxyIgnore = "Firefox",
@@ -279,7 +284,7 @@ if($inveigh.relay_running)
     throw
 }
 
-$inveigh_version = "1.4"
+$inveigh_version = "1.4.1"
 
 if(!$target -and !$inveigh.enumerate)
 {
@@ -304,8 +309,19 @@ if($ProxyIP -eq '0.0.0.0')
 
 if($Attack -contains 'Execute' -and !$Command)
 {
-    Write-Output "[-] -Command requiried with -Attack Execute"
+    Write-Output "[-] -Command required with -Attack Execute"
     throw
+}
+
+if($DomainMapping)
+{
+
+    if($DomainMapping.Count -ne 2 -or $DomainMapping[0] -like "*.*" -or $DomainMapping[1] -notlike "*.*")
+    {
+        Write-Output "[-] -DomainMapping format is incorrect"
+        throw
+    }
+    
 }
 
 if(!$FileOutputDirectory)
@@ -639,6 +655,13 @@ if($Proxy -eq 'Y')
 
     }
 
+}
+
+if($DomainMapping)
+{
+    $inveigh.output_queue.Add("[+] Domain Mapping = " + ($DomainMapping -join ","))  > $null
+    $inveigh.netBIOS_domain = $DomainMapping[0]
+    $inveigh.DNS_domain = $DomainMapping[1]
 }
 
 $inveigh.output_queue.Add("[+] Relay Attack = " + ($Attack -join ",")) > $null
@@ -1028,25 +1051,38 @@ while($inveigh.output_queue.Count -gt 0)
 
 }
 
-$inveigh.status_output = $false
-$inveigh.netBIOS_domain = (Get-ChildItem -path env:userdomain).Value
-$inveigh.computer_name = (Get-ChildItem -path env:computername).Value
-
-try
+if(!$inveigh.netBIOS_domain)
 {
-    $inveigh.DNS_domain = ((Get-ChildItem -path env:userdnsdomain -ErrorAction 'SilentlyContinue').Value).ToLower()
-    $inveigh.DNS_computer_name = ($inveigh.computer_name + "." + $inveigh.DNS_domain).ToLower()
+    $inveigh.status_output = $false
+    $inveigh.netBIOS_domain = (Get-ChildItem -path env:userdomain).Value
+    $inveigh.computer_name = (Get-ChildItem -path env:computername).Value
+
+    try
+    {
+        $inveigh.DNS_domain = ((Get-ChildItem -path env:userdnsdomain -ErrorAction 'SilentlyContinue').Value).ToLower()
+        $inveigh.DNS_computer_name = ($inveigh.computer_name + "." + $inveigh.DNS_domain).ToLower()
+
+        if(!$inveigh.domain_mapping_table.ContainsKey($inveigh.netBIOS_domain))
+        {
+            $inveigh.domain_mapping_table.Add($inveigh.netBIOS_domain,$inveigh.DNS_domain)
+        }
+
+    }
+    catch
+    {
+        $inveigh.DNS_domain = $inveigh.netBIOS_domain
+        $inveigh.DNS_computer_name = $inveigh.computer_name
+    }
+
+}
+else
+{
 
     if(!$inveigh.domain_mapping_table.ContainsKey($inveigh.netBIOS_domain))
     {
         $inveigh.domain_mapping_table.Add($inveigh.netBIOS_domain,$inveigh.DNS_domain)
     }
 
-}
-catch
-{
-    $inveigh.DNS_domain = $inveigh.netBIOS_domain
-    $inveigh.DNS_computer_name = $inveigh.computer_name
 }
 
 if($inveigh.enumerate)

