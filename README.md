@@ -20,7 +20,7 @@ Inveigh is a PowerShell ADIDNS/LLMNR/mDNS/NBNS spoofer and man-in-the-middle too
 ## Special Thanks  
 * Anyone that posted .NET packet sniffing examples  
 * Responder - https://github.com/lgandx/Responder  
-* Impacket - https://github.com/CoreSecurity/impacket  
+* Impacket - https://github.com/SecureAuthCorp/impacket  
 
 ## Overview
 
