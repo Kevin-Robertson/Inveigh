@@ -835,7 +835,8 @@ if($Target)
     }
 
     $inveigh.output_queue.Add("[*] Parsing Relay Target List") > $null
-    [Array]$inveigh.target_list = Get-TargetList $Target
+    $inveigh.target_list = New-Object System.Collections.ArrayList
+    $inveigh.target_list.AddRange($(Get-TargetList $Target))
 }
 
 if($TargetExclude)
@@ -855,7 +856,8 @@ if($TargetExclude)
     }
 
     $inveigh.output_queue.Add("[*] Parsing Relay Target Exclude List") > $null
-    [Array]$inveigh.target_exclude_list = Get-TargetList $TargetExclude
+    $inveigh.target_exclude_list = New-Object System.Collections.ArrayList
+    $inveigh.target_exclude_list.AddRange($(Get-TargetList $TargetExclude))
 }
 
 if($Username)
@@ -1131,6 +1133,7 @@ if($inveigh.enumerate)
 
     }
 
+    $inveigh.output_queue.Add("[+] DNS lookups on imported targets complete") > $null
 }
 
 if($inveigh.target_list)
@@ -1160,7 +1163,8 @@ if($inveigh.target_list)
                     {
                         $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] IPv6 target $($inveigh.target_list[$i]) not supported") > $null
                         $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Removed $($inveigh.target_list[$i]) from target list") > $null
-                        $inveigh.target_list[$i] = $null
+                        $inveigh.target_list.RemoveAt($i)
+                        $i -= 1
                     }
 
                 }
@@ -1170,7 +1174,8 @@ if($inveigh.target_list)
             {
                 $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] DNS lookup for $($inveigh.target_list[$i]) failed") > $null
                 $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Removed $($inveigh.target_list[$i]) from target list") > $null
-                $inveigh.target_list[$i] = $null
+                $inveigh.target_list.RemoveAt($i)
+                $i -= 1
             }
 
             $target_keep = $false
@@ -1179,12 +1184,7 @@ if($inveigh.target_list)
 
     }
 
-    if(!$inveigh.target_list -and !$inveigh.enumerated)
-    {
-        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] No remaining targets") > $null
-        throw
-    }
-
+    $inveigh.output_queue.Add("[+] DNS lookups on hostname targets complete") > $null
 }
 
 if($inveigh.target_exclude_list)
@@ -1216,7 +1216,8 @@ if($inveigh.target_exclude_list)
                 {
                     $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] IPv6 target $($inveigh.target_list[$i]) not supported") > $null
                     $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Removed $($inveigh.target_exclude_list[$i]) from exclusion list") > $null
-                    $inveigh.target_exclude_list[$i] = $null
+                    $inveigh.target_exclude_list.RemoveAt($i)
+                    $i -= 1
                 }
 
             }
@@ -1224,7 +1225,8 @@ if($inveigh.target_exclude_list)
             {
                 $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] DNS lookup for $($inveigh.target_exclude_list[$i]) failed") > $null
                 $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Removed $($inveigh.target_exclude_list[$i]) from exclusion list") > $null
-                $inveigh.target_exclude_list[$i] = $null
+                $inveigh.target_exclude_list.RemoveAt($i)
+                $i -= 1
             }
 
             $target_exclude_keep = $false
@@ -1233,12 +1235,21 @@ if($inveigh.target_exclude_list)
 
     }
 
+    $inveigh.output_queue.Add("[+] DNS lookups on hostname excluded targets complete") > $null
 }
 
 if($inveigh.target_list -and $inveigh.target_exclude_list)
 {
     $inveigh.target_list = Compare-Object -ReferenceObject $inveigh.target_exclude_list -DifferenceObject $inveigh.target_list -PassThru
 }
+
+if(!$inveigh.target_list -and !$inveigh.enumerated)
+{
+    $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Disabling relay due empty target list") > $null
+    $inveigh.SMB_relay = $false
+}
+
+$inveigh.status_output = $false
 
 #endregion
 #region begin script blocks
@@ -6348,7 +6359,7 @@ $control_relay_scriptblock =
 
             if($control_stopwatch.Elapsed -ge $control_timeout)
             {
-                Stop-InveighRunspace "run time"
+                Stop-InveighRunspace "reaching run time"
             }
 
         }
@@ -6398,7 +6409,7 @@ $control_relay_scriptblock =
 
         }
 
-        if(!$inveigh.running)
+        if(!$inveigh.status_output -and !$inveigh.running)
         {
             Invoke-OutputQueueLoop
         }
@@ -6643,10 +6654,7 @@ if($Proxy -eq 'Y')
 }
 
 # Control Relay Loop Start
-if(!$inveigh.running)
-{
-    ControlRelayLoop
-}
+ControlRelayLoop
 
 # Session Refresh Loop Start
 if($SessionRefresh -gt 0)
@@ -6658,7 +6666,7 @@ if($SessionRefresh -gt 0)
 try
 {
 
-    if($inveigh.console_output)
+    if($ConsoleOutput -ne 'N')
     {
 
         if($ConsoleStatus)
@@ -6672,7 +6680,7 @@ try
 
             while($inveigh.console_queue.Count -gt 0)
             {
-                
+
                 switch -wildcard ($inveigh.console_queue[0])
                 {
 
@@ -6709,7 +6717,6 @@ try
                         }
 
                         $inveigh.console_queue.RemoveAt(0)
-
                     } 
 
                     {$_ -like "* response sent" -or $_ -like "* ignoring *" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy request for *"}
@@ -6730,7 +6737,6 @@ try
                         }
 
                         $inveigh.console_queue.RemoveAt(0)
-
                     } 
 
                     default
