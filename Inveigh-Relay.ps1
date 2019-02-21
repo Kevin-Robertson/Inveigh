@@ -789,7 +789,8 @@ function Get-TargetList
             $entry_split = $entry.Split("/")
             $IP = $entry_split[0]
             $CIDR = $entry_split[1]
-            $target_list.AddRange($(Convert-RangetoIPList -IP $IP -CIDR $CIDR))
+            [Array]$target_range = Convert-RangetoIPList -IP $IP -CIDR $CIDR
+            $target_list.AddRange($target_range)
         }
         elseif($entry.contains("-"))
         {
@@ -800,7 +801,8 @@ function Get-TargetList
             {
                 $start_address = $entry_split[0]
                 $end_address = $entry_split[1]
-                $target_list.AddRange($(Convert-RangetoIPList -Start $start_address -End $end_address))
+                [Array]$target_range = Convert-RangetoIPList -Start $start_address -End $end_address
+                $target_list.AddRange($target_range)
             }
             else
             {
@@ -836,7 +838,8 @@ if($Target)
 
     $inveigh.output_queue.Add("[*] Parsing Relay Target List") > $null
     $inveigh.target_list = New-Object System.Collections.ArrayList
-    $inveigh.target_list.AddRange($(Get-TargetList $Target))
+    [Array]$target_range = Get-TargetList $Target
+    $inveigh.target_list.AddRange($target_range)
 }
 
 if($TargetExclude)
@@ -857,7 +860,8 @@ if($TargetExclude)
 
     $inveigh.output_queue.Add("[*] Parsing Relay Target Exclude List") > $null
     $inveigh.target_exclude_list = New-Object System.Collections.ArrayList
-    $inveigh.target_exclude_list.AddRange($(Get-TargetList $TargetExclude))
+    [Array]$target_range = Get-TargetList $TargetExclude
+    $inveigh.target_exclude_list.AddRange($TargetExclude)
 }
 
 if($Username)
@@ -1240,7 +1244,7 @@ if($inveigh.target_exclude_list)
 
 if($inveigh.target_list -and $inveigh.target_exclude_list)
 {
-    $inveigh.target_list = Compare-Object -ReferenceObject $inveigh.target_exclude_list -DifferenceObject $inveigh.target_list -PassThru
+    $inveigh.target_list = Compare-Object -ReferenceObject $inveigh.target_exclude_list -DifferenceObject $inveigh.target_list | Where-Object {$_.sideIndicator -eq "=>"} | ForEach-Object {$_.InputObject}
 }
 
 if(!$inveigh.target_list -and !$inveigh.enumerated)
@@ -2649,42 +2653,50 @@ $SMB_relay_functions_scriptblock =
         {
             param ($target)
             
-            $SMB_target_test = New-Object System.Net.Sockets.TCPClient
-            $SMB_target_test_result = $SMB_target_test.BeginConnect($target,"445",$null,$null)
-            $SMB_port_test_success = $SMB_target_test_result.AsyncWaitHandle.WaitOne(100,$false)
-            $SMB_target_test.Close()
+            try
+            {     
+                $SMB_target_test = New-Object System.Net.Sockets.TCPClient
+                $SMB_target_test_result = $SMB_target_test.BeginConnect($target,"445",$null,$null)
+                $SMB_port_test_success = $SMB_target_test_result.AsyncWaitHandle.WaitOne(100,$false)
+                $SMB_target_test.Close()
 
-            if($SMB_port_test_success)
-            {
-                $SMB_server = $true
-            }
-            else
-            {
-                $SMB_server = $false    
-            }
-
-            for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
-            {
-
-                if($inveigh.enumerate[$i].IP -eq $target)
+                if($SMB_port_test_success)
                 {
-                    $target_index = $i
-                    break
+                    $SMB_server = $true
+                }
+                else
+                {
+                    $SMB_server = $false    
                 }
 
+                for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+                {
+
+                    if($inveigh.enumerate[$i].IP -eq $target)
+                    {
+                        $target_index = $i
+                        break
+                    }
+
+                }
+
+                if($target_index -and $inveigh.enumerate[$target_index].IP -eq $target)
+                {
+                    $inveigh.enumerate[$target_index]."SMB Server" = $SMB_server
+                    $inveigh.enumerate[$target_index]."Targeted" = $(Get-Date -format s)
+                }
+                else
+                {
+                    $inveigh.enumerate.Add((New-RelayEnumObject -IP $target -SMBServer $SMB_server -Targeted $(Get-Date -format s))) > $null
+                }
+
+                return $SMB_port_test_success
+            }
+            catch 
+            {
+                return $false
             }
 
-            if($target_index -and $inveigh.enumerate[$target_index].IP -eq $target)
-            {
-                $inveigh.enumerate[$target_index]."SMB Server" = $SMB_server
-                $inveigh.enumerate[$target_index]."Targeted" = $(Get-Date -format s)
-            }
-            else
-            {
-                $inveigh.enumerate.Add((New-RelayEnumObject -IP $target -SMBServer $SMB_server -Targeted $(Get-Date -format s))) > $null
-            }
-
-            return $SMB_port_test_success
         }
 
         function Invoke-SMBNegotiate
@@ -5283,7 +5295,7 @@ $SMB_relay_functions_scriptblock =
                 $error_message = $_.Exception.Message
                 $error_message = $error_message -replace "`n",""
                 $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim()) stage $stage_current") > $null
-                $stage -ne 'Exit'
+                $stage = 'Exit'
             }
 
         }
@@ -6440,7 +6452,7 @@ $session_refresh_scriptblock =
         {
             $session = 0
 
-            while($session -le $inveigh.session_socket_table.Count)
+            while($session -lt $inveigh.session_socket_table.Count)
             {
                 $session_timespan =  New-TimeSpan $inveigh.session[$session]."Last Activity" $(Get-Date)
                 
