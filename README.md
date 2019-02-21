@@ -2,8 +2,11 @@
 
 Inveigh is a PowerShell ADIDNS/LLMNR/mDNS/NBNS spoofer and man-in-the-middle tool designed to assist penetration testers/red teamers that find themselves limited to a Windows system.  
 
+## 1.4 Release Blog
+* https://blog.netspi.com/inveigh-whats-new-in-version-1-4/
+
 ## Wiki
-* https://github.com/Kevin-Robertson/Inveigh/wiki
+* https://github.com/SecureAuthCorp/impacket
 
 ## Included In
 * PowerShell Empire - https://github.com/PowerShellEmpire/Empire  
@@ -12,11 +15,12 @@ Inveigh is a PowerShell ADIDNS/LLMNR/mDNS/NBNS spoofer and man-in-the-middle too
 * PowerUpSQL - https://github.com/NetSPI/PowerUpSQL  
 * PoshC2 - https://github.com/nettitude/PoshC2  
 * pupy - https://github.com/n1nj4sec/pupy  
+* Merlin - https://github.com/Ne0nd0g/merlin  
 
 ## Special Thanks  
 * Anyone that posted .NET packet sniffing examples  
 * Responder - https://github.com/lgandx/Responder  
-* Impacket - https://github.com/CoreSecurity/impacket  
+* Impacket - https://github.com/SecureAuthCorp/impacket  
 
 ## Overview
 

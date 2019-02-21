@@ -36,6 +36,10 @@ displaying full capture lists when running through a shell that does not have ac
 Default = Enabled: (Y/N) Enable/Disable displaying challenge/response hashes for only unique IP, domain/hostname,
 and username combinations when real time console output is enabled.
 
+.PARAMETER DomainMapping
+Array to map one netBIOS domain to one DNS domain. Needed when attacking a domain from a non-domain
+attached system with data imported from BloodHound.
+
 .PARAMETER Enumerate
 Default = All: (All/Group/NetSession/Share/User) The action that will be used for the 'Enumerate' attack.
 
@@ -214,6 +218,7 @@ param
     [parameter(Mandatory=$false)][ValidateSet("All","NetSession","Share","User","Group")][String]$Enumerate = "All",
     [parameter(Mandatory=$false)][ValidateSet("Random","Strict")][String]$TargetMode = "Random",
     [parameter(Mandatory=$false)][String]$EnumerateGroup = "Administrators",
+    [parameter(Mandatory=$false)][Array]$DomainMapping = "",
     [parameter(Mandatory=$false)][Array]$Target = "",
     [parameter(Mandatory=$false)][Array]$TargetExclude = "",
     [parameter(Mandatory=$false)][Array]$ProxyIgnore = "Firefox",
@@ -279,7 +284,7 @@ if($inveigh.relay_running)
     throw
 }
 
-$inveigh_version = "1.4"
+$inveigh_version = "1.4.1"
 
 if(!$target -and !$inveigh.enumerate)
 {
@@ -304,8 +309,19 @@ if($ProxyIP -eq '0.0.0.0')
 
 if($Attack -contains 'Execute' -and !$Command)
 {
-    Write-Output "[-] -Command requiried with -Attack Execute"
+    Write-Output "[-] -Command required with -Attack Execute"
     throw
+}
+
+if($DomainMapping)
+{
+
+    if($DomainMapping.Count -ne 2 -or $DomainMapping[0] -like "*.*" -or $DomainMapping[1] -notlike "*.*")
+    {
+        Write-Output "[-] -DomainMapping format is incorrect"
+        throw
+    }
+    
 }
 
 if(!$FileOutputDirectory)
@@ -641,6 +657,13 @@ if($Proxy -eq 'Y')
 
 }
 
+if($DomainMapping)
+{
+    $inveigh.output_queue.Add("[+] Domain Mapping = " + ($DomainMapping -join ","))  > $null
+    $inveigh.netBIOS_domain = $DomainMapping[0]
+    $inveigh.DNS_domain = $DomainMapping[1]
+}
+
 $inveigh.output_queue.Add("[+] Relay Attack = " + ($Attack -join ",")) > $null
 
 # math taken from https://gallery.technet.microsoft.com/scriptcenter/List-the-IP-addresses-in-a-60c5bb6b
@@ -766,7 +789,8 @@ function Get-TargetList
             $entry_split = $entry.Split("/")
             $IP = $entry_split[0]
             $CIDR = $entry_split[1]
-            $target_list.AddRange($(Convert-RangetoIPList -IP $IP -CIDR $CIDR))
+            [Array]$target_range = Convert-RangetoIPList -IP $IP -CIDR $CIDR
+            $target_list.AddRange($target_range)
         }
         elseif($entry.contains("-"))
         {
@@ -777,7 +801,8 @@ function Get-TargetList
             {
                 $start_address = $entry_split[0]
                 $end_address = $entry_split[1]
-                $target_list.AddRange($(Convert-RangetoIPList -Start $start_address -End $end_address))
+                [Array]$target_range = Convert-RangetoIPList -Start $start_address -End $end_address
+                $target_list.AddRange($target_range)
             }
             else
             {
@@ -812,7 +837,9 @@ if($Target)
     }
 
     $inveigh.output_queue.Add("[*] Parsing Relay Target List") > $null
-    [Array]$inveigh.target_list = Get-TargetList $Target
+    $inveigh.target_list = New-Object System.Collections.ArrayList
+    [Array]$target_range = Get-TargetList $Target
+    $inveigh.target_list.AddRange($target_range)
 }
 
 if($TargetExclude)
@@ -832,7 +859,9 @@ if($TargetExclude)
     }
 
     $inveigh.output_queue.Add("[*] Parsing Relay Target Exclude List") > $null
-    [Array]$inveigh.target_exclude_list = Get-TargetList $TargetExclude
+    $inveigh.target_exclude_list = New-Object System.Collections.ArrayList
+    [Array]$target_range = Get-TargetList $TargetExclude
+    $inveigh.target_exclude_list.AddRange($TargetExclude)
 }
 
 if($Username)
@@ -1028,25 +1057,38 @@ while($inveigh.output_queue.Count -gt 0)
 
 }
 
-$inveigh.status_output = $false
-$inveigh.netBIOS_domain = (Get-ChildItem -path env:userdomain).Value
-$inveigh.computer_name = (Get-ChildItem -path env:computername).Value
-
-try
+if(!$inveigh.netBIOS_domain)
 {
-    $inveigh.DNS_domain = ((Get-ChildItem -path env:userdnsdomain -ErrorAction 'SilentlyContinue').Value).ToLower()
-    $inveigh.DNS_computer_name = ($inveigh.computer_name + "." + $inveigh.DNS_domain).ToLower()
+    $inveigh.status_output = $false
+    $inveigh.netBIOS_domain = (Get-ChildItem -path env:userdomain).Value
+    $inveigh.computer_name = (Get-ChildItem -path env:computername).Value
+
+    try
+    {
+        $inveigh.DNS_domain = ((Get-ChildItem -path env:userdnsdomain -ErrorAction 'SilentlyContinue').Value).ToLower()
+        $inveigh.DNS_computer_name = ($inveigh.computer_name + "." + $inveigh.DNS_domain).ToLower()
+
+        if(!$inveigh.domain_mapping_table.ContainsKey($inveigh.netBIOS_domain))
+        {
+            $inveigh.domain_mapping_table.Add($inveigh.netBIOS_domain,$inveigh.DNS_domain)
+        }
+
+    }
+    catch
+    {
+        $inveigh.DNS_domain = $inveigh.netBIOS_domain
+        $inveigh.DNS_computer_name = $inveigh.computer_name
+    }
+
+}
+else
+{
 
     if(!$inveigh.domain_mapping_table.ContainsKey($inveigh.netBIOS_domain))
     {
         $inveigh.domain_mapping_table.Add($inveigh.netBIOS_domain,$inveigh.DNS_domain)
     }
 
-}
-catch
-{
-    $inveigh.DNS_domain = $inveigh.netBIOS_domain
-    $inveigh.DNS_computer_name = $inveigh.computer_name
 }
 
 if($inveigh.enumerate)
@@ -1095,6 +1137,7 @@ if($inveigh.enumerate)
 
     }
 
+    $inveigh.output_queue.Add("[+] DNS lookups on imported targets complete") > $null
 }
 
 if($inveigh.target_list)
@@ -1124,7 +1167,8 @@ if($inveigh.target_list)
                     {
                         $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] IPv6 target $($inveigh.target_list[$i]) not supported") > $null
                         $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Removed $($inveigh.target_list[$i]) from target list") > $null
-                        $inveigh.target_list[$i] = $null
+                        $inveigh.target_list.RemoveAt($i)
+                        $i -= 1
                     }
 
                 }
@@ -1134,7 +1178,8 @@ if($inveigh.target_list)
             {
                 $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] DNS lookup for $($inveigh.target_list[$i]) failed") > $null
                 $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Removed $($inveigh.target_list[$i]) from target list") > $null
-                $inveigh.target_list[$i] = $null
+                $inveigh.target_list.RemoveAt($i)
+                $i -= 1
             }
 
             $target_keep = $false
@@ -1143,12 +1188,7 @@ if($inveigh.target_list)
 
     }
 
-    if(!$inveigh.target_list -and !$inveigh.enumerated)
-    {
-        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] No remaining targets") > $null
-        throw
-    }
-
+    $inveigh.output_queue.Add("[+] DNS lookups on hostname targets complete") > $null
 }
 
 if($inveigh.target_exclude_list)
@@ -1180,7 +1220,8 @@ if($inveigh.target_exclude_list)
                 {
                     $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] IPv6 target $($inveigh.target_list[$i]) not supported") > $null
                     $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Removed $($inveigh.target_exclude_list[$i]) from exclusion list") > $null
-                    $inveigh.target_exclude_list[$i] = $null
+                    $inveigh.target_exclude_list.RemoveAt($i)
+                    $i -= 1
                 }
 
             }
@@ -1188,7 +1229,8 @@ if($inveigh.target_exclude_list)
             {
                 $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] DNS lookup for $($inveigh.target_exclude_list[$i]) failed") > $null
                 $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Removed $($inveigh.target_exclude_list[$i]) from exclusion list") > $null
-                $inveigh.target_exclude_list[$i] = $null
+                $inveigh.target_exclude_list.RemoveAt($i)
+                $i -= 1
             }
 
             $target_exclude_keep = $false
@@ -1197,12 +1239,21 @@ if($inveigh.target_exclude_list)
 
     }
 
+    $inveigh.output_queue.Add("[+] DNS lookups on hostname excluded targets complete") > $null
 }
 
 if($inveigh.target_list -and $inveigh.target_exclude_list)
 {
-    $inveigh.target_list = Compare-Object -ReferenceObject $inveigh.target_exclude_list -DifferenceObject $inveigh.target_list -PassThru
+    $inveigh.target_list = Compare-Object -ReferenceObject $inveigh.target_exclude_list -DifferenceObject $inveigh.target_list | Where-Object {$_.sideIndicator -eq "=>"} | ForEach-Object {$_.InputObject}
 }
+
+if(!$inveigh.target_list -and !$inveigh.enumerated)
+{
+    $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Disabling relay due empty target list") > $null
+    $inveigh.SMB_relay = $false
+}
+
+$inveigh.status_output = $false
 
 #endregion
 #region begin script blocks
@@ -2602,42 +2653,50 @@ $SMB_relay_functions_scriptblock =
         {
             param ($target)
             
-            $SMB_target_test = New-Object System.Net.Sockets.TCPClient
-            $SMB_target_test_result = $SMB_target_test.BeginConnect($target,"445",$null,$null)
-            $SMB_port_test_success = $SMB_target_test_result.AsyncWaitHandle.WaitOne(100,$false)
-            $SMB_target_test.Close()
+            try
+            {     
+                $SMB_target_test = New-Object System.Net.Sockets.TCPClient
+                $SMB_target_test_result = $SMB_target_test.BeginConnect($target,"445",$null,$null)
+                $SMB_port_test_success = $SMB_target_test_result.AsyncWaitHandle.WaitOne(100,$false)
+                $SMB_target_test.Close()
 
-            if($SMB_port_test_success)
-            {
-                $SMB_server = $true
-            }
-            else
-            {
-                $SMB_server = $false    
-            }
-
-            for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
-            {
-
-                if($inveigh.enumerate[$i].IP -eq $target)
+                if($SMB_port_test_success)
                 {
-                    $target_index = $i
-                    break
+                    $SMB_server = $true
+                }
+                else
+                {
+                    $SMB_server = $false    
                 }
 
+                for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+                {
+
+                    if($inveigh.enumerate[$i].IP -eq $target)
+                    {
+                        $target_index = $i
+                        break
+                    }
+
+                }
+
+                if($target_index -and $inveigh.enumerate[$target_index].IP -eq $target)
+                {
+                    $inveigh.enumerate[$target_index]."SMB Server" = $SMB_server
+                    $inveigh.enumerate[$target_index]."Targeted" = $(Get-Date -format s)
+                }
+                else
+                {
+                    $inveigh.enumerate.Add((New-RelayEnumObject -IP $target -SMBServer $SMB_server -Targeted $(Get-Date -format s))) > $null
+                }
+
+                return $SMB_port_test_success
+            }
+            catch 
+            {
+                return $false
             }
 
-            if($target_index -and $inveigh.enumerate[$target_index].IP -eq $target)
-            {
-                $inveigh.enumerate[$target_index]."SMB Server" = $SMB_server
-                $inveigh.enumerate[$target_index]."Targeted" = $(Get-Date -format s)
-            }
-            else
-            {
-                $inveigh.enumerate.Add((New-RelayEnumObject -IP $target -SMBServer $SMB_server -Targeted $(Get-Date -format s))) > $null
-            }
-
-            return $SMB_port_test_success
         }
 
         function Invoke-SMBNegotiate
@@ -5236,7 +5295,7 @@ $SMB_relay_functions_scriptblock =
                 $error_message = $_.Exception.Message
                 $error_message = $error_message -replace "`n",""
                 $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim()) stage $stage_current") > $null
-                $stage -ne 'Exit'
+                $stage = 'Exit'
             }
 
         }
@@ -6312,7 +6371,7 @@ $control_relay_scriptblock =
 
             if($control_stopwatch.Elapsed -ge $control_timeout)
             {
-                Stop-InveighRunspace "run time"
+                Stop-InveighRunspace "reaching run time"
             }
 
         }
@@ -6362,7 +6421,7 @@ $control_relay_scriptblock =
 
         }
 
-        if(!$inveigh.running)
+        if(!$inveigh.status_output -and !$inveigh.running)
         {
             Invoke-OutputQueueLoop
         }
@@ -6393,7 +6452,7 @@ $session_refresh_scriptblock =
         {
             $session = 0
 
-            while($session -le $inveigh.session_socket_table.Count)
+            while($session -lt $inveigh.session_socket_table.Count)
             {
                 $session_timespan =  New-TimeSpan $inveigh.session[$session]."Last Activity" $(Get-Date)
                 
@@ -6607,10 +6666,7 @@ if($Proxy -eq 'Y')
 }
 
 # Control Relay Loop Start
-if(!$inveigh.running)
-{
-    ControlRelayLoop
-}
+ControlRelayLoop
 
 # Session Refresh Loop Start
 if($SessionRefresh -gt 0)
@@ -6622,7 +6678,7 @@ if($SessionRefresh -gt 0)
 try
 {
 
-    if($inveigh.console_output)
+    if($ConsoleOutput -ne 'N')
     {
 
         if($ConsoleStatus)
@@ -6636,7 +6692,7 @@ try
 
             while($inveigh.console_queue.Count -gt 0)
             {
-                
+
                 switch -wildcard ($inveigh.console_queue[0])
                 {
 
@@ -6673,7 +6729,6 @@ try
                         }
 
                         $inveigh.console_queue.RemoveAt(0)
-
                     } 
 
                     {$_ -like "* response sent" -or $_ -like "* ignoring *" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy request for *"}
@@ -6694,7 +6749,6 @@ try
                         }
 
                         $inveigh.console_queue.RemoveAt(0)
-
                     } 
 
                     default
