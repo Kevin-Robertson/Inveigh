@@ -6961,17 +6961,23 @@ Get added DNS host records.
 .PARAMETER ADIDNSFailed
 Get failed DNS host record adds.
 
-.PARAMETER Learning
-Get valid hosts discovered through spoofer learning.
-
-.PARAMETER Log
-Get log entries.
-
 .PARAMETER Cleartext
 Get captured cleartext credentials.
 
 .PARAMETER CleartextUnique
 Get unique captured cleartext credentials.
+
+.PARAMETER KerberosUsername
+Get IP addresses, usernames, and index for captured Kerberos TGTs.
+
+.PARAMETER KerberosTGT
+Get Kerberos TGT kirbi byte array by index.
+
+.PARAMETER Learning
+Get valid hosts discovered through spoofer learning.
+
+.PARAMETER Log
+Get log entries.
 
 .PARAMETER NTLMv1
 Get captured NTLMv1 challenge/response hashes.
@@ -7009,6 +7015,8 @@ Get relay session list.
         [parameter(Mandatory=$false)][Switch]$Console,
         [parameter(Mandatory=$false)][Switch]$ADIDNS,
         [parameter(Mandatory=$false)][Switch]$ADIDNSFailed,
+        [parameter(Mandatory=$false)][Int]$KerberosTGT,
+        [parameter(Mandatory=$false)][Switch]$KerberosUsername,
         [parameter(Mandatory=$false)][Switch]$Learning,
         [parameter(Mandatory=$false)][Switch]$Log,
         [parameter(Mandatory=$false)][Switch]$NTLMv1,
@@ -7079,6 +7087,7 @@ Get relay session list.
 
     if($ADIDNSFailed)
     {
+
         $ADIDNS_table_keys_temp = $inveigh.ADIDNS_table.Keys
 
         foreach($ADIDNS_host in $ADIDNS_table_keys_temp)
@@ -7091,6 +7100,16 @@ Get relay session list.
 
         }
 
+    }
+
+    if($KerberosTGT)
+    {
+        Write-Output $inveigh.kerberos_TGT_list[$KerberosTGT]
+    }
+
+    if($KerberosUsername)
+    {
+        Write-Output $inveigh.kerberos_TGT_username_list
     }
 
     if($Log)
@@ -7183,7 +7202,6 @@ Get relay session list.
 
     if($Session)
     {
-        $sessions_temp = $inveigh.session
         $i = 0
 
         while($i -lt $inveigh.session_socket_table.Count)
@@ -7197,14 +7215,12 @@ Get relay session list.
             $i++
         }
 
-        Write-Output $sessions_temp | Format-Table -AutoSize
+        Write-Output $inveigh.session | Format-Table -AutoSize
     }
 
     if($Enumerate)
     {
-        $enumerate_temp = $inveigh.enumerate
-        Write-Output $enumerate_temp
-        Remove-Variable enumerate_temp
+        Write-Output $inveigh.enumerate
     }
 
 }

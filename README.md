@@ -6,7 +6,7 @@ Inveigh is a PowerShell ADIDNS/LLMNR/mDNS/NBNS spoofer and man-in-the-middle too
 * https://blog.netspi.com/inveigh-whats-new-in-version-1-4/
 
 ## Wiki
-* https://github.com/SecureAuthCorp/impacket
+* https://github.com/Kevin-Robertson/Inveigh/wiki
 
 ## Included In
 * PowerShell Empire - https://github.com/PowerShellEmpire/Empire  
