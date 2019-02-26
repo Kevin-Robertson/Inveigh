@@ -435,7 +435,7 @@ param
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTP = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTPS = "N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTPSForceCertDelete = "N",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$Kerberos = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$Kerberos = "N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$LLMNR = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$LogOutput = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$MachineAccounts = "N",
@@ -557,7 +557,7 @@ if($HTTPDefaultFile -or $HTTPDefaultEXE)
 
 }
 
-if($Kerberos -and !$KerberosCredential -and !$KerberosHash)
+if($Kerberos -eq 'Y' -and !$KerberosCredential -and !$KerberosHash)
 {
     Write-Output "[-] You must specify a -KerberosCredential or -KerberosHash when enabling Kerberos capture"
     throw
