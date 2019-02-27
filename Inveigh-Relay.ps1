@@ -340,6 +340,8 @@ if(!$inveigh)
     $inveigh.enumerate = New-Object System.Collections.ArrayList
     $inveigh.IP_capture_list = New-Object System.Collections.ArrayList
     $inveigh.log = New-Object System.Collections.ArrayList
+    $inveigh.kerberos_TGT_list = New-Object System.Collections.ArrayList
+    $inveigh.kerberos_TGT_username_list = New-Object System.Collections.ArrayList
     $inveigh.NTLMv1_list = New-Object System.Collections.ArrayList
     $inveigh.NTLMv1_username_list = New-Object System.Collections.ArrayList
     $inveigh.NTLMv2_list = New-Object System.Collections.ArrayList
@@ -347,6 +349,7 @@ if(!$inveigh)
     $inveigh.POST_request_list = New-Object System.Collections.ArrayList
     $inveigh.valid_host_list = New-Object System.Collections.ArrayList
     $inveigh.ADIDNS_table = [HashTable]::Synchronized(@{})
+    $inveigh.relay_privilege_table = [HashTable]::Synchronized(@{})
     $inveigh.relay_failed_login_table = [HashTable]::Synchronized(@{})
     $inveigh.relay_history_table = [HashTable]::Synchronized(@{})
     $inveigh.request_table = [HashTable]::Synchronized(@{})
