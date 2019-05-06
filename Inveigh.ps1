@@ -3615,12 +3615,13 @@ $HTTP_scriptblock =
                 {
                     break HTTP_listener_loop
                 }
-
+                
                 Start-Sleep -m 10
             }
             until($HTTP_async.IsCompleted)
 
             $HTTP_client = $HTTP_listener.EndAcceptTcpClient($HTTP_async)
+            $HTTP_client_handle_old = $HTTP_client.Client.Handle
             
             if($HTTPS_listener)
             {
@@ -3640,25 +3641,25 @@ $HTTP_scriptblock =
         {
             [Byte[]]$SSL_request_bytes = $null
 
-            do 
+            while($HTTP_clear_stream.DataAvailable)
             {
                 $HTTP_request_byte_count = $HTTP_stream.Read($TCP_request_bytes,0,$TCP_request_bytes.Length)
                 $SSL_request_bytes += $TCP_request_bytes[0..($HTTP_request_byte_count - 1)]
-            } while ($HTTP_clear_stream.DataAvailable)
+            }
 
             $TCP_request = [System.BitConverter]::ToString($SSL_request_bytes)
         }
         else
         {
-            
-            do
+
+            while($HTTP_stream.DataAvailable)
             {
                 $HTTP_stream.Read($TCP_request_bytes,0,$TCP_request_bytes.Length) > $null
-            } while ($HTTP_stream.DataAvailable)
+            }
 
             $TCP_request = [System.BitConverter]::ToString($TCP_request_bytes)
         }
-
+        
         if($TCP_request -like "47-45-54-20*" -or $TCP_request -like "48-45-41-44-20*" -or $TCP_request -like "4f-50-54-49-4f-4e-53-20*" -or $TCP_request -like "43-4f-4e-4e-45-43-54*" -or $TCP_request -like "50-4f-53-54*")
         {
             $HTTP_raw_URL = $TCP_request.Substring($TCP_request.IndexOf("-20-") + 4,$TCP_request.Substring($TCP_request.IndexOf("-20-") + 1).IndexOf("-20-") - 3)
@@ -3667,7 +3668,7 @@ $HTTP_scriptblock =
             $HTTP_source_IP = $HTTP_client.Client.RemoteEndpoint.Address.IPAddressToString
             $HTTP_source_Port = $HTTP_client.Client.RemoteEndpoint.Port
             $HTTP_connection_header_close = $true
-
+            
             if($NBNSBruteForcePause)
             {
                 $inveigh.NBNS_stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -4076,11 +4077,10 @@ $HTTP_scriptblock =
 
             Start-Sleep -m 10
             $HTTP_request_raw_URL_old = $HTTP_request_raw_URL
-            $HTTP_client_handle_old = $HTTP_client.Client.Handle
 
             if($HTTP_client_close)
             {
-
+                
                 if($proxy_listener)
                 {
                     $HTTP_client.Client.Close()
@@ -4107,6 +4107,7 @@ $HTTP_scriptblock =
 
             if($HTTP_connection_header_close -or $HTTP_reset -gt 20)
             {
+                
                 $HTTP_client.Close()
                 $HTTP_reset = 0
             }
@@ -4114,7 +4115,7 @@ $HTTP_scriptblock =
             {
                 Start-Sleep -m 100
             }
-
+            
         }
     
     }
@@ -4627,7 +4628,7 @@ $sniffer_scriptblock =
                                 !$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $NBNS_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (
                                 !$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and ($inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP.IPAddressToString) -and ($NBNS_query_string.Trim() -ne '*') -and (
                                 $SpooferLearning -eq 'N' -or ($SpooferLearning -eq 'Y' -and !$SpooferLearningDelay) -or ($SpooferLearningDelay -and $spoofer_learning_stopwatch.Elapsed -ge $spoofer_learning_delay)) -and ($source_IP -ne $IP) -and (
-                                $NBNSTypes -contains $NBNS_query_type) -and ($EvadeRG -and $destination_IP.IPAddressToString -ne $IP) -and ($SpooferNonprintable -eq 'Y' -or ($SpooferNonprintable -eq 'N' -and $NBNS_query_string -notmatch '[^\x00-\x7F]+')))
+                                $NBNSTypes -contains $NBNS_query_type) -and ($EvadeRG -eq 'Y' -and $destination_IP.IPAddressToString -ne $IP) -and ($SpooferNonprintable -eq 'Y' -or ($SpooferNonprintable -eq 'N' -and $NBNS_query_string -notmatch '[^\x00-\x7F]+')))
                                 {
 
                                     if($SpooferLearning -eq 'N' -or !$NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
@@ -4875,7 +4876,7 @@ $sniffer_scriptblock =
                                 !$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $LLMNR_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (
                                 !$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and ($inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP.IPAddressToString) -and (
                                 $SpooferLearning -eq 'N' -or ($SpooferLearning -eq 'Y' -and !$SpooferLearningDelay) -or ($SpooferLearningDelay -and $spoofer_learning_stopwatch.Elapsed -ge $spoofer_learning_delay)) -and (
-                                $EvadeRG -and $destination_IP.IPAddressToString -ne $IP) -and @($inveigh.request_table.$LLMNR_query_string | Where-Object {$_ -match $source_IP.IPAddressToString}).Count -gt $SpooferThresholdHost -and @(
+                                $EvadeRG -eq 'Y' -and $destination_IP.IPAddressToString -ne $IP) -and @($inveigh.request_table.$LLMNR_query_string | Where-Object {$_ -match $source_IP.IPAddressToString}).Count -gt $SpooferThresholdHost -and @(
                                 $inveigh.request_table.$LLMNR_query_string | Sort-Object | Get-Unique).Count -gt $SpooferThresholdNetwork -and ($SpooferNonprintable -eq 'Y' -or ($SpooferNonprintable -eq 'N' -and $LLMNR_query_string -notmatch '[^\x00-\x7F]+')))
                                 {
 

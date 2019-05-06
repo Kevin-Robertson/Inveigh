@@ -5602,6 +5602,7 @@ $HTTP_scriptblock =
             until($HTTP_async.IsCompleted)
 
             $HTTP_client = $HTTP_listener.EndAcceptTcpClient($HTTP_async)
+            $HTTP_client_handle_old = $HTTP_client.Client.Handle
             
             if($HTTPS_listener)
             {
@@ -5637,21 +5638,21 @@ $HTTP_scriptblock =
         {
             [Byte[]]$SSL_request_bytes = $null
 
-            do 
+            while($HTTP_clear_stream.DataAvailable)
             {
                 $HTTP_request_byte_count = $HTTP_stream.Read($TCP_request_bytes,0,$TCP_request_bytes.Length)
                 $SSL_request_bytes += $TCP_request_bytes[0..($HTTP_request_byte_count - 1)]
-            } while ($HTTP_clear_stream.DataAvailable)
+            }
 
             $TCP_request = [System.BitConverter]::ToString($SSL_request_bytes)
         }
         else
         {
             
-            do
+            while($HTTP_stream.DataAvailable)
             {
                 $HTTP_stream.Read($TCP_request_bytes,0,$TCP_request_bytes.Length) > $null
-            } while ($HTTP_stream.DataAvailable)
+            }
 
             $TCP_request = [System.BitConverter]::ToString($TCP_request_bytes)
         }
@@ -6188,7 +6189,6 @@ $HTTP_scriptblock =
 
             Start-Sleep -m 10
             $HTTP_request_raw_URL_old = $HTTP_request_raw_URL
-            $HTTP_client_handle_old = $HTTP_client.Client.Handle
 
             if($HTTP_client_close)
             {
