@@ -1,6 +1,6 @@
 ![Inveigh_logo](https://user-images.githubusercontent.com/5897462/62184298-69b5d280-b32b-11e9-9002-7d4f94c59731.png)
 
-Inveigh is a PowerShell ADIDNS/LLMNR/mDNS/NBNS spoofer and man-in-the-middle tool designed to assist penetration testers/red teamers that find themselves limited to a Windows system.  
+Inveigh is a PowerShell ADIDNS/LLMNR/NBNS/mDNS/DNS spoofer and man-in-the-middle tool designed to assist penetration testers/red teamers that find themselves limited to a Windows system.  
 
 ## 1.4 Release Blog
 * https://blog.netspi.com/inveigh-whats-new-in-version-1-4/
