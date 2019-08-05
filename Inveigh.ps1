@@ -500,7 +500,7 @@ if($invalid_parameter)
     throw
 }
 
-$inveigh_version = "1.5"
+$inveigh_version = "1.501"
 
 if(!$IP)
 { 
@@ -1701,7 +1701,7 @@ $shared_basic_functions_scriptblock =
     {
         param ([String]$QueryString,[String]$Type,[String]$mDNSType,[String]$Enabled)
 
-        if($QueryString -contains ".")
+        if($QueryString -like "*.*")
         {
             [Array]$query_split = $QueryString.Split('.')
             $query_host = $query_split[0]
@@ -4472,7 +4472,7 @@ $sniffer_scriptblock =
                     {
                         $DNS_query_string = Get-NameQueryString 12 $payload_bytes
                         $DNS_response_data = $payload_bytes[12..($DNS_query_string.Length + 13)]
-                        $UDP_length[0] = $DNS_response_data.Count + $DNS_response_data.Count + $SpooferIP.Length + 27
+                        [Byte[]]$UDP_length = ([System.BitConverter]::GetBytes($DNS_response_data.Count + $DNS_response_data.Count + $SpooferIP.Length + 23))[1,0]
                         $DNS_response_type = "[+]"
 
                         $DNS_response_data += 0x00,0x01,0x00,0x01 +
@@ -4484,7 +4484,7 @@ $sniffer_scriptblock =
         
                         $DNS_response_packet = 0x00,0x35 +
                                                     $source_port[1,0] +
-                                                    $UDP_length[1,0] +
+                                                    $UDP_length +
                                                     0x00,0x00 +
                                                     $payload_bytes[0,1] +
                                                     0x80,0x00,0x00,0x01,0x00,0x01,0x00,0x00,0x00,0x00 +
