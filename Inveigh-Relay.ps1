@@ -100,9 +100,6 @@ Default = Disabled: Enable/Disable forcing all output to the standard output str
 running Inveigh Relay through a shell that does not return other output streams. Note that you will not see the
 various yellow warning messages if enabled.
 
-.PARAMETER ProxyRelay
-Default = Disabled: (Y/N): Enable/Disable relaying proxy authentication.
-
 .PARAMETER ProxyIP
 Default = Any: IP address for the proxy listener.
 
@@ -282,7 +279,7 @@ if($inveigh.relay_running)
     throw
 }
 
-$inveigh_version = "1.5"
+$inveigh_version = "1.501"
 
 if(!$target -and !$inveigh.enumerate)
 {
@@ -6645,8 +6642,8 @@ function HTTPSListener
         $RelayAutoDisable).AddArgument($RepeatEnumerate).AddArgument($RepeatExecute).AddArgument(
         $Service).AddArgument($SMB_version).AddArgument($SessionLimitPriv).AddArgument(
         $SessionLimitUnpriv).AddArgument($SessionLimitShare).AddArgument($SessionPriority).AddArgument(
-        $Target).AddArgument($Username).AddArgument($WPADAuth).AddArgument($WPADAuthIgnore).AddArgument(
-        $WPADResponse) > $null
+        $Target).AddArgument($TargetMode).AddArgument($TargetRefresh).AddArgument($Username).AddArgument(
+        $WPADAuth).AddArgument($WPADAuthIgnore).AddArgument($WPADResponse) > $null
     $HTTPS_powershell.BeginInvoke() > $null
 }
 
@@ -6670,8 +6667,8 @@ function ProxyListener
         $RelayAutoDisable).AddArgument($RepeatEnumerate).AddArgument($RepeatExecute).AddArgument(
         $Service).AddArgument($SMB_version).AddArgument($SessionLimitPriv).AddArgument(
         $SessionLimitUnpriv).AddArgument($SessionLimitShare).AddArgument($SessionPriority).AddArgument(
-        $Target).AddArgument($Username).AddArgument($WPADAuth).AddArgument($WPADAuthIgnore).AddArgument(
-        $WPADResponse) > $null
+        $Target).AddArgument($TargetMode).AddArgument($TargetRefresh).AddArgument($Username).AddArgument(
+        $WPADAuth).AddArgument($WPADAuthIgnore).AddArgument($WPADResponse) > $null
     $proxy_powershell.BeginInvoke() > $null
 }
 
