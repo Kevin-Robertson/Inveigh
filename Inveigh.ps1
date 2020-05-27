@@ -500,7 +500,7 @@ if($invalid_parameter)
     throw
 }
 
-$inveigh_version = "1.503"
+$inveigh_version = "1.504"
 
 if(!$IP)
 { 
@@ -2000,7 +2000,7 @@ $NTLM_functions_scriptblock =
         $NTLMSSP_hex_offset = $payload_converted.IndexOf("4E544C4D53535000")
         $session = "$SourceIP`:$SourcePort"
 
-        if(($Protocol -Like "HTTP*" -or $Protocol -Like "Proxy"-or $NTLMSSP_hex_offset -gt 0) -and $payload_converted.SubString(($NTLMSSP_hex_offset + 16),8) -eq "03000000")
+        if($NTLMSSP_hex_offset -gt 0 -and $payload_converted.SubString(($NTLMSSP_hex_offset + 16),8) -eq "03000000")
         {
             $NTLMSSP_offset = $NTLMSSP_hex_offset / 2
             $LM_length = Get-UInt16DataLength ($NTLMSSP_offset + 12) $Payload
@@ -2023,15 +2023,7 @@ $NTLM_functions_scriptblock =
             $host_length = Get-UInt16DataLength ($NTLMSSP_offset + 44) $Payload
             $host_offset = Get-UInt32DataLength ($NTLMSSP_offset + 48) $Payload
             $NTLM_host_string = Convert-DataToString ($NTLMSSP_offset + $host_offset) $host_length $Payload
-
-            if($Protocol -eq "SMB")
-            {
-                $NTLM_challenge = $inveigh.SMB_session_table.$session
-            }
-            elseif($Protocol -Like "HTTP*")
-            {
-                $NTLM_challenge = $inveigh.HTTP_session_table.$session
-            }
+            $NTLM_challenge = $inveigh.HTTP_session_table.$session
 
             if($NTLM_length -gt 24)
             {
