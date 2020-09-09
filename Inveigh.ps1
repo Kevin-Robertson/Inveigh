@@ -500,7 +500,7 @@ if($invalid_parameter)
     throw
 }
 
-$inveigh_version = "1.504"
+$inveigh_version = "1.505"
 
 if(!$IP)
 { 
@@ -2000,7 +2000,7 @@ $NTLM_functions_scriptblock =
         $NTLMSSP_hex_offset = $payload_converted.IndexOf("4E544C4D53535000")
         $session = "$SourceIP`:$SourcePort"
 
-        if($NTLMSSP_hex_offset -gt 0 -and $payload_converted.SubString(($NTLMSSP_hex_offset + 16),8) -eq "03000000")
+        if($NTLMSSP_hex_offset -ge 0 -and $payload_converted.SubString(($NTLMSSP_hex_offset + 16),8) -eq "03000000")
         {
             $NTLMSSP_offset = $NTLMSSP_hex_offset / 2
             $LM_length = Get-UInt16DataLength ($NTLMSSP_offset + 12) $Payload
@@ -2027,7 +2027,6 @@ $NTLM_functions_scriptblock =
 
             if($NTLM_length -gt 24)
             {
-
                 $NTLMv2_response = $NTLM_response.Insert(32,':')
                 $NTLMv2_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $NTLM_challenge + ":" + $NTLMv2_response
 
@@ -3591,7 +3590,8 @@ $HTTP_scriptblock =
         {
             $inveigh.HTTP_session_table["$ClientIPAddress`:$ClientPort"] = $HTTP_challenge
         }
-        
+
+        $inveigh.output_queue.Add("[*] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLM challenge $HTTP_challenge sent to $HTTP_source_IP`:$HTTP_source_port") > $null
         $hostname_bytes = [System.Text.Encoding]::Unicode.GetBytes($inveigh.computer_name)
         $netBIOS_domain_bytes = [System.Text.Encoding]::Unicode.GetBytes($inveigh.netBIOS_domain)
         $DNS_domain_bytes = [System.Text.Encoding]::Unicode.GetBytes($inveigh.DNS_domain)
