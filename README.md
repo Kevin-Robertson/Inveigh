@@ -27,12 +27,12 @@ The C# version of Inveigh contains attacks for the following protocols:
 * [NBNS](#NBNS) [packet sniffer | listener]
 * [DHCPv6](#DHCPv6) [packet sniffer | listener]
 * [ICMPv6](#ICMPv6) [privileged raw socket]
-* [HTTP](#HTTP) [listener]
-* [HTTPS](#HTTPS) [listener]
-* [SMB](#SMB) [packet sniffer | listener]
-* [LDAP](#LDAP) [listener]
-* [WebDAV](#WebDAV) [listener]
-* [Proxy Auth](#Proxy) [listener]
+* [HTTP] [listener]
+* [HTTPS] [listener]
+* [SMB] [packet sniffer | listener]
+* [LDAP] [listener]
+* [WebDAV] [listener]
+* [Proxy Auth] [listener]
  
 Inveigh works with both IPv4 and IPv6 in cases where support for both is provided by the underlying protocol.
 
