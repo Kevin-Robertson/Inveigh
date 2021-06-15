@@ -441,3 +441,8 @@ Cleartext(unique:total) NTLMv1(unique:total) NTLMv2(unique:total)
 ## Quiddity
 
 The protocol library used by Inveigh is located [here](https://github.com/Kevin-Robertson/Quiddity).
+
+## Special Thanks  
+* Responder - https://github.com/lgandx/Responder  
+* Impacket - https://github.com/SecureAuthCorp/impacket  
+* mitm6 - https://github.com/fox-it/mitm6
