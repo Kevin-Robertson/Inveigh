@@ -31,7 +31,7 @@ The C# version of Inveigh contains attacks for the following protocols:
 * [HTTPS](#HTTPS) [listener]
 * [SMB](#SMB) [packet sniffer | listener]
 * [LDAP](#LDAP) [listener]
-* [WebDAV] [listener]
+* [WebDAV](#WebDAV) [listener]
 * [Proxy Auth] [listener]
  
 Inveigh works with both IPv4 and IPv6 in cases where support for both is provided by the underlying protocol.
@@ -406,9 +406,9 @@ Start NBNS spoofer
 [+] [23:33:09] NBNS(00) request [TEST] from 10.10.2.201 [response sent]
 ```
 ### <a name="HTTP"></a>HTTP
-Start HTTP listener on port 80
+Start HTTP listener on port 80 (enabled by default)
 ```
-.\Inveigh.exe
+.\Inveigh.exe 
 ...
 [+] HTTP Listener [HTTPAuth NTLM | WPADAuth NTLM | Port 80]
 ...
@@ -429,7 +429,7 @@ Start HTTPS listener on port 443 with Inveigh's default cert
 ...
 ```
 ### <a name="SMB"></a>SMB
-Start SMB packet sniffer
+Start SMB packet sniffer (enabled by default)
 ```
 .\Inveigh.exe
 ...
@@ -449,6 +449,14 @@ Start LDAP listener on port 389
 .\Inveigh.exe
 ...
 [+] LDAP Listener [Port 389]
+...
+```
+### <a name="WebDAV"></a>WebDAV
+Start the HTTP listener with WebDAV support (enabled by default)
+```
+.\Inveigh.exe
+...
+[+] WebDAV [WebDAVAuth NTLM]
 ...
 ```
 ## Console
