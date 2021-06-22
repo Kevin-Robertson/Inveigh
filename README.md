@@ -460,7 +460,7 @@ Start the HTTP listener with WebDAV support (enabled by default)
 ...
 ```
 ### <a name="Proxy"></a>Proxy Auth
-Enable proxy auth capture
+Enable proxy auth capture on port 8492
 ```
 .\Inveigh.exe -proxy y
 ...
