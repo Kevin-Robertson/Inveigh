@@ -314,7 +314,7 @@ namespace Inveigh
 
             if (Program.enabledProxy)
             {
-                Program.argWPADResponse = string.Concat("function FindProxyForURL(url,host){", "return \"PROXY ", Program.argSnifferIP, ":", Program.argProxyPort, "; PROXY ", Program.argSnifferIP, ":", (int.Parse(Program.argProxyPort) + 1).ToString(), "; DIRECT\";}");
+                Program.argWPADResponse = string.Concat("function FindProxyForURL(url,host) {", "return \"PROXY ", Program.argSnifferIP, ":", Program.argProxyPort, "; PROXY ", Program.argSnifferIP, ":", (int.Parse(Program.argProxyPort) + 1).ToString(), "; DIRECT\";}");
             }
             else if (string.IsNullOrEmpty(Program.argWPADResponse))
             {

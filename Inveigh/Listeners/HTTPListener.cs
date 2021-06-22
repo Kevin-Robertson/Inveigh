@@ -251,29 +251,6 @@ namespace Inveigh
                         response.WWWAuthenticate = string.Concat("Basic realm=", Program.argHTTPRealm);
                     }
 
-                    /*
-                    if (!string.Equals(request.URI, "/wpad.dat") && string.Equals(Program.argHTTPAuth, "ANONYMOUS") || string.Equals(request.URI, "/wpad.dat") && string.Equals(Program.argWPADAuth, "ANONYMOUS") || wpadAuthIgnoreMatch)
-                    {
-                        response.StatusCode = "200";
-                        response.ReasonPhrase = "OK";
-                    }
-                    else
-                    {
-                        if (String.Equals(type, "Proxy"))
-                        {
-                            response.StatusCode = "407";
-                            response.ProxyAuthenticate = "NTLM";
-                            response.WWWAuthenticate = "";
-                            response.Connection = "close";
-                        }
-                        else
-                        {
-                            //response.StatusCode = "401";
-                            //response.WWWAuthenticate = "NTLM";
-                        }
-                    }
-                    */
-
                     if ((!string.IsNullOrEmpty(request.Authorization) && request.Authorization.ToUpper().StartsWith("NTLM ")) || (!string.IsNullOrEmpty(request.ProxyAuthorization)) && request.ProxyAuthorization.ToUpper().StartsWith("NTLM "))
                     {
                         string authorization = request.Authorization;
@@ -326,7 +303,6 @@ namespace Inveigh
                                 byte[] timestamp = new byte[8];
                                 Buffer.BlockCopy(ntlmResponse.NtChallengeResponse, 24, timestamp, 0, 8);
                                 string sessionTimestamp = BitConverter.ToString(timestamp).Replace("-", "");
-                                Console.WriteLine(sessionTimestamp);
                                 ntlmChallenge = Program.httpSessionTable[sessionTimestamp].ToString();
                             }
 
