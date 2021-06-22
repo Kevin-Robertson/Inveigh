@@ -32,7 +32,7 @@ The C# version of Inveigh contains attacks for the following protocols:
 * [SMB](#SMB) [packet sniffer | listener]
 * [LDAP](#LDAP) [listener]
 * [WebDAV](#WebDAV) [listener]
-* [Proxy Auth] [listener]
+* [Proxy Auth](#Proxy) [listener]
  
 Inveigh works with both IPv4 and IPv6 in cases where support for both is provided by the underlying protocol.
 
@@ -457,6 +457,14 @@ Start the HTTP listener with WebDAV support (enabled by default)
 .\Inveigh.exe
 ...
 [+] WebDAV [WebDAVAuth NTLM]
+...
+```
+### <a name="Proxy"></a>Proxy Auth
+Enable proxy auth capture
+```
+.\Inveigh.exe -proxy y
+...
+[+] Proxy Listener [ProxyAuth NTLM | Port 8492]
 ...
 ```
 ## Console
