@@ -30,7 +30,7 @@ The C# version of Inveigh contains attacks for the following protocols:
 * [HTTP](#HTTP) [listener]
 * [HTTPS](#HTTPS) [listener]
 * [SMB](#SMB) [packet sniffer | listener]
-* [LDAP] [listener]
+* [LDAP](#LDAP) [listener]
 * [WebDAV] [listener]
 * [Proxy Auth] [listener]
  
@@ -441,6 +441,14 @@ Start SMB listener on port 445
 .\Inveigh.exe -sniffer n
 ...
 [+] SMB Listener [Port 445]
+...
+```
+### <a name="LDAP"></a>LDAP
+Start LDAP listener on port 389
+```
+.\Inveigh.exe
+...
+[+] LDAP Listener [Port 389]
 ...
 ```
 ## Console
