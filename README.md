@@ -27,7 +27,7 @@ The C# version of Inveigh contains attacks for the following protocols:
 * [NBNS](#NBNS) [packet sniffer | listener]
 * [DHCPv6](#DHCPv6) [packet sniffer | listener]
 * [ICMPv6](#ICMPv6) [privileged raw socket]
-* [HTTP] [listener]
+* [HTTP](#HTTP) [listener]
 * [HTTPS] [listener]
 * [SMB] [packet sniffer | listener]
 * [LDAP] [listener]
@@ -404,6 +404,14 @@ Start NBNS spoofer
 [+] NBNS Listener [Types 00:20]
 ...
 [+] [23:33:09] NBNS(00) request [TEST] from 10.10.2.201 [response sent]
+```
+### <a name="HTTP"></a>HTTP
+Start HTTP listener on port 80
+```
+.\Inveigh.exe
+...
+[+] HTTP Listener [HTTPAuth NTLM | WPADAuth NTLM | Port 80]
+...
 ```
 ## Console
 
