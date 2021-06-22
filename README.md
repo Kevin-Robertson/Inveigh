@@ -413,6 +413,13 @@ Start HTTP listener on port 80
 [+] HTTP Listener [HTTPAuth NTLM | WPADAuth NTLM | Port 80]
 ...
 ```
+Start HTTP listeners on multiple ports
+```
+.\Inveigh.exe -httpports 80,8080
+...
+[+] HTTP Listener [HTTPAuth NTLM | WPADAuth NTLM | Ports 80:8080]
+...
+```
 ## Console
 
 Inveigh contains a console that is accessible while the tool is running (hit escape to enter and exit). The console provides easy access to captured credentials/hashes and other various information. The console's prompt provides real-time updates for cleartext, NTLMv1, and NTLMv2 captue counts in the format of unique:total. Note, the console may be inaccessible when running through C2. 
