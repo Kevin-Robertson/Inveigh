@@ -29,7 +29,7 @@ The C# version of Inveigh contains attacks for the following protocols:
 * [ICMPv6](#ICMPv6) [privileged raw socket]
 * [HTTP](#HTTP) [listener]
 * [HTTPS](#HTTPS) [listener]
-* [SMB] [packet sniffer | listener]
+* [SMB](#SMB) [packet sniffer | listener]
 * [LDAP] [listener]
 * [WebDAV] [listener]
 * [Proxy Auth] [listener]
@@ -426,6 +426,21 @@ Start HTTPS listener on port 443 with Inveigh's default cert
 .\Inveigh.exe -https y
 ...
 [+] HTTPS Listener [HTTPAuth NTLM | WPADAuth NTLM | Port 443]
+...
+```
+### <a name="SMB"></a>SMB
+Start SMB packet sniffer
+```
+.\Inveigh.exe
+...
+[+] SMB Packet Sniffer [Port 445]
+...
+```
+Start SMB listener on port 445
+```
+.\Inveigh.exe -sniffer n
+...
+[+] SMB Listener [Port 445]
 ...
 ```
 ## Console
