@@ -188,12 +188,13 @@ namespace Quiddity.NTLM
 
         private SPNEGONegTokenResp Decode(byte[] data)
         {
+
             SPNEGONegTokenResp spnegoNegTokenResp = new SPNEGONegTokenResp
             {
-                NegState = ASN1.GetTagBytes(1, data)[0],
-                SupportedMech = ASN1.GetTagBytes(6, data),
+                NegState = ASN1.GetTagBytes(10, data)[0],
+                //SupportedMech = ASN1.GetTagBytes(6, data),
                 ResponseToken = ASN1.GetTagBytes(4, data),
-                MechListMIC = ASN1.GetTagBytes(4, ASN1.GetTagBytes(163, data))
+                //MechListMIC = ASN1.GetTagBytes(4, ASN1.GetTagBytes(163, data))
             };
 
             return spnegoNegTokenResp;

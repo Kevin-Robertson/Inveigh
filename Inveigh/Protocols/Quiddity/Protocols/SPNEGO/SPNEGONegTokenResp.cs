@@ -45,7 +45,7 @@ namespace Quiddity.SPNEGO
         public SPNEGONegTokenResp()
         {
             this.NegState = 0;
-            this.SupportedMech = new byte[10];
+            this.SupportedMech = new byte[10]; // todo check
             this.ResponseToken = new byte[0];
             this.MechListMIC = new byte[0];
         }

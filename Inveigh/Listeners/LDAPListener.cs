@@ -90,7 +90,7 @@ namespace Inveigh
                 LDAPMessage message2 = new LDAPMessage();
                 message2.MessageID = message.MessageID;
                 byte[] buffer = new byte[0];
-                Output.Queue(String.Format("[.] [{0}] LDAP({1}) message type {2} request from {3}:{4}", DateTime.Now.ToString("s"), listenerPort, message.Tag, clientIP, clientPort));
+                Output.Queue(String.Format("[.] [{0}] LDAP({1}) message type {2} request from {3}:{4}", Output.Timestamp(), listenerPort, message.Tag, clientIP, clientPort));
 
                 if (message.Tag == 3)
                 {

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.IO;
 using System.Collections;
+using Quiddity.NTLM;
 
 namespace Inveigh
 {
@@ -170,7 +171,7 @@ namespace Inveigh
         public static string netbiosDomain = Environment.UserDomainName;
         public static string dnsDomain = "";    
         public static ulong smb2Session = 5548434740922023936; // todo check
-        public static string version = "2.0.1";
+        public static string version = "2.0.2";
 
         static void Main(string[] arguments)
         {
@@ -627,7 +628,7 @@ namespace Inveigh
                 catch (Exception ex)
                 {
                     Console.WriteLine(outputList.Count);
-                    outputList.Add(String.Format("[-] [{0}] Console error detected - {1}", DateTime.Now.ToString("s"), ex.ToString()));                 
+                    outputList.Add(String.Format("[-] [{0}] Console error detected - {1}", Output.Timestamp(), ex.ToString()));                 
                 }
 
             }

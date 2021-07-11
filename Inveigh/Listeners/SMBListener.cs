@@ -159,7 +159,7 @@ namespace Inveigh
                         {
                             smb2NegotiateResponse.DialectRivision = new byte[2] { 0xff, 0x02 };
                             smb2NegotiateResponse.Capabilities = new byte[4] { 0x07, 0x00, 0x00, 0x00 };
-                            Output.Queue(String.Format("[.] [{0}] SMB1({1}) negotiation request received from {2}:{3}", DateTime.Now.ToString("s"), listenerPort, clientIP, clientPort));
+                            Output.Queue(String.Format("[.] [{0}] SMB1({1}) negotiation request received from {2}:{3}", Output.Timestamp(), listenerPort, clientIP, clientPort));
                         }
                         else if (isSMB2)
                         {
@@ -172,13 +172,13 @@ namespace Inveigh
                                 smb2NegotiateResponse.Capabilities = new byte[4] { 0x2f, 0x00, 0x00, 0x00 };
                                 smb2NegotiateResponse.NegotiateContextOffset = 448;
                                 smb2NegotiateResponse.NegotiateContextList = new SMB2NegotiateContext().GetBytes(new string[] { "1", "2", "3" });
-                                Output.Queue(String.Format("[.] [{0}] SMB3({1}) negotiated with {2}:{3}", DateTime.Now.ToString("s"), listenerPort, clientIP, clientPort));
+                                Output.Queue(String.Format("[.] [{0}] SMB3({1}) negotiated with {2}:{3}", Output.Timestamp(), listenerPort, clientIP, clientPort));
                             }
                             else
                             {
                                 smb2NegotiateResponse.DialectRivision = new byte[2] { 0x10, 0x02 };
                                 smb2NegotiateResponse.Capabilities = new byte[4] { 0x07, 0x00, 0x00, 0x00 };
-                                Output.Queue(String.Format("[.] [{0}] SMB2({1}) negotiated with {2}:{3}", DateTime.Now.ToString("s"), listenerPort, clientIP, clientPort));
+                                Output.Queue(String.Format("[.] [{0}] SMB2({1}) negotiated with {2}:{3}", Output.Timestamp(), listenerPort, clientIP, clientPort));
                             }
 
                             responseSMB2Header.Reserved2 = requestSMB2Header.Reserved2; // todo fix

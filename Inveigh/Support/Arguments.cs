@@ -246,32 +246,42 @@ namespace Inveigh
             else
             {
 
-                if (!string.Equals(Program.argListenerIP, "0.0.0.0") && string.IsNullOrEmpty(Program.argSpooferIP))
+                if (string.IsNullOrEmpty(Program.argSpooferIP))
                 {
-                    Program.argSpooferIP = Program.argListenerIP;
-                }
-                else
-                {
-                    Program.argSpooferIP = GetLocalIPAddress("IPv4");
 
-                    if (string.IsNullOrEmpty(Program.argSpooferIP))
+                    if (!string.Equals(Program.argListenerIP, "0.0.0.0"))
                     {
-                        Program.enabledIPv4 = false;
+                        Program.argSpooferIP = Program.argListenerIP;
+                    }
+                    else
+                    {
+                        Program.argSpooferIP = GetLocalIPAddress("IPv4");
+
+                        if (string.IsNullOrEmpty(Program.argSpooferIP))
+                        {
+                            Program.enabledIPv4 = false;
+                        }
+
                     }
 
                 }
 
-                if (!string.Equals(Program.argListenerIPv6, "::") && string.IsNullOrEmpty(Program.argSpooferIPv6))
+                if (string.IsNullOrEmpty(Program.argSpooferIPv6))
                 {
-                    Program.argSpooferIPv6 = Program.argListenerIPv6;
-                }
-                else
-                {
-                    Program.argSpooferIPv6 = GetLocalIPAddress("IPv6");
 
-                    if (string.IsNullOrEmpty(Program.argSpooferIPv6))
+                    if (!string.Equals(Program.argListenerIPv6, "::"))
                     {
-                        Program.enabledIPv6 = false;
+                        Program.argSpooferIPv6 = Program.argListenerIPv6;
+                    }
+                    else
+                    {
+                        Program.argSpooferIPv6 = GetLocalIPAddress("IPv6");
+
+                        if (string.IsNullOrEmpty(Program.argSpooferIPv6))
+                        {
+                            Program.enabledIPv6 = false;
+                        }
+
                     }
 
                 }

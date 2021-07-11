@@ -75,7 +75,7 @@ namespace Inveigh
 
                 if (ex.Message.Equals("An attempt was made to access a socket in a way forbidden by its access permissions"))
                 {
-                    Output.Queue(String.Format("[!] Error starting packet sniffer, check if shell has elevated privilege or set -Sniffer N for listener only mode.", DateTime.Now.ToString("s")));
+                    Output.Queue(String.Format("[!] Error starting packet sniffer, check if shell has elevated privilege or set -Sniffer N for listener only mode.", Output.Timestamp()));
                     Thread.Sleep(10);
                     Program.isRunning = false;
                 }
@@ -155,7 +155,7 @@ namespace Inveigh
                                 {
                                     tcpHeader.ReadBytes(snifferData, ipHeaderLength);
 
-                                    if (tcpHeader.SYN && !tcpHeader.ACK && snifferIP.StartsWith(destinationIP))
+                                    if (tcpHeader.SYN && !tcpHeader.ACK && snifferIP.Equals(destinationIP))
                                     {
                                         Output.Queue(String.Format("[.] [{0}] TCP({1}) SYN packet from {2}:{3}", Output.Timestamp(), tcpHeader.DestinationPort, sourceIP, tcpHeader.SourcePort));
                                     }
@@ -538,7 +538,7 @@ namespace Inveigh
                                         }
                                         else
                                         {
-                                            Output.Queue(string.Format("[.] [{0}] SMB({1}) Kerberos authentication from {2}:{3}", DateTime.Now.ToString("s"), clientPort, clientIP, listenerPort));
+                                            Output.Queue(string.Format("[.] [{0}] SMB({1}) Kerberos authentication from {2}:{3}", Output.Timestamp(), clientPort, clientIP, listenerPort));
                                         }
 
                                     }
@@ -635,7 +635,7 @@ namespace Inveigh
                                         }
                                         else
                                         {
-                                            Output.Queue(string.Format("[.] [{0}] SMB({1}) Kerberos authentication from {2}:{3}", DateTime.Now.ToString("s"), clientPort, clientIP, listenerPort));
+                                            Output.Queue(string.Format("[.] [{0}] SMB({1}) Kerberos authentication from {2}:{3}", Output.Timestamp(), clientPort, clientIP, listenerPort));
                                         }
 
                                     }

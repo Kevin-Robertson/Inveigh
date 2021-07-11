@@ -216,7 +216,7 @@ namespace Inveigh
 
                         if (wpadAuthIgnoreMatch)
                         {
-                            Output.Queue(string.Format("[-] [{0}] {1}({2}) switching wpad.dat auth to anonymous due to user agent match from {3}:{4}", DateTime.Now.ToString("s"), type, listenerPort, sourceIP, sourcePort));
+                            Output.Queue(string.Format("[-] [{0}] {1}({2}) switching wpad.dat auth to anonymous due to user agent match from {3}:{4}", Output.Timestamp(), type, listenerPort, sourceIP, sourcePort));
                         }
 
                     }
