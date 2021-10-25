@@ -38,14 +38,14 @@
   
   <ItemGroup Condition="'$(TargetFramework)' == 'net45'">
     <PackageReference Include="System.DirectoryServices.Protocols">
-      <Version>5.0</Version>
+      <Version>5.0.1</Version>
     </PackageReference>
   </ItemGroup>
  
   
   <ItemGroup Condition="'$(TargetFramework)' == 'net5.0'">
     <PackageReference Include="System.DirectoryServices.Protocols">
-      <Version>5.0</Version>
+      <Version>5.0.1</Version>
     </PackageReference>
   </ItemGroup>
   
