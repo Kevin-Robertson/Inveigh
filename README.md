@@ -220,7 +220,7 @@ Capture:
 
   -ListenerIPv6   Default=Any: IPv6 address for all listeners.
 
-  -Machines       Default=Disabled: (Y/N) machine account NetNTLM captures.
+  -Machineaccounts Default=Disabled: (Y/N) machine account NetNTLM captures.
 
   -Proxy          Default=Disabled: (Y/N) proxy listener authentication captures.
 
