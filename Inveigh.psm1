@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Inveigh is a Windows PowerShell LLMNR/NBNS/mDNS/DNS spoofer/man-in-the-middle tool.
+Inveigh is a Windows PowerShell ADIDNS/LLMNR/mDNS/NBNS spoofer/man-in-the-middle tool.
 
 .LINK
 https://github.com/Kevin-Robertson/Inveigh

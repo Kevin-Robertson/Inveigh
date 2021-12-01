@@ -8,7 +8,7 @@ This function performs NTLMv1/NTLMv2 HTTP to SMB relay.
 This function performs NTLMv1/NTLMv2 HTTP to SMB relay.
 
 .PARAMETER Attack
-Default = not sure yet: (Enumerate/Execute/Session) Comma seperated list of attacks to perform with relay. Enumerate
+Default = Enumerate,Session: (Enumerate/Execute/Session) Comma seperated list of attacks to perform with relay. Enumerate
 leverages relay to perform enumeration on target systems. The collected data is used for target selection.
 Execute performs PSExec style command execution. Session creates and maintains authenticated SMB sessions that
 can be interacted with through Invoke-TheHash's Invoke-SMBClient, Invoke-SMBEnum, and Invoke-SMBExec. 
@@ -47,15 +47,12 @@ Default = All: (All/Group/NetSession/Share/User) The action that will be used fo
 Default = Administrators: The group that will be enumerated with the 'Enumerate' attack. Note that only the
 'Administrators' group will be used for targeting decisions.
 
-.PARAMETER Execute
-Command to execute on relay target. Use PowerShell character escapes where necessary.
-
 .PARAMETER FailedLoginStrict
 Default = Disabled: If disabled, login attempts against non-domain attached will not count as failed logins. If enabled, all
 failed logins will count.
 
 .PARAMETER FailedLoginThreshold
-Default = 2: The threshold for failed logins. Once failed logins for a user exceed the threshhold, further relay attempts for that
+Default = 2: The threshold for failed logins. Once failed logins for a user exceed the threshold, further relay attempts for that
 user will be stopped.
 
 .PARAMETER FileOutput
@@ -103,9 +100,6 @@ Default = Disabled: Enable/Disable forcing all output to the standard output str
 running Inveigh Relay through a shell that does not return other output streams. Note that you will not see the
 various yellow warning messages if enabled.
 
-.PARAMETER ProxyRelay
-Default = Disabled: (Y/N): Enable/Disable relaying proxy authentication.
-
 .PARAMETER ProxyIP
 Default = Any: IP address for the proxy listener.
 
@@ -121,17 +115,17 @@ cleared. Remove "Firefox" from this list to attack Firefox. If attacking Firefox
 closing and reopening.
 
 .PARAMETER RelayAutoDisable
-Default = Enable: (Y/N) Enable/Disable automaticaly disabling SMB relay after a successful command execution on
+Default = Enable: (Y/N) Enable/Disable automatically disabling SMB relay after a successful command execution on
 target.
 
 .PARAMETER RelayAutoExit
-Default = Enable: (Y/N) Enable/Disable automaticaly exiting after a relay is disabled due to success or error.
+Default = Enable: (Y/N) Enable/Disable automatically exiting after a relay is disabled due to success or error.
 
 .PARAMETER RepeatEnumerate
 Default = 30 Minutes: The minimum number of minutes to wait between enumeration attempts for a target.
 
 .PARAMETER RepeatExecute
-Default = 30 Minutes: The minumum number of minutes to wait between command execution attempts for a target. 
+Default = 30 Minutes: The minimum number of minutes to wait between command execution attempts for a target. 
 
 .PARAMETER RunTime
 (Integer) Run time duration in minutes.
@@ -211,6 +205,7 @@ https://github.com/Kevin-Robertson/Inveigh
 #region begin parameters
 
 # Parameter default values can be modified in this section:
+
 [CmdletBinding()]
 param
 ( 
@@ -284,7 +279,7 @@ if($inveigh.relay_running)
     throw
 }
 
-$inveigh_version = "1.5 Dev"
+$inveigh_version = "1.501"
 
 if(!$target -and !$inveigh.enumerate)
 {
@@ -358,7 +353,6 @@ if(!$inveigh)
     $inveigh.session_message_ID_table = [HashTable]::Synchronized(@{})
     $inveigh.session_lock_table = [HashTable]::Synchronized(@{})
     $inveigh.SMB_session_table = [HashTable]::Synchronized(@{})
-    $inveigh.TCP_session_table = [HashTable]::Synchronized(@{})
     $inveigh.domain_mapping_table = [HashTable]::Synchronized(@{})
     $inveigh.group_table = [HashTable]::Synchronized(@{})
     $inveigh.session_count = 0
@@ -608,7 +602,7 @@ if($HTTP -eq 'Y' -or $HTTPS -eq 'Y')
 
     if($Challenge)
     {
-        $inveigh.output_queue.Add("[+] NTLM Challenge = $Challenge")  > $null
+        $inveigh.output_queue.Add("[+] HTTP NTLM Challenge = $Challenge")  > $null
     }
 
     if($MachineAccounts -eq 'N')
@@ -5681,6 +5675,7 @@ $HTTP_scriptblock =
             $HTTP_raw_URL = $HTTP_raw_URL.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
             $HTTP_request_raw_URL = New-Object System.String ($HTTP_raw_URL,0,$HTTP_raw_URL.Length)
             $HTTP_source_IP = $HTTP_client.Client.RemoteEndpoint.Address.IPAddressToString
+            $HTTP_source_Port = $HTTP_client.Client.RemoteEndpoint.Port
             $HTTP_connection_header_close = $true
 
             if(($TCP_request).StartsWith("47-45-54-20"))
@@ -5859,7 +5854,6 @@ $HTTP_scriptblock =
                                 $inveigh.HTTP_session_table["$ClientIPAddress`:$ClientPort"] = $HTTP_challenge
                             }
 
-                            #$inveigh.HTTP_challenge_queue.Add($HTTP_source_IP + $HTTP_client.Client.RemoteEndpoint.Port + ',' + $NTLM_challenge) > $null
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Received challenge $NTLM_challenge for relay from $Target") > $null
                             $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] Providing challenge $NTLM_challenge for relay to $HTTP_source_IP") > $null
                             $relay_step = 2
@@ -5923,18 +5917,18 @@ $HTTP_scriptblock =
                         
                             if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full"))
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) $NTLM_type challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) $NTLM_type captured for $HTTP_username_full from $HTTP_source_IP($NTLM_host_string)`:$HTTP_source_Port`:") > $null
                                 $inveigh.output_queue.Add($HTTP_NTLM_hash) > $null
                             }
                             else
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) $NTLM_type challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_username_full [not unique]") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) $NTLM_type captured for $HTTP_username_full from $HTTP_source_IP($NTLM_host_string)`:$HTTP_source_Port`:`n[not unique]") > $null
                             }
 
                             if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")))
                             {
                                 $inveigh.NTLMv1_file_queue.Add($HTTP_NTLM_hash) > $null
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) $NTLM_type challenge/response written to " + $inveigh.NTLMv1_out_file) > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) $NTLM_type written to " + "Inveigh-NTLMv1.txt") > $null
                             }
 
                             if($inveigh.NTLMv1_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")
@@ -5958,18 +5952,18 @@ $HTTP_scriptblock =
                         
                             if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full"))
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 captured for $HTTP_username_full from $HTTP_source_IP($NTLM_host_string)`:$HTTP_source_Port`:") > $null
                                 $inveigh.output_queue.Add($HTTP_NTLM_hash) > $null
                             }
                             else
                             {
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 challenge/response captured from $HTTP_source_IP ($HTTP_NTLM_host_string):`n$HTTP_username_full [not unique]") > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 captured for $HTTP_username_full from $HTTP_source_IP($NTLM_host_string)`:$HTTP_source_Port`:`n[not unique]") > $null
                             }
 
                             if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")))
                             {
                                 $inveigh.NTLMv2_file_queue.Add($HTTP_NTLM_hash) > $null
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 challenge/response written to " + $inveigh.NTLMv2_out_file) > $null
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLMv2 written to " + "Inveigh-NTLMv2.txt") > $null
                             }
 
                             if($inveigh.NTLMv2_username_list -notcontains "$HTTP_source_IP $HTTP_username_full")
@@ -6648,8 +6642,8 @@ function HTTPSListener
         $RelayAutoDisable).AddArgument($RepeatEnumerate).AddArgument($RepeatExecute).AddArgument(
         $Service).AddArgument($SMB_version).AddArgument($SessionLimitPriv).AddArgument(
         $SessionLimitUnpriv).AddArgument($SessionLimitShare).AddArgument($SessionPriority).AddArgument(
-        $Target).AddArgument($Username).AddArgument($WPADAuth).AddArgument($WPADAuthIgnore).AddArgument(
-        $WPADResponse) > $null
+        $Target).AddArgument($TargetMode).AddArgument($TargetRefresh).AddArgument($Username).AddArgument(
+        $WPADAuth).AddArgument($WPADAuthIgnore).AddArgument($WPADResponse) > $null
     $HTTPS_powershell.BeginInvoke() > $null
 }
 
@@ -6673,8 +6667,8 @@ function ProxyListener
         $RelayAutoDisable).AddArgument($RepeatEnumerate).AddArgument($RepeatExecute).AddArgument(
         $Service).AddArgument($SMB_version).AddArgument($SessionLimitPriv).AddArgument(
         $SessionLimitUnpriv).AddArgument($SessionLimitShare).AddArgument($SessionPriority).AddArgument(
-        $Target).AddArgument($Username).AddArgument($WPADAuth).AddArgument($WPADAuthIgnore).AddArgument(
-        $WPADResponse) > $null
+        $Target).AddArgument($TargetMode).AddArgument($TargetRefresh).AddArgument($Username).AddArgument(
+        $WPADAuth).AddArgument($WPADAuthIgnore).AddArgument($WPADResponse) > $null
     $proxy_powershell.BeginInvoke() > $null
 }
 
@@ -7144,7 +7138,7 @@ Get relay session list.
         foreach($ADIDNS_host in $ADIDNS_table_keys_temp)
         {
             
-            if($inveigh.ADIDNS_table.$ADIDNS_host -eq 1)
+            if($inveigh.ADIDNS_table.$ADIDNS_host -ge 1)
             {
                 Write-Output $ADIDNS_host
             }
@@ -7339,7 +7333,7 @@ if($inveigh.tool -ne 1)
                         $inveigh.console_queue.RemoveAt(0)
                     }
 
-                    {$_ -like "* spoofer is disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
+                    {$_ -like "*spoofer disabled]" -or $_ -like "*local request]" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
                     {
 
                         if($ConsoleOutput -eq 'Y')
@@ -7351,7 +7345,7 @@ if($inveigh.tool -ne 1)
 
                     } 
 
-                    {$_ -like "* response sent" -or $_ -like "* ignoring *" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy request for *"}
+                    {$_ -like "*response sent]" -or $_ -like "*ignoring*" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy*request for *" -or $_ -like "*SYN packet*"}
                     {
                     
                         if($ConsoleOutput -ne "Low")
@@ -7490,7 +7484,6 @@ function ConvertTo-Inveigh
         $inveigh.session_message_ID_table = [HashTable]::Synchronized(@{})
         $inveigh.session_lock_table = [HashTable]::Synchronized(@{})
         $inveigh.SMB_session_table = [HashTable]::Synchronized(@{})
-        $inveigh.TCP_session_table = [HashTable]::Synchronized(@{})
         $inveigh.domain_mapping_table = [HashTable]::Synchronized(@{})
         $inveigh.group_table = [HashTable]::Synchronized(@{})
         $inveigh.session_count = 0

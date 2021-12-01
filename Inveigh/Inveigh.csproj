@@ -1,0 +1,56 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net35;net45;net5.0</TargetFrameworks>
+  </PropertyGroup>
+  
+
+
+
+	<PropertyGroup>
+		<!-- https://github.com/dotnet/msbuild/issues/1333#issuecomment-296346352 -->
+		<FrameworkPathOverride Condition="'$(TargetFramework)' == 'net35'">$(MSBuildProgramFiles32)\Reference Assemblies\Microsoft\Framework\.NETFramework\v3.5\Profile\Client</FrameworkPathOverride>
+		<AutomaticallyUseReferenceAssemblyPackages Condition=" '$(TargetFramework)' == 'net35' ">false</AutomaticallyUseReferenceAssemblyPackages>
+		<AssemblyName>Inveigh</AssemblyName>
+		<Version>2.0.0</Version>
+	</PropertyGroup>
+ 
+  
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFrameworks)|$(Platform)'=='Debug|net35|AnyCPU'">
+    <DebugType>pdbonly</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+ 
+  
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net35|AnyCPU'">
+    <DebugType>pdbonly</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
+	<ItemGroup Condition="'$(TargetFramework)' == 'net35'">
+		<Reference Include="System.DirectoryServices.Protocols">
+			<HintPath>$(WINDIR)\Microsoft.NET\Framework64\v2.0.50727\System.DirectoryServices.Protocols.dll</HintPath>
+			<private>False</private>
+		</Reference>
+	</ItemGroup>
+ 
+  
+  <ItemGroup Condition="'$(TargetFramework)' == 'net45'">
+    <PackageReference Include="System.DirectoryServices.Protocols">
+      <Version>5.0.1</Version>
+    </PackageReference>
+  </ItemGroup>
+ 
+  
+  <ItemGroup Condition="'$(TargetFramework)' == 'net5.0'">
+    <PackageReference Include="System.DirectoryServices.Protocols">
+      <Version>5.0.1</Version>
+    </PackageReference>
+  </ItemGroup>
+  
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net5.0'">
+    <DefineConstants>ISNET5_0</DefineConstants>
+  </PropertyGroup>
+
+</Project>

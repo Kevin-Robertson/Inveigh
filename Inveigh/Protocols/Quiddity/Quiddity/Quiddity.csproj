@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net35;net45;net5.0</TargetFrameworks>
+  </PropertyGroup>
+  
+   <PropertyGroup>
+    <!-- https://github.com/dotnet/msbuild/issues/1333#issuecomment-296346352 -->
+    <FrameworkPathOverride Condition="'$(TargetFramework)' == 'net35'">$(MSBuildProgramFiles32)\Reference Assemblies\Microsoft\Framework\.NETFramework\v3.5\Profile\Client</FrameworkPathOverride>
+	<AutomaticallyUseReferenceAssemblyPackages Condition=" '$(TargetFramework)' == 'net35' ">false</AutomaticallyUseReferenceAssemblyPackages>
+	<Version>0.0.0-alpha</Version>
+	<Authors>Kevin Robertson</Authors>
+	<Company />
+	<Description>Quiddity is a protocol library designed for infosec testing and defense related tasks. Quiddity has partial implementation for many protocols including DNS, LLMNR, mDNS, SMB2, LDAP, and DHCPv6.</Description>
+	<PackageProjectUrl>https://github.com/Kevin-Robertson/Quiddity</PackageProjectUrl>
+	<RepositoryUrl>https://github.com/Kevin-Robertson/Quiddity.git</RepositoryUrl>
+	<RepositoryType>git</RepositoryType>
+	<PackageTags>penetration testing, red team, blue team, purple team, packet, packets, LLMNR, NBNS, mDNS, DNS, SMB, LDAP, HTTP</PackageTags>
+	<PackageReleaseNotes>initial alpha version</PackageReleaseNotes>
+	<Copyright>Copyright (c) 2021 Kevin Robertson</Copyright>
+	<PackageLicenseFile>LICENSE</PackageLicenseFile>
+	<AssemblyVersion>0.0.0.0</AssemblyVersion>
+	<FileVersion>0.0.0.0</FileVersion>
+  </PropertyGroup>
+  
+  <ItemGroup Condition="'$(TargetFramework)' == 'net35'">
+		<Reference Include="System.DirectoryServices.Protocols">
+			<HintPath>$(WINDIR)\Microsoft.NET\Framework64\v2.0.50727\System.DirectoryServices.Protocols.dll</HintPath>
+			<private>False</private>
+		</Reference>
+	</ItemGroup>
+ 
+  
+  <ItemGroup Condition="'$(TargetFramework)' == 'net45'">
+    <PackageReference Include="System.DirectoryServices.Protocols">
+      <Version>5.0</Version>
+    </PackageReference>
+  </ItemGroup>
+ 
+  
+  <ItemGroup Condition="'$(TargetFramework)' == 'net5.0'">
+    <PackageReference Include="System.DirectoryServices.Protocols">
+      <Version>5.0</Version>
+    </PackageReference>
+  </ItemGroup>
+ 
+  
+  <ItemGroup>
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+  </ItemGroup>
+
+</Project>
