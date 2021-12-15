@@ -34,6 +34,14 @@ namespace Inveigh
                 "get ntlmv2usernames",
                 "get cleartext",
                 "get cleartextunique",
+                "get replytohosts",
+                "get replytoips",
+                "get replytodomains",
+                "get replytomacs",
+                "get ignorehosts",
+                "get ignoreips",
+                "get ignoredomains",
+                "get ignoremacs",
                 "history",
                 "resume",
                 "stop"
@@ -427,23 +435,43 @@ namespace Inveigh
                     GetNTLMv2Usernames(search);
                     break;
 
-                case "GET SPOOFERReplyToHosts":
+                case "GET REPLYTOHOSTS":
                     foreach (string entry in Program.argReplyToHosts)
                         Console.WriteLine(entry);
                     break;
 
-                case "GET SPOOFERHOSTSDENY":
+                case "GET IGNOREHOSTS":
                     foreach (string entry in Program.argIgnoreHosts)
                         Console.WriteLine(entry);
                     break;
 
-                case "GET SPOOFERReplyToIPs":
-                    foreach (string entry in Program.argReplyToHosts)
+                case "GET REPLYTOIPS":
+                    foreach (string entry in Program.argReplyToIPs)
                         Console.WriteLine(entry);
                     break;
 
-                case "GET SPOOFERIPSDENY":
+                case "GET IGNOREIPS":
                     foreach (string entry in Program.argIgnoreHosts)
+                        Console.WriteLine(entry);
+                    break;
+
+                case "GET REPLYTODOMAINS":
+                    foreach (string entry in Program.argReplyToDomains)
+                        Console.WriteLine(entry);
+                    break;
+
+                case "GET IGNOREDOMAINS":
+                    foreach (string entry in Program.argIgnoreDomains)
+                        Console.WriteLine(entry);
+                    break;
+
+                case "GET REPLYTOMACS":
+                    foreach (string entry in Program.argReplyToMACs)
+                        Console.WriteLine(entry);
+                    break;
+
+                case "GET IGNOREMACS":
+                    foreach (string entry in Program.argIgnoreMACs)
                         Console.WriteLine(entry);
                     break;
 
@@ -511,6 +539,14 @@ namespace Inveigh
             commands.Add("GET NTLMV2USERNAMES,get usernames and source IPs/hostnames for captured NTLMv2 hashes");
             commands.Add("GET CLEARTEXT,get captured cleartext credentials");
             commands.Add("GET CLEARTEXTUNIQUE,get unique captured cleartext credentials");
+            commands.Add("GET REPLYTODOMAINS,get ReplyToDomains parameter startup values");
+            commands.Add("GET REPLYTOHOSTS,get ReplyToHosts parameter startup values");
+            commands.Add("GET REPLYTOIPS,get ReplyToIPs parameter startup values");
+            commands.Add("GET REPLYTOMACS,get ReplyToMACs parameter startup values");
+            commands.Add("GET IGNOREDOMAINS,get IgnoreDomains parameter startup values");
+            commands.Add("GET IGNOREHOSTS,get IgnoreHosts parameter startup values");
+            commands.Add("GET IGNOREIPS,get IgnoreIPs parameter startup values");
+            commands.Add("GET IGNOREMACS,get IgnoreMACs parameter startup values");
             commands.Add("HISTORY,get console command history");
             commands.Add("RESUME,resume real time console output");
             commands.Add("STOP,stop Inveigh");
@@ -757,4 +793,5 @@ namespace Inveigh
         }
 
     }
+
 }

@@ -77,6 +77,7 @@ namespace Quiddity.DNS
 
         public bool Check(string name, string type, string clientIP)
         {
+
             if (this.Inspect)
             {
                 this.OutputMessage = this.OutputInspect;
@@ -102,24 +103,14 @@ namespace Quiddity.DNS
                 this.OutputMessage = this.OutputServiceDenied;
                 return false;
             }
-            else if (HostIsDenied(name))
+            else if (HostIsDenied(name) && FQDNIsDenied(name))
             {
                 this.OutputMessage = this.OutputHostDenied;
                 return false;
             }
-            else if (!HostIsAllowed(name))
-            {
-                this.OutputMessage = this.OutputIPDenied;
-                return false;
-            }
-            else if (FQDNIsDenied(name))
+            else if (!HostIsAllowed(name) && !FQDNIsAllowed(name))
             {
                 this.OutputMessage = this.OutputHostDenied;
-                return false;
-            }
-            else if (!FQDNIsAllowed(name))
-            {
-                this.OutputMessage = this.OutputIPDenied;
                 return false;
             }
             else if (IPIsDenied(clientIP))
@@ -228,7 +219,7 @@ namespace Quiddity.DNS
 
         public bool FQDNIsDenied(string name)
         {
-
+           
             if (!Utilities.ArrayIsNullOrEmpty(this.IgnoreHosts) && Array.Exists(this.IgnoreHosts, element => element == name.ToUpper()))
             {
                 return true;

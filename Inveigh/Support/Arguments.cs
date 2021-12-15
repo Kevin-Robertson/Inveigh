@@ -104,7 +104,7 @@ namespace Inveigh
             };
 
             ValidateStringArguments(ynArguments, ynArgumentValues, new string[] { "Y", "N" });
-            ValidateStringArguments(new string[] { nameof(Program.argConsole) }, new string[] { Program.argConsole }, new string[] { "0", "1", "2", "3" });
+            ValidateStringArguments(new string[] { nameof(Program.argConsole) }, new string[] { Program.argConsole }, new string[] { "0", "1", "2", "3", "4" });
             string[] authArguments = { nameof(Program.argHTTPAuth), nameof(Program.argProxyAuth), nameof(Program.argWPADAuth), nameof(Program.argWebDAVAuth) };
             string[] authArgumentValues = { Program.argHTTPAuth, Program.argProxyAuth, Program.argWPADAuth, Program.argWebDAVAuth };
             ValidateStringArguments(authArguments, authArgumentValues, new string[] { "ANONYMOUS", "BASIC", "NTLM" });

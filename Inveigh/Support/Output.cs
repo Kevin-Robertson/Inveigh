@@ -234,6 +234,10 @@ namespace Inveigh
             {
                 OutputColor(consoleEntry, "+", Program.colorPositive);
             }
+            else if (entryType.Equals(" "))
+            {
+                OutputColor(consoleEntry, " ", Program.colorDisabled);
+            }
             else if (entryType.Equals("!"))
             {
                 Console.ForegroundColor = ConsoleColor.Yellow;
@@ -354,7 +358,7 @@ namespace Inveigh
         public static void GetStartupMessageIP(string ipType, string address1, string address2)
         {
             string startupMessage = "";
-            string optionStatus = "-";
+            string optionStatus = " ";
 
             if (Program.enabledIPv4 && !string.IsNullOrEmpty(address1) && Program.enabledIPv6 && !string.IsNullOrEmpty(address2))
             {
@@ -383,7 +387,7 @@ namespace Inveigh
         {
             string startupMessage;
             string optionType = "Listener";
-            string optionStatus = "-";
+            string optionStatus = " ";
             string types;
             string typesHeader = "Type";
             string questions;
@@ -450,7 +454,7 @@ namespace Inveigh
         {
             string startupMessage = "";
             string optionType = "Listener";
-            string optionStatus = "-";
+            string optionStatus = " ";
             string portHeading = "Port";
 
             if (Program.enabledSniffer && protocol.StartsWith("SMB"))
@@ -699,6 +703,10 @@ namespace Inveigh
             {
                 status = "+";
             }
+            else if (outputMessage.Equals("disabled"))
+            {
+                status = " ";
+            }
 
             Queue(string.Format("[{0}] [{1}] {2}({3}) request [{4}] from {5} [{6}]", status, Timestamp(), protocol, type, request, clientIP, outputMessage));
         }
@@ -832,7 +840,7 @@ namespace Inveigh
             if (nullarg || string.Equals(arg, "CONSOLE"))
             {
                 string argument = "Console";
-                string description = "Default=3: Set the level for console output. (0=none, 1=only captures/spoofs, 2=no informational, 3=all)";
+                string description = "Default=4: Set the level for console output. (0=none, 1=only captures/spoofs, 2=no disabled, no informational, 3=no disabled, 4=all)";
                 OutputHelp(argument, description);
             }
 
@@ -1341,7 +1349,12 @@ namespace Inveigh
 
             while (Program.outputList.Count > 0)
             {
-                if (Program.console == 3)
+                if (Program.console == 4)
+                {
+                    Program.consoleList.Add(Program.outputList[0]);
+                }
+
+                if (Program.console == 3 && (Program.outputList[0].StartsWith("[*]") || Program.outputList[0].StartsWith("[+]") || Program.outputList[0].StartsWith("[-]") || Program.outputList[0].StartsWith("[.]") || !Program.outputList[0].StartsWith("[")))
                 {
                     Program.consoleList.Add(Program.outputList[0]);
                 }
