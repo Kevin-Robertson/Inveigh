@@ -281,7 +281,7 @@ namespace Inveigh
             }
             else
             {
-                Queue("[-] Packet Sniffer");
+                Queue("[ ] Packet Sniffer");
             }
 
             GetStartupMessageIP(string.Concat("Listener ", address), Program.argListenerIP, Program.argListenerIPv6);
@@ -332,7 +332,7 @@ namespace Inveigh
             }
             else
             {
-                Queue("[-] ICMPv6");
+                Queue("[ ] ICMPv6");
             }
 
             GetStartupMessageUDP("LLMNR", Program.enabledLLMNR, Program.argLLMNRTypes, null, null, null);
@@ -345,7 +345,7 @@ namespace Inveigh
             GetStartupMessageTCP("LDAP", Program.enabledLDAP, null, null, Program.argLDAPPorts);
             GetStartupMessageTCP("SMB", Program.enabledSMB, null, null, Program.argSMBPorts);
             if (Program.enabledFileOutput) Queue(string.Format("[+] File Output [{0}]", Program.argFileDirectory));
-            else Queue("[-] File Output");
+            else Queue("[ ] File Output");
             if (Program.isSession) Queue("[+] Previous Session Files [Imported]");
             else Queue("[+] Previous Session Files (Not Found)");
             if (Program.runCount == 1) Program.outputList.Add(string.Format("[+] Run Count [{0} Minute]", Program.runCount));
@@ -695,29 +695,33 @@ namespace Inveigh
 
         }
 
-        public static void SpooferOutput(string protocol, string type, string request, string clientIP, string outputMessage)
+        public static void SpooferOutput(string protocol, string type, string request, string clientIP, string message)
         {
             string status = "-";
 
-            if (outputMessage.Equals("response sent"))
+            if (message.Equals("response sent"))
             {
                 status = "+";
             }
-            else if (outputMessage.Equals("disabled"))
+            else if (message.Equals("disabled"))
             {
                 status = " ";
             }
 
-            Queue(string.Format("[{0}] [{1}] {2}({3}) request [{4}] from {5} [{6}]", status, Timestamp(), protocol, type, request, clientIP, outputMessage));
+            Queue(string.Format("[{0}] [{1}] {2}({3}) request [{4}] from {5} [{6}]", status, Timestamp(), protocol, type, request, clientIP, message));
         }
 
         public static void DHCPv6Output(int msgType, string leaseIP, string clientIP, string clientMAC, string clientHostname, string message)
         {
-            string responseStatus = "-";
+            string status = "-";
 
-            if (string.Equals(message, "response sent"))
+            if (message.Equals("response sent"))
             {
-                responseStatus = "+";
+                status = "+";
+            }
+            else if (message.Equals("disabled"))
+            {
+                status = " ";
             }
 
             string responseType = "";
@@ -752,20 +756,20 @@ namespace Inveigh
 
             if (!string.IsNullOrEmpty(clientHostname))
             {
-                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 [{2}] from {3}({4}) [{5}]", responseStatus, Output.Timestamp(), responseType, clientIP, clientHostname, message));
+                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 [{2}] from {3}({4}) [{5}]", status, Output.Timestamp(), responseType, clientIP, clientHostname, message));
             }
             else
             {
-                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 [{2}] from {3} [{4}]", responseStatus, Output.Timestamp(), responseType, clientIP, message));
+                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 [{2}] from {3} [{4}]", status, Output.Timestamp(), responseType, clientIP, message));
             }
 
             if (string.Equals(message, "response sent"))
             {
-                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 [{2}] {3} to [{4}]", responseStatus, Output.Timestamp(), leaseIP, responseAction, clientMAC));
+                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 [{2}] {3} to [{4}]", status, Output.Timestamp(), leaseIP, responseAction, clientMAC));
             }
             else
             {
-                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 client MAC [{2}]", responseStatus, Output.Timestamp(), clientMAC));
+                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 client MAC [{2}]", status, Output.Timestamp(), clientMAC));
             }
 
         }
