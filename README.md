@@ -69,7 +69,7 @@ Default parameter values are located at the beginning of Program.cs. I recommend
     public static string argCert = "MIIKaQIBAzCCC..."
     public static string argCertPassword = "password";
     public static string argChallenge = "";
-    public static string argConsole = "3";
+    public static string argConsole = "5";
     public static string argConsoleLimit = "-1";
     public static string argConsoleStatus = "0";
     public static string argConsoleUnique = "Y";
@@ -100,7 +100,7 @@ Control:
 
 Output:
 
-  -Console        Default=3: Set the level for console output. (0=none, 1=only captures/spoofs, 2=no informational, 3=all)
+  -Console        Default=5: Set the level for console output. (0=none, 1=only captures/spoofs, 2=no disabled, no informational, 3=no disabled, no filtered, 4=no disabled, 5=all)  
 
   -ConsoleLimit   Default=Unlimited: Limit to queued console entries.
 
@@ -140,6 +140,8 @@ Spoofers:
   -ICMPv6         Default=Enabled: (Y/N) sending ICMPv6 router advertisements.
 
   -ICMPv6Interval Default=200: ICMPv6 RA interval in seconds.
+  
+  -ICMPv6TTL	  Default=300: ICMPv6 TTL in seconds.
 
   -IgnoreDomains  Default=None: Comma separated list of domains to ignore when spoofing.
 
@@ -220,7 +222,7 @@ Capture:
 
   -ListenerIPv6   Default=Any: IPv6 address for all listeners.
 
-  -Machines       Default=Disabled: (Y/N) machine account NetNTLM captures.
+  -MachineAccount Default=Enabled: (Y/N) machine account NetNTLM captures.
 
   -Proxy          Default=Disabled: (Y/N) proxy listener authentication captures.
 
@@ -489,7 +491,16 @@ GET NTLMV1USERNAMES             | get usernames and source IPs/hostnames for cap
 GET NTLMV2USERNAMES             | get usernames and source IPs/hostnames for captured NTLMv2 hashes
 GET CLEARTEXT                   | get captured cleartext credentials
 GET CLEARTEXTUNIQUE             | get unique captured cleartext credentials
-HISTORY                         | get console command history
+GET REPLYTODOMAINS              | get ReplyToDomains parameter startup values
+GET REPLYTOHOSTS                | get ReplyToHosts parameter startup values
+GET REPLYTOIPS                  | get ReplyToIPs parameter startup values
+GET REPLYTOMACS                 | get ReplyToMACs parameter startup values
+GET IGNOREDOMAINS               | get IgnoreDomains parameter startup values
+GET IGNOREHOSTS                 | get IgnoreHosts parameter startup values
+GET IGNOREIPS                   | get IgnoreIPs parameter startup values
+GET IGNOREMACS                  | get IgnoreMACs parameter startup values
+SET CONSOLE                     | set Console parameter value
+HISTORY                         | get command history
 RESUME                          | resume real time console output
 STOP                            | stop Inveigh
 ```

@@ -130,6 +130,11 @@ namespace Inveigh
             Console.WriteLine();
         }
 
+        public static void OutputCommand(string message)
+        {
+            Console.WriteLine(message);
+        }
+
         public static void OutputCommand(string description, string[] headings, IList<string> list, ConsoleColor color)
         {
             Console.ForegroundColor = color;
@@ -215,7 +220,12 @@ namespace Inveigh
                 consoleEntry = "";
             }
 
-            string entryType = consoleEntry.Substring(1, 1);
+            string entryType = "";
+
+            if (consoleEntry.Length > 1)
+            {
+               entryType = consoleEntry.Substring(1, 1);
+            }
 
             if (entryType.Equals("."))
             {
@@ -228,6 +238,10 @@ namespace Inveigh
             else if (entryType.Equals("+") || consoleEntry.Equals("[redacted]"))
             {
                 OutputColor(consoleEntry, "+", Program.colorPositive);
+            }
+            else if (entryType.Equals(" "))
+            {
+                OutputColor(consoleEntry, " ", Program.colorDisabled);
             }
             else if (entryType.Equals("!"))
             {
@@ -272,7 +286,7 @@ namespace Inveigh
             }
             else
             {
-                Queue("[-] Packet Sniffer");
+                Queue("[ ] Packet Sniffer");
             }
 
             GetStartupMessageIP(string.Concat("Listener ", address), Program.argListenerIP, Program.argListenerIPv6);
@@ -323,7 +337,7 @@ namespace Inveigh
             }
             else
             {
-                Queue("[-] ICMPv6");
+                Queue("[ ] ICMPv6");
             }
 
             GetStartupMessageUDP("LLMNR", Program.enabledLLMNR, Program.argLLMNRTypes, null, null, null);
@@ -336,7 +350,7 @@ namespace Inveigh
             GetStartupMessageTCP("LDAP", Program.enabledLDAP, null, null, Program.argLDAPPorts);
             GetStartupMessageTCP("SMB", Program.enabledSMB, null, null, Program.argSMBPorts);
             if (Program.enabledFileOutput) Queue(string.Format("[+] File Output [{0}]", Program.argFileDirectory));
-            else Queue("[-] File Output");
+            else Queue("[ ] File Output");
             if (Program.isSession) Queue("[+] Previous Session Files [Imported]");
             else Queue("[+] Previous Session Files (Not Found)");
             if (Program.runCount == 1) Program.outputList.Add(string.Format("[+] Run Count [{0} Minute]", Program.runCount));
@@ -349,7 +363,7 @@ namespace Inveigh
         public static void GetStartupMessageIP(string ipType, string address1, string address2)
         {
             string startupMessage = "";
-            string optionStatus = "-";
+            string optionStatus = " ";
 
             if (Program.enabledIPv4 && !string.IsNullOrEmpty(address1) && Program.enabledIPv6 && !string.IsNullOrEmpty(address2))
             {
@@ -378,7 +392,7 @@ namespace Inveigh
         {
             string startupMessage;
             string optionType = "Listener";
-            string optionStatus = "-";
+            string optionStatus = " ";
             string types;
             string typesHeader = "Type";
             string questions;
@@ -445,7 +459,7 @@ namespace Inveigh
         {
             string startupMessage = "";
             string optionType = "Listener";
-            string optionStatus = "-";
+            string optionStatus = " ";
             string portHeading = "Port";
 
             if (Program.enabledSniffer && protocol.StartsWith("SMB"))
@@ -519,7 +533,7 @@ namespace Inveigh
                 challengeResponse = user + "::" + domain + ":" + lmResponse + ":" + ntlmResponse + ":" + challenge;
             }
 
-            if (Program.enabledMachineAccounts || (!Program.enabledMachineAccounts && !user.EndsWith("$")))
+            if (Program.enabledMachineAccountCapture || (!Program.enabledMachineAccountCapture && !user.EndsWith("$")))
             {
 
                 if (!string.IsNullOrEmpty(challenge))
@@ -686,25 +700,33 @@ namespace Inveigh
 
         }
 
-        public static void SpooferOutput(string protocol, string type, string request, string clientIP, string outputMessage)
+        public static void SpooferOutput(string protocol, string type, string request, string clientIP, string message)
         {
             string status = "-";
 
-            if (outputMessage.Equals("response sent"))
+            if (message.Equals("response sent"))
             {
                 status = "+";
             }
+            else if (message.Equals("disabled"))
+            {
+                status = " ";
+            }
 
-            Queue(string.Format("[{0}] [{1}] {2}({3}) request [{4}] from {5} [{6}]", status, Timestamp(), protocol, type, request, clientIP, outputMessage));
+            Queue(string.Format("[{0}] [{1}] {2}({3}) request [{4}] from {5} [{6}]", status, Timestamp(), protocol, type, request, clientIP, message));
         }
 
         public static void DHCPv6Output(int msgType, string leaseIP, string clientIP, string clientMAC, string clientHostname, string message)
         {
-            string responseStatus = "-";
+            string status = "-";
 
-            if (string.Equals(message, "response sent"))
+            if (message.Equals("response sent"))
             {
-                responseStatus = "+";
+                status = "+";
+            }
+            else if (message.Equals("disabled"))
+            {
+                status = " ";
             }
 
             string responseType = "";
@@ -739,20 +761,20 @@ namespace Inveigh
 
             if (!string.IsNullOrEmpty(clientHostname))
             {
-                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 [{2}] from {3}({4}) [{5}]", responseStatus, Output.Timestamp(), responseType, clientIP, clientHostname, message));
+                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 [{2}] from {3}({4}) [{5}]", status, Output.Timestamp(), responseType, clientIP, clientHostname, message));
             }
             else
             {
-                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 [{2}] from {3} [{4}]", responseStatus, Output.Timestamp(), responseType, clientIP, message));
+                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 [{2}] from {3} [{4}]", status, Output.Timestamp(), responseType, clientIP, message));
             }
 
             if (string.Equals(message, "response sent"))
             {
-                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 [{2}] {3} to [{4}]", responseStatus, Output.Timestamp(), leaseIP, responseAction, clientMAC));
+                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 [{2}] {3} to [{4}]", status, Output.Timestamp(), leaseIP, responseAction, clientMAC));
             }
             else
             {
-                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 client MAC [{2}]", responseStatus, Output.Timestamp(), clientMAC));
+                Output.Queue(string.Format("[{0}] [{1}] DHCPv6 client MAC [{2}]", status, Output.Timestamp(), clientMAC));
             }
 
         }
@@ -827,7 +849,7 @@ namespace Inveigh
             if (nullarg || string.Equals(arg, "CONSOLE"))
             {
                 string argument = "Console";
-                string description = "Default=3: Set the level for console output. (0=none, 1=only captures/spoofs, 2=no informational, 3=all)";
+                string description = "Default=5: Set the level for console output. (0=none, 1=only captures/spoofs, 2=no disabled, no informational, 3=no disabled, no filtered, 4=no disabled, 5=all)";
                 OutputHelp(argument, description);
             }
 
@@ -961,6 +983,13 @@ namespace Inveigh
             {
                 string argument = "ICMPv6Interval";
                 string description = "Default=200: ICMPv6 RA interval in seconds.";
+                OutputHelp(argument, description);
+            }
+
+            if (nullarg || string.Equals(arg, "ICMPV6TTL"))
+            {
+                string argument = "ICMPv6TTL";
+                string description = "Default=300: ICMPv6 TTL in seconds.";
                 OutputHelp(argument, description);
             }
 
@@ -1237,10 +1266,10 @@ namespace Inveigh
                 OutputHelp(argument, description);
             }
 
-            if (nullarg || string.Equals(arg, "MACHINES"))
+            if (nullarg || string.Equals(arg, "MACHINEACCOUNT"))
             {
-                string argument = "Machines";
-                string description = "Default=Disabled: (Y/N) machine account NetNTLM captures.";
+                string argument = "MachineAccount";
+                string description = "Default=Enabled: (Y/N) machine account NetNTLM captures.";
                 OutputHelp(argument, description);
             }
 
@@ -1329,7 +1358,17 @@ namespace Inveigh
 
             while (Program.outputList.Count > 0)
             {
-                if (Program.console == 3)
+                if (Program.console == 5)
+                {
+                    Program.consoleList.Add(Program.outputList[0]);
+                }
+
+                if (Program.console == 4 && (Program.outputList[0].StartsWith("[*]") || Program.outputList[0].StartsWith("[+]") || Program.outputList[0].StartsWith("[-]") || Program.outputList[0].StartsWith("[.]") || !Program.outputList[0].StartsWith("[")))
+                {
+                    Program.consoleList.Add(Program.outputList[0]);
+                }
+
+                if (Program.console == 3 && (Program.outputList[0].StartsWith("[*]") || Program.outputList[0].StartsWith("[+]") || Program.outputList[0].StartsWith("[.]") || !Program.outputList[0].StartsWith("[")))
                 {
                     Program.consoleList.Add(Program.outputList[0]);
                 }

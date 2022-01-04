@@ -294,22 +294,39 @@ namespace Inveigh
 
             DNSListener listener = new DNSListener(UInt32.Parse(Program.argDNSTTL));
 
-            if (packet.Header.IsQuery())
+            if(!packet.Header.IsDynamicUpdateRequest())
             {
-
-                if (listener.Check(packet.Question.Name, packet.Question.Type, clientIP, out string message))
+                if (packet.Header.IsQuery())
                 {
-                    byte[] buffer = packet.GetBytes(UInt32.Parse(Program.argDNSTTL), Program.dnsSerial, Program.argSpooferIP, Program.argSpooferIPv6);
 
-                    if (!Utilities.ArrayIsNullOrEmpty(buffer))
+                    if (listener.Check(packet.Question.Name, packet.Question.Type, clientIP, out string message))
                     {
-                        UDPSocket.SendTo(clientIP, clientPort, sourceIP, sourcePort, buffer, false);
+                        byte[] buffer = packet.GetBytes(UInt32.Parse(Program.argDNSTTL), Program.dnsSerial, Program.argSpooferIP, Program.argSpooferIPv6);
+
+                        if (!Utilities.ArrayIsNullOrEmpty(buffer))
+                        {
+                            UDPSocket.SendTo(clientIP, clientPort, sourceIP, sourcePort, buffer, false);
+                        }
+
                     }
 
+                    Output.SpooferOutput("DNS", packet.Question.Type, packet.Question.Name, clientIP, message);
                 }
 
-                Output.SpooferOutput("DNS", packet.Question.Type, packet.Question.Name, clientIP, message);
             }
+            else
+            {
+                byte[] flags = new byte[2] { 0xa8, 0x05 };
+                byte[] dnsPayload = new byte[data.Length - 2];
+                System.Buffer.BlockCopy(data, 2, dnsPayload, 0, dnsPayload.Length);
+                MemoryStream dnsMemoryStream = new MemoryStream();
+                dnsMemoryStream.Write(data, 0, data.Length);
+                dnsMemoryStream.Position = 2;
+                dnsMemoryStream.Write(flags, 0, 2);
+                UDPSocket.SendTo(clientIP, clientPort, sourceIP, sourcePort, dnsMemoryStream.ToArray(), false);
+
+            }
+
 
         }
 
@@ -438,7 +455,14 @@ namespace Inveigh
                         break;
                 }
 
-                byte[] clientMACData = new DHCPv6DUIDLLT(packet.Option1.DUID).LinkLayerAddress;
+                DHCPv6DUIDLL duid = new DHCPv6DUIDLL(packet.Option1.DUID);
+                byte[] clientMACData = new DHCPv6DUIDLL(packet.Option1.DUID).LinkLayerAddress;
+
+                if (duid.DUIDType == 1)
+                {
+                    clientMACData = new DHCPv6DUIDLLT(packet.Option1.DUID).LinkLayerAddress;
+                }
+                
                 string clientMAC = BitConverter.ToString(clientMACData).Replace("-", ":");
                 string clientHostName = "";
 

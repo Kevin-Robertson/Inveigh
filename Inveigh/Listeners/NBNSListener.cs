@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Net;
-using System.Net.Sockets;
 using Quiddity;
 using Quiddity.NetBIOS;
-using Quiddity.Support;
 
 namespace Inveigh
 {

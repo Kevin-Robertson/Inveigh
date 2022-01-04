@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Quiddity.Support;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -31,7 +32,7 @@ namespace Inveigh
                 nameof(Program.argLocal),
                 nameof(Program.argLLMNR),
                 nameof(Program.argLogOutput),
-                nameof(Program.argMachineAccounts),
+                nameof(Program.argMachineAccount),
                 nameof(Program.argMDNS),
                 nameof(Program.argMDNSUnicast),
                 nameof(Program.argNBNS),
@@ -58,7 +59,7 @@ namespace Inveigh
                 Program.argLocal,
                 Program.argLLMNR,
                 Program.argLogOutput,
-                Program.argMachineAccounts,
+                Program.argMachineAccount,
                 Program.argMDNS,
                 Program.argMDNSUnicast,
                 Program.argNBNS, 
@@ -76,6 +77,7 @@ namespace Inveigh
                 nameof(Program.argDHCPv6TTL),
                 nameof(Program.argDNSTTL),
                 nameof(Program.argICMPv6Interval),
+                nameof(Program.argICMPv6TTL),
                 nameof(Program.argLLMNRTTL),
                 nameof(Program.argMDNSTTL),
                 nameof(Program.argNBNSTTL),
@@ -92,6 +94,7 @@ namespace Inveigh
                 Program.argDHCPv6TTL,
                 Program.argDNSTTL,
                 Program.argICMPv6Interval,
+                Program.argICMPv6TTL,
                 Program.argLLMNRTTL,
                 Program.argMDNSTTL,
                 Program.argNBNSTTL,
@@ -101,7 +104,7 @@ namespace Inveigh
             };
 
             ValidateStringArguments(ynArguments, ynArgumentValues, new string[] { "Y", "N" });
-            ValidateStringArguments(new string[] { nameof(Program.argConsole) }, new string[] { Program.argConsole }, new string[] { "0", "1", "2", "3" });
+            ValidateStringArguments(new string[] { nameof(Program.argConsole) }, new string[] { Program.argConsole }, new string[] { "0", "1", "2", "3", "4", "5" });
             string[] authArguments = { nameof(Program.argHTTPAuth), nameof(Program.argProxyAuth), nameof(Program.argWPADAuth), nameof(Program.argWebDAVAuth) };
             string[] authArgumentValues = { Program.argHTTPAuth, Program.argProxyAuth, Program.argWPADAuth, Program.argWebDAVAuth };
             ValidateStringArguments(authArguments, authArgumentValues, new string[] { "ANONYMOUS", "BASIC", "NTLM" });
@@ -180,7 +183,7 @@ namespace Inveigh
             if (string.Equals(Program.argMDNS, "Y")) { Program.enabledMDNS = true; }
             if (string.Equals(Program.argMDNSUnicast, "Y")) { Program.enabledMDNSUnicast = true; }
             if (string.Equals(Program.argProxy, "Y")) { Program.enabledProxy = true; }
-            if (string.Equals(Program.argMachineAccounts, "Y")) { Program.enabledMachineAccounts = true; }
+            if (string.Equals(Program.argMachineAccount, "Y")) { Program.enabledMachineAccountCapture = true; }
             if (string.Equals(Program.argNBNS, "Y")) { Program.enabledNBNS = true; }
             if (string.Equals(Program.argSniffer, "Y")) { Program.enabledSniffer = true; }
             if (!Program.enabledWindows) { Program.enabledSniffer = false; }
@@ -288,21 +291,87 @@ namespace Inveigh
 
             }
 
-            if (string.IsNullOrEmpty(Program.argMAC))
+            if (!Program.enabledIPv4)
             {
 
-                if (string.IsNullOrEmpty(Program.argSnifferIPv6))
+                Program.argDNSTypes = Program.argDNSTypes.Where(element => element != "A").ToArray();
+
+                if (Utilities.ArrayIsNullOrEmpty(Program.argDNSTypes))
                 {
-                    Program.argMAC = GetLocalMACAddress(GetLocalIPAddress("IPv6"));
+                    Program.argDNSTypes = new string[] { "AAAA" };
                 }
-                else
+
+                Program.argLLMNRTypes = Program.argLLMNRTypes.Where(element => element != "A").ToArray();
+
+                if (Utilities.ArrayIsNullOrEmpty(Program.argLLMNRTypes))
                 {
-                    Program.argMAC = GetLocalMACAddress(Program.argSnifferIPv6);
+                    Program.argLLMNRTypes = new string[] { "AAAA" };
+                }
+
+                Program.argMDNSTypes = Program.argMDNSTypes.Where(element => element != "A").ToArray();
+
+                if (Utilities.ArrayIsNullOrEmpty(Program.argMDNSTypes))
+                {
+                    Program.argMDNSTypes = new string[] { "AAAA" };
                 }
 
             }
-            
-            Program.argMAC = Program.argMAC.Insert(2, ":").Insert(5, ":").Insert(8, ":").Insert(11, ":").Insert(14, ":");
+
+            if (!Program.enabledIPv6)
+            {
+
+                Program.argDNSTypes = Program.argDNSTypes.Where(element => element != "AAAA").ToArray();
+
+                if (Utilities.ArrayIsNullOrEmpty(Program.argDNSTypes))
+                {
+                    Program.argDNSTypes = new string[] { "A" };
+                }
+
+                Program.argLLMNRTypes = Program.argLLMNRTypes.Where(element => element != "AAAA").ToArray();
+
+                if (Utilities.ArrayIsNullOrEmpty(Program.argLLMNRTypes))
+                {
+                    Program.argLLMNRTypes = new string[] { "A" };
+                }
+
+                Program.argMDNSTypes = Program.argMDNSTypes.Where(element => element != "AAAA").ToArray();
+
+                if (Utilities.ArrayIsNullOrEmpty(Program.argMDNSTypes))
+                {
+                    Program.argMDNSTypes = new string[] { "A" };
+                }
+
+            }
+
+            if (Program.enabledIPv6)
+            {
+
+                if (string.IsNullOrEmpty(Program.argMAC))
+                {
+
+                    if (string.IsNullOrEmpty(Program.argSnifferIPv6))
+                    {
+                        Program.argMAC = GetLocalMACAddress(GetLocalIPAddress("IPv6"));
+                    }
+                    else
+                    {
+                        Program.argMAC = GetLocalMACAddress(Program.argSnifferIPv6);
+                    }
+
+                }
+
+                Program.argMAC = Program.argMAC.Insert(2, ":").Insert(5, ":").Insert(8, ":").Insert(11, ":").Insert(14, ":");
+            }
+
+            if (!string.IsNullOrEmpty(Program.argSnifferIP))
+            {
+                Program.networkInterfaceIndexIPv4 = GetNetworkInterfaceIndex(Program.argSniffer);
+            }
+
+            if (!string.IsNullOrEmpty(Program.argSnifferIPv6))
+            {
+                Program.networkInterfaceIndexIPv6 = GetNetworkInterfaceIndex(Program.argSnifferIPv6);
+            }
 
             if (Program.enabledInspect)
             {
@@ -514,5 +583,39 @@ namespace Inveigh
             return macAddressList.FirstOrDefault();
         }
 
+        public static int GetNetworkInterfaceIndex(string ipAddress)
+        {
+            int index = 0;
+
+            foreach (NetworkInterface networkInterface in NetworkInterface.GetAllNetworkInterfaces())
+            {
+
+                if (networkInterface.NetworkInterfaceType == NetworkInterfaceType.Ethernet && networkInterface.OperationalStatus == OperationalStatus.Up)
+                {
+
+                    foreach (UnicastIPAddressInformation ip in networkInterface.GetIPProperties().UnicastAddresses)
+                    {
+
+                        if (ip.Address.AddressFamily == AddressFamily.InterNetworkV6 && string.Equals(ip.Address.ToString(), ipAddress))
+                        {
+                            index = networkInterface.GetIPProperties().GetIPv6Properties().Index;
+                            break;
+                        }
+                        else if (ip.Address.AddressFamily == AddressFamily.InterNetwork && string.Equals(ip.Address.ToString(), ipAddress))
+                        {
+                            index = networkInterface.GetIPProperties().GetIPv4Properties().Index;
+                            break;
+                        }
+
+                    }
+
+                }
+
+            }
+
+            return index;
+        }
+
     }
+
 }

@@ -124,6 +124,7 @@ namespace Inveigh
             Output.ProcessOutput();
             Output.ProcessFileOutput();
             Program.isRunning = false;
+            Quiddity.HTTPListener.isRunning = false;
 
             while (Program.consoleList.Count > 0)
             {
@@ -313,9 +314,21 @@ namespace Inveigh
 
                     if (Program.enabledSMB)
                     {
-                        SMBListener smbListener = new SMBListener();
-                        Thread smbListenerThread = new Thread(() => smbListener.Start(IPAddress.Parse(Program.argListenerIP), 445));
-                        smbListenerThread.Start();
+                        foreach (string port in Program.argSMBPorts)
+                        {
+
+                            SMBListener smbListener = new SMBListener
+                            {
+                                Challenge = Program.argChallenge,
+                                NetbiosDomain = Program.netbiosDomain,
+                                ComputerName = Program.computerName,
+                                DNSDomain = Program.dnsDomain
+                            };
+
+                            Thread smbListenerThread = new Thread(() => smbListener.Start(IPAddress.Parse(Program.argListenerIP), Int32.Parse(port)));
+                            smbListenerThread.Start();
+                        }
+
                     }
 
                 }             
@@ -353,9 +366,22 @@ namespace Inveigh
 
                     if (Program.enabledSMB)
                     {
-                        SMBListener smbv6Listener = new SMBListener();
-                        Thread smbv6ListenerThread = new Thread(() => smbv6Listener.Start(IPAddress.Parse(Program.argListenerIPv6), 445));
-                        smbv6ListenerThread.Start();
+
+                        foreach (string port in Program.argSMBPorts)
+                        {
+
+                            SMBListener smbv6Listener = new SMBListener
+                            {
+                                Challenge = Program.argChallenge,
+                                NetbiosDomain = Program.netbiosDomain,
+                                ComputerName = Program.computerName,
+                                DNSDomain = Program.dnsDomain
+                            };
+
+                            Thread smbv6ListenerThread = new Thread(() => smbv6Listener.Start(IPAddress.Parse(Program.argListenerIPv6), Int32.Parse(port)));
+                            smbv6ListenerThread.Start();
+                        }
+
                     }
 
                 }
@@ -373,7 +399,23 @@ namespace Inveigh
 
                         foreach (string port in Program.argHTTPPorts)
                         {
-                            HTTPListener httpListener = new HTTPListener();
+
+                            HTTPListener httpListener = new HTTPListener
+                            {
+                                Challenge = Program.argChallenge,
+                                EnabledWebDAV = true,
+                                IgnoreAgents = Program.argIgnoreAgents,
+                                HTTPAuth = Program.argHTTPAuth,
+                                WebDAVAuth = Program.argWebDAVAuth,
+                                WPADAuth = Program.argWPADAuth,
+                                HTTPRealm = Program.argHTTPRealm,
+                                HTTPResponse = Program.argHTTPResponse,
+                                WPADResponse = Program.argWPADResponse,
+                                NetbiosDomain = Program.netbiosDomain,
+                                ComputerName = Program.computerName,
+                                DNSDomain = Program.dnsDomain
+                            };
+
                             Thread httpListenerThread = new Thread(() => httpListener.Start(IPAddress.Parse(Program.argListenerIP), Int32.Parse(port), "HTTP"));
                             httpListenerThread.Start();
                         }
@@ -385,7 +427,25 @@ namespace Inveigh
 
                         foreach (string port in Program.argHTTPSPorts)
                         {
-                            HTTPListener httpsListener = new HTTPListener();
+
+                            HTTPListener httpsListener = new HTTPListener
+                            {
+                                Challenge = Program.argChallenge,
+                                Cert = Program.argCert,
+                                CertPassword = Program.argCertPassword,
+                                EnabledWebDAV = true,
+                                IgnoreAgents = Program.argIgnoreAgents,
+                                HTTPAuth = Program.argHTTPAuth,
+                                WebDAVAuth = Program.argWebDAVAuth,
+                                WPADAuth = Program.argWPADAuth,
+                                HTTPRealm = Program.argHTTPRealm,
+                                HTTPResponse = Program.argHTTPResponse,
+                                WPADResponse = Program.argWPADResponse,
+                                NetbiosDomain = Program.netbiosDomain,
+                                ComputerName = Program.computerName,
+                                DNSDomain = Program.dnsDomain
+                            };
+
                             Thread httpsListenerThread = new Thread(() => httpsListener.Start(IPAddress.Parse(Program.argListenerIP), Int32.Parse(port), "HTTPS"));
                             httpsListenerThread.Start();
                         }
@@ -397,7 +457,15 @@ namespace Inveigh
 
                         foreach (string port in Program.argLDAPPorts)
                         {
-                            LDAPListener ldapListener = new LDAPListener();
+
+                            LDAPListener ldapListener = new LDAPListener
+                            {
+                                Challenge = Program.argChallenge,
+                                NetbiosDomain = Program.netbiosDomain,
+                                ComputerName = Program.computerName,
+                                DNSDomain = Program.dnsDomain
+                            };
+
                             Thread ldapListenerThread = new Thread(() => ldapListener.Start(IPAddress.Parse(Program.argListenerIP), Int32.Parse(port)));
                             ldapListenerThread.Start();
                         }
@@ -406,7 +474,23 @@ namespace Inveigh
 
                     if (Program.enabledProxy)
                     {
-                        HTTPListener proxyListener = new HTTPListener();
+
+                        HTTPListener proxyListener = new HTTPListener
+                        {
+                            Challenge = Program.argChallenge,
+                            EnabledWebDAV = false,
+                            IgnoreAgents = Program.argIgnoreAgents,
+                            HTTPAuth = Program.argHTTPAuth,
+                            WebDAVAuth = Program.argWebDAVAuth,
+                            WPADAuth = Program.argWPADAuth,
+                            HTTPRealm = Program.argHTTPRealm,
+                            HTTPResponse = Program.argHTTPResponse,
+                            WPADResponse = Program.argWPADResponse,
+                            NetbiosDomain = Program.netbiosDomain,
+                            ComputerName = Program.computerName,
+                            DNSDomain = Program.dnsDomain
+                        };
+
                         Thread proxyListenerThread = new Thread(() => proxyListener.Start(IPAddress.Parse(Program.argListenerIP), Int32.Parse(Program.argProxyPort), "Proxy"));
                         proxyListenerThread.Start();
                     }
@@ -422,7 +506,15 @@ namespace Inveigh
 
                         foreach (string port in Program.argLDAPPorts)
                         {
-                            LDAPListener ldapv6Listener = new LDAPListener();
+
+                            LDAPListener ldapv6Listener = new LDAPListener
+                            {
+                                Challenge = Program.argChallenge,
+                                NetbiosDomain = Program.netbiosDomain,
+                                ComputerName = Program.computerName,
+                                DNSDomain = Program.dnsDomain
+                            };
+
                             Thread ldapv6ListenerThread = new Thread(() => ldapv6Listener.Start(IPAddress.Parse(Program.argListenerIPv6), Int32.Parse(port)));
                             ldapv6ListenerThread.Start();
                         }
@@ -434,7 +526,23 @@ namespace Inveigh
 
                         foreach (string port in Program.argHTTPPorts)
                         {
-                            HTTPListener httpv6Listener = new HTTPListener();
+
+                            HTTPListener httpv6Listener = new HTTPListener
+                            {
+                                Challenge = Program.argChallenge,
+                                EnabledWebDAV = true,
+                                IgnoreAgents = Program.argIgnoreAgents,
+                                HTTPAuth = Program.argHTTPAuth,
+                                WebDAVAuth = Program.argWebDAVAuth,
+                                WPADAuth = Program.argWPADAuth,
+                                HTTPRealm = Program.argHTTPRealm,
+                                HTTPResponse = Program.argHTTPResponse,
+                                WPADResponse = Program.argWPADResponse,
+                                NetbiosDomain = Program.netbiosDomain,
+                                ComputerName = Program.computerName,
+                                DNSDomain = Program.dnsDomain
+                            };
+
                             Thread httpv6ListenerThread = new Thread(() => httpv6Listener.Start(IPAddress.Parse(Program.argListenerIPv6), Int32.Parse(port), "HTTPv6"));
                             httpv6ListenerThread.Start();
                         }
@@ -446,7 +554,25 @@ namespace Inveigh
 
                         foreach (string port in Program.argHTTPPorts)
                         {
-                            HTTPListener httpsv6Listener = new HTTPListener();
+
+                            HTTPListener httpsv6Listener = new HTTPListener
+                            {
+                                Challenge = Program.argChallenge,
+                                Cert = Program.argCert,
+                                CertPassword = Program.argCertPassword,
+                                EnabledWebDAV = true,
+                                IgnoreAgents = Program.argIgnoreAgents,
+                                HTTPAuth = Program.argHTTPAuth,
+                                WebDAVAuth = Program.argWebDAVAuth,
+                                WPADAuth = Program.argWPADAuth,
+                                HTTPRealm = Program.argHTTPRealm,
+                                HTTPResponse = Program.argHTTPResponse,
+                                WPADResponse = Program.argWPADResponse,
+                                NetbiosDomain = Program.netbiosDomain,
+                                ComputerName = Program.computerName,
+                                DNSDomain = Program.dnsDomain
+                            };
+
                             Thread httpsv6ListenerThread = new Thread(() => httpsv6Listener.Start(IPAddress.Parse(Program.argListenerIPv6), Int32.Parse(port), "HTTPSv6"));
                             httpsv6ListenerThread.Start();
                         }
