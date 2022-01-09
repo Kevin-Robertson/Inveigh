@@ -13,7 +13,7 @@ namespace Inveigh
         public static string argCert = "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";
         public static string argCertPassword = "password";
         public static string argChallenge = "";
-        public static string argConsole = "4";
+        public static string argConsole = "5";
         public static string argConsoleLimit = "-1";
         public static string argConsoleStatus = "0";
         public static string argConsoleUnique = "Y";
@@ -39,7 +39,7 @@ namespace Inveigh
         public static string[] argHTTPSPorts = { "443" };
         public static string argICMPv6 = "N";
         public static string argICMPv6Interval = "200";
-        public static string argICMPv6TTL = "1800";
+        public static string argICMPv6TTL = "300";
         public static string argInspect = "N";
         public static string argIPv4 = "Y";
         public static string argIPv6 = "Y";
@@ -174,7 +174,7 @@ namespace Inveigh
         public static string netbiosDomain = Environment.UserDomainName;
         public static string dnsDomain = "";    
         public static ulong smb2Session = 5548434740922023936; // todo check
-        public static string version = "2.0.3";
+        public static string version = "2.0.4";
 
         static void Main(string[] arguments)
         {
