@@ -174,7 +174,7 @@ namespace Quiddity
 
                 while (tcpClient.Connected && isRunning)
                 {
-                    byte[] requestData = new byte[4096];
+                    byte[] requestData = new byte[16384];
 
                     if (type.Equals("HTTPS"))
                     {
@@ -234,7 +234,7 @@ namespace Quiddity
                         }
 
                     }
-
+                    
                     HTTPRequest request = new HTTPRequest();
 
                     if (!Utilities.ArrayIsNullOrEmpty(requestData))
@@ -291,7 +291,7 @@ namespace Quiddity
                             }
 
                         }
-
+                        
                         if (type.Equals("Proxy"))
                         {
                             response.StatusCode = "407";
@@ -322,7 +322,7 @@ namespace Quiddity
                             response.WWWAuthenticate = string.Concat("Basic realm=", HTTPRealm);
                         }
 
-                        if ((!string.IsNullOrEmpty(request.Authorization) && request.Authorization.ToUpper().StartsWith("NTLM ")) || (!string.IsNullOrEmpty(request.ProxyAuthorization)) && request.ProxyAuthorization.ToUpper().StartsWith("NTLM "))
+                        if (!string.IsNullOrEmpty(request.Authorization) && (request.Authorization.ToUpper().StartsWith("NTLM ") || request.Authorization.ToUpper().StartsWith("NEGOTIATE ")) || (!string.IsNullOrEmpty(request.ProxyAuthorization)) && request.ProxyAuthorization.ToUpper().StartsWith("NTLM "))
                         {
                             string authorization = request.Authorization;
 
@@ -332,7 +332,7 @@ namespace Quiddity
                             }
 
                             NTLMNegotiate ntlm = new NTLMNegotiate();
-                            ntlm.ReadBytes(Convert.FromBase64String(authorization.Substring(5, authorization.Length - 5)), 0);
+                            ntlm.ReadBytes(Convert.FromBase64String(request.Authorization.Split(' ')[1]), 0);
 
                             if (ntlm.MessageType == 1)
                             {
@@ -351,7 +351,16 @@ namespace Quiddity
                                 }
                                 else
                                 {
-                                    response.WWWAuthenticate = "NTLM " + Convert.ToBase64String(challengeData);
+
+                                    if (request.Authorization.ToUpper().StartsWith("NEGOTIATE "))
+                                    {
+                                        response.WWWAuthenticate = "Negotiate " + Convert.ToBase64String(challengeData);
+                                    }
+                                    else
+                                    {
+                                        response.WWWAuthenticate = "NTLM " + Convert.ToBase64String(challengeData);
+                                    }
+
                                 }
 
                                 response.Connection = "";
@@ -362,7 +371,7 @@ namespace Quiddity
                                 response.ReasonPhrase = "OK";
                                 ntlmStage = 3;
                                 isClientClose = true;
-                                NTLMResponse ntlmResponse = new NTLMResponse(Convert.FromBase64String(authorization.Substring(5, authorization.Length - 5)), false);
+                                NTLMResponse ntlmResponse = new NTLMResponse(Convert.FromBase64String(authorization.Split(' ')[1]), false);
                                 string domain = Encoding.Unicode.GetString(ntlmResponse.DomainName);
                                 string user = Encoding.Unicode.GetString(ntlmResponse.UserName);
                                 string host = Encoding.Unicode.GetString(ntlmResponse.Workstation);
