@@ -796,6 +796,11 @@ namespace Inveigh
         {
             bool nullarg = true;
 
+            if (!string.IsNullOrEmpty(arg))
+            {
+                nullarg = false;
+            }
+
             Console.WriteLine();
 
             if (nullarg)

@@ -174,7 +174,7 @@ namespace Inveigh
         public static string netbiosDomain = Environment.UserDomainName;
         public static string dnsDomain = "";    
         public static ulong smb2Session = 5548434740922023936; // todo check
-        public static string version = "2.0.4";
+        public static string version = "2.0.5";
 
         static void Main(string[] arguments)
         {
@@ -185,6 +185,7 @@ namespace Inveigh
                 enabledWindows = false;
             }
 #endif
+            bool allValid = true;
 
             if (arguments.Length > 0)
             {
@@ -584,7 +585,7 @@ namespace Inveigh
                                 if (arguments.Length > 1)
                                     argHelp = arguments[entry.index + 1].ToUpper();
                                 Output.GetHelp(argHelp);
-                                Environment.Exit(0);
+                                allValid &= false;
                                 break;
 
                             default:
@@ -606,42 +607,46 @@ namespace Inveigh
                             Console.WriteLine("{0} error - {1}", argument, ex.Message);
                         }
 
-                        Environment.Exit(0);
+                        allValid &= false;
                     }
 
                 }
 
             }
 
-            Arguments.ValidateArguments();
-            Arguments.ParseArguments();
-            Control.ImportSession();
-            Output.StartupOutput();
-            Control.StartThreads();
-            commandHistoryList.Add("");
+            allValid &= Arguments.ValidateArguments();
 
-            while (isRunning)
+            if (allValid)
             {
+                Arguments.ParseArguments();
+                Control.ImportSession();
+                Output.StartupOutput();
+                Control.StartThreads();
+                commandHistoryList.Add("");
 
-                try
+                while (isRunning)
                 {
-                    Output.OutputLoop();
 
-                    if (isRunning)
+                    try
                     {
-                        Shell.ConsoleLoop();
+                        Output.OutputLoop();
+
+                        if (isRunning)
+                        {
+                            Shell.ConsoleLoop();
+                        }
+
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(outputList.Count);
+                        outputList.Add(String.Format("[-] [{0}] Console error detected - {1}", Output.Timestamp(), ex.ToString()));
                     }
 
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(outputList.Count);
-                    outputList.Add(String.Format("[-] [{0}] Console error detected - {1}", Output.Timestamp(), ex.ToString()));                 
                 }
 
             }
 
-            Environment.Exit(0);
         }
 
     }

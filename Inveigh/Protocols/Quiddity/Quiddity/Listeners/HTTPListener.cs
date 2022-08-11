@@ -115,9 +115,13 @@ namespace Quiddity
                             }
                             while (!tcpAsync.IsCompleted);
 
-                            TcpClient tcpClient = tcpListener.EndAcceptTcpClient(tcpAsync);
-                            object[] parameters = { tcpClient, type, port };
-                            ThreadPool.QueueUserWorkItem(new WaitCallback(ReceiveClient), parameters);
+                            if (isRunning)
+                            {
+                                TcpClient tcpClient = tcpListener.EndAcceptTcpClient(tcpAsync);
+                                object[] parameters = { tcpClient, type, port };
+                                ThreadPool.QueueUserWorkItem(new WaitCallback(ReceiveClient), parameters);
+                            }
+
                         }
                         catch (Exception ex)
                         {

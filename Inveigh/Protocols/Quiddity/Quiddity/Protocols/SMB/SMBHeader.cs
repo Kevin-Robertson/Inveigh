@@ -87,6 +87,28 @@ namespace Quiddity.SMB
             }
 
         }
+        public byte[] GetBytes()
+        {
+
+            using (MemoryStream memoryStream = new MemoryStream())
+            {
+                PacketWriter packetWriter = new PacketWriter(memoryStream);
+                packetWriter.Write(this.Protocol);
+                packetWriter.Write(this.Command);
+                packetWriter.Write(this.Status);
+                packetWriter.Write(this.Flags);
+                packetWriter.Write(this.Flags2);
+                packetWriter.Write(this.PIDHigh);
+                packetWriter.Write(this.SecurityFeatures);
+                packetWriter.Write(this.Reserved);
+                packetWriter.Write(this.TID);
+                packetWriter.Write(this.PIDLow);
+                packetWriter.Write(this.UID);
+                packetWriter.Write(this.MID);
+                return memoryStream.ToArray();
+            }
+
+        }
 
     }
 

@@ -29,23 +29,71 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+using Quiddity.NetBIOS;
+using Quiddity.SMB;
+using Quiddity.SMB2;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Sockets;
 using System.Text;
 
 namespace Quiddity.Clients
 {
     class SMBClient
     {
+        public TCPClient TCPClient { get; set; }
+
+        public static NetworkStream tcpStream;
+
         internal void Connect(string ipAddress, int port)
         {
-            TCPClient tcpClient = new TCPClient(ipAddress, port);
-            tcpClient.Connect(ipAddress, port);
+            TCPClient = new TCPClient(ipAddress, port);
+            //TCPClient.Connect(ipAddress, port);
+            tcpStream = TCPClient.GetStream();
         }
 
         internal void Negotiate(string ipAddress, int port)
         {
+            Connect(ipAddress, port);
+            byte[] readBuffer = new byte[1024];
+
+            SMBHeader smbHeader = new SMBHeader
+            {
+                Command = 0x72,
+                Status = 0,
+                Flags = 0x18,
+                Flags2 = 51283,
+                PIDHigh = 0,
+                SecurityFeatures = new byte[8],
+                TID = 65535,
+                PIDLow = 65279,
+                UID = 0,
+                MID = 0
+            };
+
+            SMBCOMNegotiateRequest smbCOMNegotiateRequest = new SMBCOMNegotiateRequest();
+            byte[] sendBuffer = SMBHelper.GetBytes(new NetBIOSSessionService(), smbHeader, smbCOMNegotiateRequest);
+            tcpStream.Write(sendBuffer, 0, sendBuffer.Length);
+            tcpStream.Flush();
+            tcpStream.Read(readBuffer, 0, readBuffer.Length);
+
+            NetBIOSSessionService requestNetBIOSSessionService = new NetBIOSSessionService(readBuffer);
+            SMBHelper smbHelper = new SMBHelper();
+
+            if (requestNetBIOSSessionService.Type == 0 || smbHelper.Protocol[0] == 0xfe || smbHelper.Protocol[0] == 0xff)
+            {
+                int sessionServiceIndex = 0;
+
+                if (requestNetBIOSSessionService.Type == 0)
+                {
+                    sessionServiceIndex = 4;
+                }
+
+                SMBHeader requestSMBHeader = new SMBHeader();
+                SMB2Header requestSMB2Header = new SMB2Header();
+                smbHelper.ReadBytes(readBuffer, sessionServiceIndex);
+            }
 
         }
 

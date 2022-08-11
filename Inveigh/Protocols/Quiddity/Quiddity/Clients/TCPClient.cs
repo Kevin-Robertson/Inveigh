@@ -40,7 +40,7 @@ namespace Quiddity.Clients
         public TCPClient(string ipAddress, int port) : base(ipAddress, port)
         {
             this.Client.ReceiveTimeout = 60000;
-            this.ExclusiveAddressUse = false;
+            //this.ExclusiveAddressUse = false;
         }
 
     }

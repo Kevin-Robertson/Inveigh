@@ -21,6 +21,8 @@ namespace Inveigh
 {
     class Sniffer
     {
+        public static bool isRunning = false;
+
         public static void Start(string protocol, string snifferIP, bool isIPV6)
         {
             byte[] snifferIn = new byte[4] { 1, 0, 0, 0 };
@@ -68,7 +70,9 @@ namespace Inveigh
                 snifferIPEndPoint = new IPEndPoint(IPAddress.Parse(snifferIP), 0);
                 snifferSocket.ReceiveBufferSize = 4096;
                 snifferSocket.Bind(snifferIPEndPoint);
+                snifferSocket.Blocking = false;
                 snifferSocket.IOControl(IOControlCode.ReceiveAll, snifferIn, snifferOut);
+
             }
             catch (Exception ex)
             {
@@ -88,8 +92,9 @@ namespace Inveigh
             }         
             
             int packetLength;
+            isRunning = true;
 
-            while (Program.isRunning)
+            while (isRunning)
             {
 
                 try
@@ -107,8 +112,8 @@ namespace Inveigh
                     {
                         packetLength = 0;
                     }
-
-                    if (packetLength > 0)
+                    
+                    if (packetLength > 0 && isRunning)
                     {
                         IPHeader ipHeader = new IPHeader();
                         MemoryStream memoryStream = new MemoryStream(snifferData, 0, packetLength);

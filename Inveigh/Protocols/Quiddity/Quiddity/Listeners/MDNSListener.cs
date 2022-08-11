@@ -33,6 +33,7 @@ using Quiddity.MDNS;
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 
 namespace Quiddity
 {
@@ -55,6 +56,8 @@ namespace Quiddity
         {
             UDPListener listener = new UDPListener(AddressFamily.InterNetwork);
             IPEndPoint ipEndPoint = new IPEndPoint(ipAddress, 5353);
+            isRunning = true;
+            IAsyncResult udpAsync;
 
             if (string.Equals(ipAddress.AddressFamily.ToString(), "InterNetwork"))
             {
@@ -68,13 +71,30 @@ namespace Quiddity
 
             listener.Client.Bind(ipEndPoint);
 
-            while (true)
+            while (isRunning)
             {
 
                 try
                 {
-                    byte[] receiveBuffer = listener.Receive(ref ipEndPoint);
-                    ProcessRequest(receiveBuffer, listener, ipEndPoint, replyIP, replyIPv6);
+                    udpAsync = listener.BeginReceive(null, null);
+
+                    do
+                    {
+                        Thread.Sleep(10);
+
+                        if (!isRunning)
+                        {
+                            break;
+                        }
+
+                    }
+                    while (!udpAsync.IsCompleted);
+
+                    if (isRunning)
+                    {
+                        byte[] receiveBuffer = listener.EndReceive(udpAsync, ref ipEndPoint);
+                        ProcessRequest(receiveBuffer, listener, ipEndPoint, replyIP, replyIPv6);
+                    }
                 }
                 catch (Exception ex)
                 {

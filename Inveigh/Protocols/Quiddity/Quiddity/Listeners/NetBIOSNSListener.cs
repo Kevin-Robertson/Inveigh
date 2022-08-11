@@ -33,6 +33,7 @@ using Quiddity.NetBIOS;
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 
 namespace Quiddity
 {
@@ -52,16 +53,35 @@ namespace Quiddity
         {
             UDPListener listener = new UDPListener(AddressFamily.InterNetwork);
             IPEndPoint ipEndPoint = new IPEndPoint(ipAddress, 137);
-
+            isRunning = true;
+            IAsyncResult udpAsync;
             listener.Client.Bind(ipEndPoint);
 
-            while (true)
+            while (isRunning)
             {
 
                 try
                 {
-                    byte[] receiveBuffer = listener.Receive(ref ipEndPoint);
-                    ProcessRequest(receiveBuffer, listener, ipEndPoint, replyIP);
+                    udpAsync = listener.BeginReceive(null, null);
+
+                    do
+                    {
+                        Thread.Sleep(10);
+
+                        if (!isRunning)
+                        {
+                            break;
+                        }
+
+                    }
+                    while (!udpAsync.IsCompleted);
+
+                    if (isRunning)
+                    {
+                        byte[] receiveBuffer = listener.EndReceive(udpAsync, ref ipEndPoint);
+                        ProcessRequest(receiveBuffer, listener, ipEndPoint, replyIP);
+                    }
+
                 }
                 catch (Exception ex)
                 {
