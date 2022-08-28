@@ -164,6 +164,7 @@ namespace Quiddity.NTLM
                 this.EncryptedRandomSessionKeyBufferOffset = packetReader.ReadUInt32();
                 this.NegotiateFlags = packetReader.ReadBytes(4);
 
+                
                 string flags = Convert.ToString(BitConverter.ToUInt32(this.NegotiateFlags, 0), 2).PadLeft(this.NegotiateFlags.Length * 8, '0');
 
                 if (String.Equals(flags.Substring(6, 1), "1"))
@@ -171,12 +172,13 @@ namespace Quiddity.NTLM
                     this.Version = packetReader.ReadBytes(8);
                 }
 
-                if (String.Equals(flags.Substring(1, 1), "1"))
+                if (String.Equals(flags.Substring(16, 1), "1"))
                 {
                     this.MIC = packetReader.ReadBytes(16);
                 }
 
                 this.Payload = packetReader.ReadBytes(data.Length - (int)this.DomainNameBufferOffset);
+                
             }
 
         }

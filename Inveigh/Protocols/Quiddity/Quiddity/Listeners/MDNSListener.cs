@@ -31,6 +31,7 @@
  */
 using Quiddity.MDNS;
 using System;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -54,10 +55,16 @@ namespace Quiddity
 
         public new void Start(IPAddress ipAddress, string replyIP, string replyIPv6)
         {
+            Start(ipAddress, replyIP, replyIPv6, 0);
+        }
+
+        public void Start(IPAddress ipAddress, string replyIP, string replyIPv6, int runTime)
+        {
             UDPListener listener = new UDPListener(AddressFamily.InterNetwork);
             IPEndPoint ipEndPoint = new IPEndPoint(ipAddress, 5353);
             isRunning = true;
             IAsyncResult udpAsync;
+            Stopwatch stopwatchRunTime = new Stopwatch();
 
             if (string.Equals(ipAddress.AddressFamily.ToString(), "InterNetwork"))
             {
@@ -82,8 +89,9 @@ namespace Quiddity
                     {
                         Thread.Sleep(10);
 
-                        if (!isRunning)
+                        if (!isRunning || stopwatchRunTime.IsRunning && stopwatchRunTime.Elapsed.Minutes >= runTime)
                         {
+                            isRunning = false;
                             break;
                         }
 

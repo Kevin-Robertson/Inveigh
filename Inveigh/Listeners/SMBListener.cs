@@ -54,7 +54,7 @@ namespace Inveigh
         protected override void OutputError(Exception ex, int port)
         {
 
-            if (ex.Message.ToString().Equals("An attempt was made to access a socket in a way forbidden by its access permissions."))
+            if (ex.Message.ToString().Contains("An attempt was made to access a socket in a way forbidden by its access permissions"))
             {
                 Output.Queue(String.Format("[!] Failed to start SMB listener on port {0}, check IP and port usage.", port));
             }

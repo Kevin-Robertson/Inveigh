@@ -33,6 +33,7 @@ namespace Inveigh
             IPEndPoint snifferIPEndPoint;
             EndPoint snifferEndPoint;
             AddressFamily addressFamily = AddressFamily.InterNetwork;
+            IAsyncResult ipAsync;
 
             if (isIPV6)
             {
@@ -70,9 +71,7 @@ namespace Inveigh
                 snifferIPEndPoint = new IPEndPoint(IPAddress.Parse(snifferIP), 0);
                 snifferSocket.ReceiveBufferSize = 4096;
                 snifferSocket.Bind(snifferIPEndPoint);
-                snifferSocket.Blocking = false;
                 snifferSocket.IOControl(IOControlCode.ReceiveAll, snifferIn, snifferOut);
-
             }
             catch (Exception ex)
             {
@@ -91,7 +90,7 @@ namespace Inveigh
                 throw;
             }         
             
-            int packetLength;
+            int packetLength = 0;
             isRunning = true;
 
             while (isRunning)
@@ -103,10 +102,28 @@ namespace Inveigh
                     SocketFlags socketFlags = SocketFlags.None;
 
                     try
-                    {                     
-                        packetLength = snifferSocket.ReceiveMessageFrom(snifferBuffer, 0, snifferBuffer.Length, ref socketFlags, ref snifferEndPoint, out packetInformation);
-                        snifferData = new byte[packetLength];
-                        Buffer.BlockCopy(snifferBuffer, 0, snifferData, 0, packetLength);
+                    {
+                        ipAsync = snifferSocket.BeginReceiveMessageFrom(snifferBuffer, 0, snifferBuffer.Length, socketFlags, ref snifferEndPoint, null, null);
+
+                        do
+                        {
+                            Thread.Sleep(10);
+
+                            if (!isRunning)
+                            {
+                                break;
+                            }
+
+                        }
+                        while (!ipAsync.IsCompleted);
+
+                        if (isRunning)
+                        {
+                            packetLength = snifferSocket.EndReceiveMessageFrom(ipAsync, ref socketFlags, ref snifferEndPoint, out packetInformation);
+                            snifferData = new byte[packetLength];
+                            Buffer.BlockCopy(snifferBuffer, 0, snifferData, 0, packetLength);
+                        }
+
                     }
                     catch
                     {

@@ -71,7 +71,7 @@ namespace Quiddity.MDNS
 
         public bool QuestionIsAllowed(string question)
         {
-
+ 
             if (!Utilities.ArrayIsNullOrEmpty(this.Questions) && !Array.Exists(this.Questions, element => element == question.ToUpper()))
             {
                 return false;
