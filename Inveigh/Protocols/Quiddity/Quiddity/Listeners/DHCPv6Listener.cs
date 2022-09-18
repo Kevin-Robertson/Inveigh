@@ -1,7 +1,7 @@
 ﻿/*
  * BSD 3-Clause License
  *
- * Copyright (c) 2021, Kevin Robertson
+ * Copyright (c) 2022, Kevin Robertson
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,6 +36,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 
 namespace Quiddity
 {
@@ -45,6 +46,8 @@ namespace Quiddity
         public uint Lifetime { get; set; }
         public int Prefix { get; set; }
         public int Index { get; set; }
+
+        public static bool isRunning = false;
 
         public DHCPv6Listener()
         {
@@ -68,14 +71,33 @@ namespace Quiddity
             IPEndPoint ipEndPoint = new IPEndPoint(ipAddress, 547);
             listener.JoinMulticastGroup(IPAddress.Parse("ff02::1:2"));
             listener.Client.Bind(ipEndPoint);
+            isRunning = true;
+            IAsyncResult udpAsync;
 
-            while (true)
-            {
+            while (isRunning)
+            {  
 
                 try
                 {
-                    byte[] receiveBuffer = listener.Receive(ref ipEndPoint);
-                    ProcessRequest(receiveBuffer, listener, ipEndPoint, mac, dnsIPv6);
+                    udpAsync = listener.BeginReceive(null, null);
+
+                    do
+                    {
+                        Thread.Sleep(10);
+
+                        if (!isRunning)
+                        {
+                            break;
+                        }
+
+                    }
+                    while (!udpAsync.IsCompleted);
+
+                    if (isRunning)
+                    {
+                        byte[] receiveBuffer = listener.EndReceive(udpAsync, ref ipEndPoint);
+                        ProcessRequest(receiveBuffer, listener, ipEndPoint, mac, dnsIPv6);
+                    }
                 }
                 catch (Exception ex)
                 {

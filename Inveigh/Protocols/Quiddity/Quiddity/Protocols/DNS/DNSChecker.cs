@@ -1,7 +1,7 @@
 ﻿/*
  * BSD 3-Clause License
  *
- * Copyright (c) 2021, Kevin Robertson
+ * Copyright (c) 2022, Kevin Robertson
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -103,7 +103,7 @@ namespace Quiddity.DNS
                 this.OutputMessage = this.OutputServiceDenied;
                 return false;
             }
-            else if (HostIsDenied(name) && FQDNIsDenied(name))
+            else if (HostIsDenied(name) || FQDNIsDenied(name))
             {
                 this.OutputMessage = this.OutputHostDenied;
                 return false;

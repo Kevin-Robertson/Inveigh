@@ -29,48 +29,42 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-using Quiddity.DNS;
-using Quiddity.Support;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Net;
 using System.Text;
 
-namespace Quiddity.NetBIOS
+namespace Quiddity.SMB
 {
-    class NetBIOSNSChecker : DNSChecker
+    class SMBCOMNegotiateRequest
     {
-        /// <summary>method <c>GetBytes</c> returns reply buffer.</summary>
-        public static byte[] GetBytes(NetBIOSNSHeader header, NetBIOSNSQuestion question, uint ttl, string replyIP)
+        //https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-cifs/25c8c3c9-58fc-4bb8-aa8f-0272dede84c5
+        public byte WordCount { get; set; }
+        public ushort ByteCount { get; set; }
+        public byte[] Dialects{ get; set; }
+
+        public SMBCOMNegotiateRequest()
         {
-            byte[] rdata = Utilities.BlockCopy(new byte[2], IPAddress.Parse(replyIP).GetAddressBytes());
-
-            NetBIOSNSHeader responseHeader = new NetBIOSNSHeader
-            {
-                ID = header.ID,
-                R = true,
-                Opcode = "0000",
-                AA = true,
-                TC = false,
-                RD = true,
-                RA = false,
-                Z = "00",
-                B = false,
-                RCode = "0000",             
-                QDCount = 0,
-                ANCount = 1
-            };
-
-            NetBIOSNSResource resource = new NetBIOSNSResource();
-            resource.Name = question.QName;
-            resource.Type = question.QType;
-            resource.Class = question.QClass;
-            resource.TTL = ttl;
-            resource.RDLength = 6;
-            resource.RData = rdata;
-
-            return Utilities.BlockCopy(responseHeader.GetBytes(), resource.GetBytes());
+            this.WordCount = 0;
+            this.ByteCount = 120;
+            this.Dialects = new byte[120] { 0x02, 0x50, 0x43, 0x20, 0x4e, 0x45, 0x54, 0x57, 0x4f, 0x52, 0x4b, 0x20, 0x50, 0x52, 0x4f, 0x47, 0x52, 0x41, 0x4d, 0x20, 0x31, 0x2e, 0x30, 0x00, 0x02, 0x4c, 0x41, 0x4e, 0x4d, 0x41, 0x4e, 0x31, 0x2e, 0x30, 0x00, 0x02, 0x57, 0x69, 0x6e, 0x64, 0x6f, 0x77, 0x73, 0x20, 0x66, 0x6f, 0x72, 0x20, 0x57, 0x6f, 0x72, 0x6b, 0x67, 0x72, 0x6f, 0x75, 0x70, 0x73, 0x20, 0x33, 0x2e, 0x31, 0x61, 0x00, 0x02, 0x4c, 0x4d, 0x31, 0x2e, 0x32, 0x58, 0x30, 0x30, 0x32, 0x00, 0x02, 0x4c, 0x41, 0x4e, 0x4d, 0x41, 0x4e, 0x32, 0x2e, 0x31, 0x00, 0x02, 0x4e, 0x54, 0x20, 0x4c, 0x4d, 0x20, 0x30, 0x2e, 0x31, 0x32, 0x00, 0x02, 0x53, 0x4d, 0x42, 0x20, 0x32, 0x2e, 0x30, 0x30, 0x32, 0x00, 0x02, 0x53, 0x4d, 0x42, 0x20, 0x32, 0x2e, 0x3f, 0x3f, 0x3f, 0x00 };
         }
+
+        public byte[] GetBytes()
+        {
+
+            using (MemoryStream memoryStream = new MemoryStream())
+            {
+                PacketWriter packetWriter = new PacketWriter(memoryStream);
+                packetWriter.Write(this.WordCount);
+                packetWriter.Write(this.ByteCount);
+                packetWriter.Write(this.Dialects);
+                return memoryStream.ToArray();
+            }
+
+        }
+
     }
+    
 }

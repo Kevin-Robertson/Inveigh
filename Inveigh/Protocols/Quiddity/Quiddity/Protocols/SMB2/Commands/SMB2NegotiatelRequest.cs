@@ -1,7 +1,7 @@
 ﻿/*
  * BSD 3-Clause License
  *
- * Copyright (c) 2021, Kevin Robertson
+ * Copyright (c) 2022, Kevin Robertson
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -53,6 +53,24 @@ namespace Quiddity.SMB2
         public byte[] Dialects { get; set; }
         public byte[] Padding { get; set; } // todo check
         public byte[] NegotiateContextList { get; set; }
+
+        public SMB2NegotiatelRequest()
+        {
+            this.StructureSize = 65;
+            this.DialectCount = 5;
+            this.SecurityMode = 1;
+            this.Reserved = new byte[2];
+            this.Capabilities = new byte[2];
+            this.ClientGUID = new byte[2];
+            this.NegotiateContextOffset = 0;
+            this.NegotiateContextCount = 0;
+            this.ClientStartTime = BitConverter.GetBytes(DateTime.Now.ToFileTime());
+            this.Capabilities = new byte[4];
+            this.Dialects = new byte[4];
+            this.NegotiateContextOffset = 0;
+            this.Padding = new byte[2]; // todo check
+            this.NegotiateContextList = new byte[0];
+        }
 
         public SMB2NegotiatelRequest(byte[] data, int offset)
         {

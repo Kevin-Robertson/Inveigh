@@ -42,6 +42,7 @@ namespace Inveigh
                 "get ignoreips",
                 "get ignoredomains",
                 "get ignoremacs",
+                "set console",
                 "history",
                 "resume",
                 "stop"
@@ -372,12 +373,12 @@ namespace Inveigh
         public static void Commands(string inputCommand)
         {
             string[] inputArray = inputCommand.Split(' ');
-            string search = "";
+            string value = "";
 
             if (!Utilities.ArrayIsNullOrEmpty(inputArray) && inputArray.Length == 3)
             {
                 inputCommand = string.Concat(inputArray[0], " ", inputArray[1]);
-                search = inputArray[2];
+                value = inputArray[2];
             }
 
             inputCommand = inputCommand.ToUpper();
@@ -396,43 +397,43 @@ namespace Inveigh
                     break;
 
                 case "GET LOG":
-                    GetLog(search);
+                    GetLog(value);
                     break;
 
                 case "GET CLEARTEXT":
-                    GetCleartext(search);
+                    GetCleartext(value);
                     break;
 
                 case "GET CLEARTEXTUNIQUE":
-                    GetCleartextUnique(search);
+                    GetCleartextUnique(value);
                     break;
 
                 case "GET DHCPV6LEASES":
-                    GetDHCPv6Leases(search);
+                    GetDHCPv6Leases(value);
                     break;
 
                 case "GET NTLMV1":
-                    GetNTLMv1(search);
+                    GetNTLMv1(value);
                     break;
 
                 case "GET NTLMV1UNIQUE":
-                    GetNTLMv1Unique(search);
+                    GetNTLMv1Unique(value);
                     break;
 
                 case "GET NTLMV1USERNAMES":
-                    GetNTLMv1Usernames(search);
+                    GetNTLMv1Usernames(value);
                     break;
 
                 case "GET NTLMV2":
-                    GetNTLMv2(search);
+                    GetNTLMv2(value);
                     break;
 
                 case "GET NTLMV2UNIQUE":
-                    GetNTLMv2Unique(search);
+                    GetNTLMv2Unique(value);
                     break;
 
                 case "GET NTLMV2USERNAMES":
-                    GetNTLMv2Usernames(search);
+                    GetNTLMv2Usernames(value);
                     break;
 
                 case "GET REPLYTOHOSTS":
@@ -473,6 +474,10 @@ namespace Inveigh
                 case "GET IGNOREMACS":
                     foreach (string entry in Program.argIgnoreMACs)
                         Console.WriteLine(entry);
+                    break;
+
+                case "SET CONSOLE":
+                    SetConsole(value);
                     break;
 
                 case "?":
@@ -547,7 +552,8 @@ namespace Inveigh
             commands.Add("GET IGNOREHOSTS,get IgnoreHosts parameter startup values");
             commands.Add("GET IGNOREIPS,get IgnoreIPs parameter startup values");
             commands.Add("GET IGNOREMACS,get IgnoreMACs parameter startup values");
-            commands.Add("HISTORY,get console command history");
+            commands.Add("SET CONSOLE,set Console parameter value");
+            commands.Add("HISTORY,get command history");
             commands.Add("RESUME,resume real time console output");
             commands.Add("STOP,stop Inveigh");
             Output.OutputCommand(description, headings, commands, Program.colorPositive);
@@ -758,36 +764,37 @@ namespace Inveigh
             Output.OutputCommand(description, headers, list, Program.colorPositive);
         }
 
-        public static void GetSpooferReplyLists()
+        public static void SetConsole(string value)
         {
 
-            if (Program.ntlmv2UsernameList.Count > 0)
+            if (!string.IsNullOrEmpty(value))
             {
-                Console.WriteLine(string.Format("[+] [{0}] Current NTLMv2 IP addresses, hostnames, and usernames:", Output.Timestamp()));
-                string[] outputNTLMV2Usernames = Program.ntlmv2UsernameList.ToArray();
-                foreach (string entry in outputNTLMV2Usernames)
-                    Console.WriteLine(entry);
+
+                try
+                {
+                    Int32.Parse(value);
+                    int console = Int32.Parse(value);
+
+                    if (console <= 5)
+                    {
+                        Program.console = console;
+                        Output.OutputCommand("Console value set to " + value);
+                    }
+                    else
+                    {
+                        Output.OutputCommand("Value must be between 0 and 5");
+                    }
+
+                }
+                catch
+                {
+                    Output.OutputCommand("Value must be an integer");
+                }
+
             }
             else
             {
-                Console.WriteLine(string.Format("[+] [{0}] NTLMv2 IP address, hostname, and username list is empty", Output.Timestamp()));
-            }
-
-        }
-
-        public static void GetSpooferIgnoreLists()
-        {
-
-            if (Program.ntlmv2UsernameList.Count > 0)
-            {
-                Console.WriteLine(string.Format("Current NTLMv2 IP addresses, hostnames, and usernames:", Output.Timestamp()));
-                string[] outputNTLMV2Usernames = Program.ntlmv2UsernameList.ToArray();
-                foreach (string entry in outputNTLMV2Usernames)
-                    Console.WriteLine(entry);
-            }
-            else
-            {
-                Console.WriteLine(string.Format("[+] [{0}] NTLMv2 IP address, hostname, and username list is empty", Output.Timestamp()));
+                Output.OutputCommand("No value specified");
             }
 
         }

@@ -1,7 +1,7 @@
 ﻿/*
  * BSD 3-Clause License
  *
- * Copyright (c) 2021, Kevin Robertson
+ * Copyright (c) 2022, Kevin Robertson
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,8 +31,10 @@
  */
 using Quiddity.NetBIOS;
 using System;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 
 namespace Quiddity
 {
@@ -48,20 +50,51 @@ namespace Quiddity
             this.TTL = ttl;
         }
 
-        public void Start(IPAddress ipAddress, string replyIP)
+        public new void Start(IPAddress ipAddress, string replyIP)
+        {
+            Start(ipAddress, replyIP, 0);
+        }
+
+        public void Start(IPAddress ipAddress, string replyIP, int runTime)
         {
             UDPListener listener = new UDPListener(AddressFamily.InterNetwork);
             IPEndPoint ipEndPoint = new IPEndPoint(ipAddress, 137);
+            isRunning = true;
+            IAsyncResult udpAsync;
+            Stopwatch stopwatchRunTime = new Stopwatch();
+
+            if (runTime > 0)
+            {
+                stopwatchRunTime.Start();
+            }
 
             listener.Client.Bind(ipEndPoint);
 
-            while (true)
+            while (isRunning)
             {
 
                 try
                 {
-                    byte[] receiveBuffer = listener.Receive(ref ipEndPoint);
-                    ProcessRequest(receiveBuffer, listener, ipEndPoint, replyIP);
+                    udpAsync = listener.BeginReceive(null, null);
+
+                    do
+                    {
+                        Thread.Sleep(10);
+
+                        if (!isRunning || stopwatchRunTime.IsRunning && stopwatchRunTime.Elapsed.Minutes >= runTime)
+                        {
+                            break;
+                        }
+
+                    }
+                    while (!udpAsync.IsCompleted);
+
+                    if (isRunning)
+                    {
+                        byte[] receiveBuffer = listener.EndReceive(udpAsync, ref ipEndPoint);
+                        ProcessRequest(receiveBuffer, listener, ipEndPoint, replyIP);
+                    }
+
                 }
                 catch (Exception ex)
                 {

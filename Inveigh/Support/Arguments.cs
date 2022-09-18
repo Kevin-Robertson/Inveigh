@@ -12,7 +12,7 @@ namespace Inveigh
 {
     class Arguments
     {
-        public static void ValidateArguments()
+        public static bool ValidateArguments()
         {
 
             string[] ynArguments = 
@@ -103,28 +103,29 @@ namespace Inveigh
                 Program.argRunTime
             };
 
-            ValidateStringArguments(ynArguments, ynArgumentValues, new string[] { "Y", "N" });
-            ValidateStringArguments(new string[] { nameof(Program.argConsole) }, new string[] { Program.argConsole }, new string[] { "0", "1", "2", "3", "4" });
+            bool allValid = true;
+            allValid &= Utilities.ValidateStringArguments(ynArguments, ynArgumentValues, new string[] { "Y", "N" });
+            allValid &= Utilities.ValidateStringArguments(new string[] { nameof(Program.argConsole) }, new string[] { Program.argConsole }, new string[] { "0", "1", "2", "3", "4", "5" });
             string[] authArguments = { nameof(Program.argHTTPAuth), nameof(Program.argProxyAuth), nameof(Program.argWPADAuth), nameof(Program.argWebDAVAuth) };
             string[] authArgumentValues = { Program.argHTTPAuth, Program.argProxyAuth, Program.argWPADAuth, Program.argWebDAVAuth };
-            ValidateStringArguments(authArguments, authArgumentValues, new string[] { "ANONYMOUS", "BASIC", "NTLM" });
-            ValidateStringArrayArguments(nameof(Program.argDNSTypes), Program.argDNSTypes, new string[] { "A", "SOA", "SRV" });
-            ValidateStringArrayArguments(nameof(Program.argDNSSRV), Program.argDNSSRV, new string[] { "LDAP", "KERBEROS", "KPASSWORD", "GC" });
-            ValidateStringArrayArguments(nameof(Program.argNBNSTypes), Program.argNBNSTypes, new string[] { "00", "03", "20", "1B", "1C", "1D", "1E" });
-            ValidateStringArrayArguments(nameof(Program.argMDNSQuestions), Program.argMDNSQuestions, new string[] { "QM", "QU" });
-            ValidateStringArrayArguments(nameof(Program.argMDNSTypes), Program.argMDNSTypes, new string[] { "A", "AAAA", "ANY" });
-            ValidateStringArrayArguments(nameof(Program.argLLMNRTypes), Program.argLLMNRTypes, new string[] { "A", "AAAA", "ANY" });
-            ValidateIntArguments(intArguments, intArgumentValues);
+            allValid &= Utilities.ValidateStringArguments(authArguments, authArgumentValues, new string[] { "ANONYMOUS", "BASIC", "NTLM" });
+            allValid &= Utilities.ValidateStringArrayArguments(nameof(Program.argDNSTypes), Program.argDNSTypes, new string[] { "A", "SOA", "SRV" });
+            allValid &= Utilities.ValidateStringArrayArguments(nameof(Program.argDNSSRV), Program.argDNSSRV, new string[] { "LDAP", "KERBEROS", "KPASSWORD", "GC" });
+            allValid &= Utilities.ValidateStringArrayArguments(nameof(Program.argNBNSTypes), Program.argNBNSTypes, new string[] { "00", "03", "20", "1B", "1C", "1D", "1E" });
+            allValid &= Utilities.ValidateStringArrayArguments(nameof(Program.argMDNSQuestions), Program.argMDNSQuestions, new string[] { "QM", "QU" });
+            allValid &= Utilities.ValidateStringArrayArguments(nameof(Program.argMDNSTypes), Program.argMDNSTypes, new string[] { "A", "AAAA", "ANY" });
+            allValid &= Utilities.ValidateStringArrayArguments(nameof(Program.argLLMNRTypes), Program.argLLMNRTypes, new string[] { "A", "AAAA", "ANY" });
+            allValid &= Utilities.ValidateIntArguments(intArguments, intArgumentValues);
             string[] ipAddressArguments = { nameof(Program.argSnifferIP), nameof(Program.argSnifferIPv6), nameof(Program.argListenerIP), nameof(Program.argListenerIPv6), nameof(Program.argSpooferIP), nameof(Program.argSpooferIPv6) };
             string[] ipAddressArgumentValues = { Program.argSnifferIP, Program.argSnifferIPv6, Program.argListenerIP, Program.argListenerIPv6, Program.argSpooferIP, Program.argSpooferIPv6 };
-            ValidateIPAddressArguments(ipAddressArguments, ipAddressArgumentValues);
-            ValidateIntArrayArguments(nameof(Program.argHTTPPorts), Program.argHTTPPorts);
+            allValid &= Utilities.ValidateIPAddressArguments(ipAddressArguments, ipAddressArgumentValues);
+            allValid &= Utilities.ValidateIntArrayArguments(nameof(Program.argHTTPPorts), Program.argHTTPPorts);
             Regex r = new Regex("^[A-Fa-f0-9]{16}$");
             
             if (!string.IsNullOrEmpty(Program.argChallenge) && !r.IsMatch(Program.argChallenge))
             {
                 Console.WriteLine("Challenge is invalid");
-                Environment.Exit(0);
+                allValid = false;
             }
             
             r = new Regex("^[A-Fa-f0-9]{12}$");
@@ -132,20 +133,22 @@ namespace Inveigh
             if (!string.IsNullOrEmpty(Program.argMAC) && !r.IsMatch(Program.argMAC))
             {
                 Console.WriteLine("MAC address is invalid");
-                Environment.Exit(0);
+                allValid = false;
             }
 
             if ((Program.argDNSTypes.Contains("SOA") || Program.argDNSTypes.Contains("SRV")) && (string.IsNullOrEmpty(Program.argDNSHost) || Program.argDNSHost.Split('.').Count() < 3))
             { 
-                Console.WriteLine("DNSHost must be specified and fully qualified when using DNSTypes SOA or SRV"); Environment.Exit(0);
+                Console.WriteLine("DNSHost must be specified and fully qualified when using DNSTypes SOA or SRV");
+                allValid = false;
             }
 
             if (string.Equals(Program.argFileOutput, "Y") && !Directory.Exists(Program.argFileDirectory))
             {
                 Console.WriteLine("FileOutputDirectory is invalid");
-                Environment.Exit(0);
+                allValid = false;
             }
 
+            return allValid;
         }
 
         public static void ParseArguments()
@@ -188,7 +191,7 @@ namespace Inveigh
             if (string.Equals(Program.argSniffer, "Y")) { Program.enabledSniffer = true; }
             if (!Program.enabledWindows) { Program.enabledSniffer = false; }
             if (string.Equals(Program.argSMB, "Y")) { Program.enabledSMB = true; }
-            if (string.Equals(Program.argWebDAV, "Y")) { Program.enabledWebDAV = true; }
+            if (string.Equals(Program.argWebDAV, "Y") && (string.Equals(Program.argHTTP, "Y") || string.Equals(Program.argHTTPS, "Y"))) { Program.enabledWebDAV = true; }
             if (string.Equals(Program.argLocal, "Y")) { Program.enabledLocal = true; }
             if (string.Equals(Program.argRepeat, "Y")) { Program.enabledRepeat = true; }
 
@@ -215,7 +218,7 @@ namespace Inveigh
 
                 if (Program.enabledIPv4 && string.IsNullOrEmpty(Program.argSnifferIP))
                 {
-                    Program.argSnifferIP = GetLocalIPAddress("IPv4");
+                    Program.argSnifferIP = Utilities.GetLocalIPAddress("IPv4");
 
                     if (string.IsNullOrEmpty(Program.argSnifferIP))
                     {
@@ -226,7 +229,7 @@ namespace Inveigh
 
                 if (Program.enabledIPv6 && string.IsNullOrEmpty(Program.argSnifferIPv6))
                 {
-                    Program.argSnifferIPv6 = GetLocalIPAddress("IPv6");
+                    Program.argSnifferIPv6 = Utilities.GetLocalIPAddress("IPv6");
 
                     if (string.IsNullOrEmpty(Program.argSnifferIPv6))
                     {
@@ -258,7 +261,7 @@ namespace Inveigh
                     }
                     else
                     {
-                        Program.argSpooferIP = GetLocalIPAddress("IPv4");
+                        Program.argSpooferIP = Utilities.GetLocalIPAddress("IPv4");
 
                         if (string.IsNullOrEmpty(Program.argSpooferIP))
                         {
@@ -278,7 +281,7 @@ namespace Inveigh
                     }
                     else
                     {
-                        Program.argSpooferIPv6 = GetLocalIPAddress("IPv6");
+                        Program.argSpooferIPv6 = Utilities.GetLocalIPAddress("IPv6");
 
                         if (string.IsNullOrEmpty(Program.argSpooferIPv6))
                         {
@@ -351,11 +354,11 @@ namespace Inveigh
 
                     if (string.IsNullOrEmpty(Program.argSnifferIPv6))
                     {
-                        Program.argMAC = GetLocalMACAddress(GetLocalIPAddress("IPv6"));
+                        Program.argMAC = Utilities.GetLocalMACAddress(Utilities.GetLocalIPAddress("IPv6"));
                     }
                     else
                     {
-                        Program.argMAC = GetLocalMACAddress(Program.argSnifferIPv6);
+                        Program.argMAC = Utilities.GetLocalMACAddress(Program.argSnifferIPv6);
                     }
 
                 }
@@ -365,12 +368,12 @@ namespace Inveigh
 
             if (!string.IsNullOrEmpty(Program.argSnifferIP))
             {
-                Program.networkInterfaceIndexIPv4 = GetNetworkInterfaceIndex(Program.argSniffer);
+                Program.networkInterfaceIndexIPv4 = Utilities.GetNetworkInterfaceIndex(Program.argSniffer);
             }
 
             if (!string.IsNullOrEmpty(Program.argSnifferIPv6))
             {
-                Program.networkInterfaceIndexIPv6 = GetNetworkInterfaceIndex(Program.argSnifferIPv6);
+                Program.networkInterfaceIndexIPv6 = Utilities.GetNetworkInterfaceIndex(Program.argSnifferIPv6);
             }
 
             if (Program.enabledInspect)
@@ -399,221 +402,6 @@ namespace Inveigh
             {
                 Program.argWPADResponse = "function FindProxyForURL(url,host) {return \"DIRECT\";}";
             }
-        }
-
-        public static void ValidateStringArguments(string[] arguments, string[] values, string[] validValues)
-        {
-            int i = 0;
-            foreach (string value in values)
-            {
-
-                if (!validValues.Contains(value))
-                {
-                    Console.WriteLine(arguments[i].Substring(3) + " value must be " + string.Join("/", validValues));
-                    Environment.Exit(0);
-                }
-
-                i++;
-            }
-
-        }
-
-        public static void ValidateStringArrayArguments(string argument, string[] values, string[] validValues)
-        {
-
-            foreach (string value in values)
-            {
-
-                if (!validValues.Contains(value))
-                {
-                    Console.WriteLine(argument.Substring(3) + " value must be " + string.Join("/", validValues));
-                    Environment.Exit(0);
-                }
-
-            }
-
-        }
-
-        public static void ValidateIntArguments(string[] arguments, string[] values)
-        {
-
-            int i = 0;
-            foreach (string value in values)
-            {
-
-                if (!string.IsNullOrEmpty(value))
-                {
-
-                    try
-                    {
-                        Int32.Parse(value);
-
-                    }
-                    catch
-                    {
-                        Console.WriteLine(arguments[i].Substring(3) + " value must be an integer");
-                        Environment.Exit(0);
-                    }
-
-                }
-
-                i++;
-            }
-
-        }
-
-        public static void ValidateIntArrayArguments(string argument, string[] values)
-        {
-
-            int i = 0;
-            foreach (string value in values)
-            {
-
-                if (!string.IsNullOrEmpty(value))
-                {
-
-                    try
-                    {
-                        int.Parse(value);
-
-                    }
-                    catch
-                    {
-                        Console.WriteLine(argument.Substring(3) + " values must be integers");
-                        Environment.Exit(0);
-                    }
-
-                }
-
-                i++;
-            }
-
-        }
-
-        public static void ValidateIPAddressArguments(string[] arguments, string[] values)
-        {
-
-            int i = 0;
-            foreach (string value in values)
-            {
-
-                if (!string.IsNullOrEmpty(value))
-                {
-
-                    try
-                    {
-                        IPAddress.Parse(value);
-
-                    }
-                    catch
-                    {
-                        Console.WriteLine(arguments[i].Substring(3) + " value must be an IP address");
-                        Environment.Exit(0);
-                    }
-
-                }
-
-                i++;
-            }
-
-        }
-
-        public static string GetLocalIPAddress(string ipVersion)
-        {
-
-            List<string> ipAddressList = new List<string>();
-            AddressFamily addressFamily;
-
-            if (string.Equals(ipVersion, "IPv4"))
-            {
-                addressFamily = AddressFamily.InterNetwork;
-            }
-            else
-            {
-                addressFamily = AddressFamily.InterNetworkV6;
-            }
-
-            foreach (NetworkInterface networkInterface in NetworkInterface.GetAllNetworkInterfaces())
-            {
-
-                if (networkInterface.NetworkInterfaceType == NetworkInterfaceType.Ethernet && networkInterface.OperationalStatus == OperationalStatus.Up)
-                {
-
-                    foreach (UnicastIPAddressInformation ip in networkInterface.GetIPProperties().UnicastAddresses)
-                    {
-
-                        if (ip.Address.AddressFamily == addressFamily)
-                        {
-                            ipAddressList.Add(ip.Address.ToString());
-                        }
-
-                    }
-
-                }
-
-            }
-
-            return ipAddressList.FirstOrDefault();
-        }
-
-        public static string GetLocalMACAddress(string ipAddress)
-        {
-            List<string> macAddressList = new List<string>();
-
-            foreach (NetworkInterface networkInterface in NetworkInterface.GetAllNetworkInterfaces())
-            {
-
-                if (networkInterface.NetworkInterfaceType == NetworkInterfaceType.Ethernet && networkInterface.OperationalStatus == OperationalStatus.Up)
-                {
-
-                    foreach (UnicastIPAddressInformation ip in networkInterface.GetIPProperties().UnicastAddresses)
-                    {
-
-                        if (ip.Address.AddressFamily == AddressFamily.InterNetworkV6 && string.Equals(ip.Address.ToString(), ipAddress))
-                        {
-                            macAddressList.Add(networkInterface.GetPhysicalAddress().ToString());
-                        }
-
-                    }
-
-                }
-
-            }
-
-            return macAddressList.FirstOrDefault();
-        }
-
-        public static int GetNetworkInterfaceIndex(string ipAddress)
-        {
-            int index = 0;
-
-            foreach (NetworkInterface networkInterface in NetworkInterface.GetAllNetworkInterfaces())
-            {
-
-                if (networkInterface.NetworkInterfaceType == NetworkInterfaceType.Ethernet && networkInterface.OperationalStatus == OperationalStatus.Up)
-                {
-
-                    foreach (UnicastIPAddressInformation ip in networkInterface.GetIPProperties().UnicastAddresses)
-                    {
-
-                        if (ip.Address.AddressFamily == AddressFamily.InterNetworkV6 && string.Equals(ip.Address.ToString(), ipAddress))
-                        {
-                            index = networkInterface.GetIPProperties().GetIPv6Properties().Index;
-                            break;
-                        }
-                        else if (ip.Address.AddressFamily == AddressFamily.InterNetwork && string.Equals(ip.Address.ToString(), ipAddress))
-                        {
-                            index = networkInterface.GetIPProperties().GetIPv4Properties().Index;
-                            break;
-                        }
-
-                    }
-
-                }
-
-            }
-
-            return index;
         }
 
     }

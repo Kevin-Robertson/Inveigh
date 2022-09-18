@@ -1,7 +1,7 @@
 ﻿/*
  * BSD 3-Clause License
  *
- * Copyright (c) 2021, Kevin Robertson
+ * Copyright (c) 2022, Kevin Robertson
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,6 +33,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Text;
 
 namespace Quiddity.Support
@@ -120,6 +123,228 @@ namespace Quiddity.Support
 
         }
 
+        public static string GetLocalIPAddress(string ipVersion)
+        {
+
+            List<string> ipAddressList = new List<string>();
+            AddressFamily addressFamily;
+
+            if (string.Equals(ipVersion, "IPv4"))
+            {
+                addressFamily = AddressFamily.InterNetwork;
+            }
+            else
+            {
+                addressFamily = AddressFamily.InterNetworkV6;
+            }
+
+            foreach (NetworkInterface networkInterface in NetworkInterface.GetAllNetworkInterfaces())
+            {
+
+                if (networkInterface.NetworkInterfaceType == NetworkInterfaceType.Ethernet && networkInterface.OperationalStatus == OperationalStatus.Up)
+                {
+
+                    foreach (UnicastIPAddressInformation ip in networkInterface.GetIPProperties().UnicastAddresses)
+                    {
+
+                        if (ip.Address.AddressFamily == addressFamily)
+                        {
+                            ipAddressList.Add(ip.Address.ToString());
+                        }
+
+                    }
+
+                }
+
+            }
+
+            return ipAddressList.FirstOrDefault();
+        }
+
+        public static string GetLocalMACAddress(string ipAddress)
+        {
+            List<string> macAddressList = new List<string>();
+
+            foreach (NetworkInterface networkInterface in NetworkInterface.GetAllNetworkInterfaces())
+            {
+
+                if (networkInterface.NetworkInterfaceType == NetworkInterfaceType.Ethernet && networkInterface.OperationalStatus == OperationalStatus.Up)
+                {
+
+                    foreach (UnicastIPAddressInformation ip in networkInterface.GetIPProperties().UnicastAddresses)
+                    {
+
+                        if (ip.Address.AddressFamily == AddressFamily.InterNetworkV6 && string.Equals(ip.Address.ToString(), ipAddress))
+                        {
+                            macAddressList.Add(networkInterface.GetPhysicalAddress().ToString());
+                        }
+
+                    }
+
+                }
+
+            }
+
+            return macAddressList.FirstOrDefault();
+        }
+
+        public static int GetNetworkInterfaceIndex(string ipAddress)
+        {
+            int index = 0;
+
+            foreach (NetworkInterface networkInterface in NetworkInterface.GetAllNetworkInterfaces())
+            {
+
+                if (networkInterface.NetworkInterfaceType == NetworkInterfaceType.Ethernet && networkInterface.OperationalStatus == OperationalStatus.Up)
+                {
+
+                    foreach (UnicastIPAddressInformation ip in networkInterface.GetIPProperties().UnicastAddresses)
+                    {
+
+                        if (ip.Address.AddressFamily == AddressFamily.InterNetworkV6 && string.Equals(ip.Address.ToString(), ipAddress))
+                        {
+                            index = networkInterface.GetIPProperties().GetIPv6Properties().Index;
+                            break;
+                        }
+                        else if (ip.Address.AddressFamily == AddressFamily.InterNetwork && string.Equals(ip.Address.ToString(), ipAddress))
+                        {
+                            index = networkInterface.GetIPProperties().GetIPv4Properties().Index;
+                            break;
+                        }
+
+                    }
+
+                }
+
+            }
+
+            return index;
+        }
+
+        public static bool ValidateStringArguments(string[] arguments, string[] values, string[] validValues)
+        {
+            int i = 0;
+            foreach (string value in values)
+            {
+
+                if (!validValues.Contains(value))
+                {
+                    Console.WriteLine(arguments[i].Substring(3) + " value must be " + string.Join("/", validValues));
+                    return false;
+                }
+
+                i++;
+            }
+
+            return true;
+        }
+
+        public static bool ValidateStringArrayArguments(string argument, string[] values, string[] validValues)
+        {
+
+            foreach (string value in values)
+            {
+
+                if (!validValues.Contains(value))
+                {
+                    Console.WriteLine(argument.Substring(3) + " value must be " + string.Join("/", validValues));
+                    return false;
+                }
+
+            }
+
+            return true;
+        }
+
+        public static bool ValidateIntArguments(string[] arguments, string[] values)
+        {
+
+            int i = 0;
+            foreach (string value in values)
+            {
+
+                if (!string.IsNullOrEmpty(value))
+                {
+
+                    try
+                    {
+                        Int32.Parse(value);
+                        return true;
+
+                    }
+                    catch
+                    {
+                        Console.WriteLine(arguments[i].Substring(3) + " value must be an integer");
+                        return false;
+                    }
+
+                }
+
+                i++;
+            }
+
+            return true;
+        }
+
+        public static bool ValidateIntArrayArguments(string argument, string[] values)
+        {
+
+            int i = 0;
+            foreach (string value in values)
+            {
+
+                if (!string.IsNullOrEmpty(value))
+                {
+
+                    try
+                    {
+                        int.Parse(value);
+                        return true;
+
+                    }
+                    catch
+                    {
+                        Console.WriteLine(argument.Substring(3) + " values must be integers");
+                        return false;
+                    }
+
+                }
+
+                i++;
+            }
+
+            return true;
+        }
+
+        public static bool ValidateIPAddressArguments(string[] arguments, string[] values)
+        {
+
+            int i = 0;
+            foreach (string value in values)
+            {
+
+                if (!string.IsNullOrEmpty(value))
+                {
+
+                    try
+                    {
+                        IPAddress.Parse(value);
+                        return true;
+
+                    }
+                    catch
+                    {
+                        Console.WriteLine(arguments[i].Substring(3) + " value must be an IP address");
+                        return false;
+                    }
+
+                }
+
+                i++;
+            }
+
+            return true;
+        }
 
     }
 

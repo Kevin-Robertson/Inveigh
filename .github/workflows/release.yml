@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push: 
+    tags:
+      - "v*.*.*"
+  
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+ 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup .NET Core SDK
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: 6.0.x
+
+      - name: Restore Dependencies
+        run: dotnet restore
+      
+      - name: Build
+        run: |
+          VERSION=${{ github.ref_name }}
+          dotnet build -c release -p:Version=${VERSION:1}        
+          
+      - name: Zip - Build
+        run: |
+          7z a -tzip -mx9 Inveigh-net3.5-${{ github.ref_name }}.zip $PWD/Inveigh/bin/release/net35/*
+          7z a -tzip -mx9 Inveigh-net4.6.2-${{ github.ref_name }}.zip $PWD/Inveigh/bin/release/net462/*
+          7z a -tzip -mx9 Inveigh-net6.0-${{ github.ref_name }}.zip $PWD/Inveigh/bin/release/net6.0/* -x!*/
+      
+      - name: Publish - Trimmed/Single File
+        run: |
+          VERSION=${{ github.ref_name }}
+          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:Version=${VERSION:1} -r linux-x64 -f net6.0 -p:AssemblyName=inveigh -c release
+          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:Version=${VERSION:1} -r osx-x64 -f net6.0 -p:AssemblyName=inveigh -c release
+          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:Version=${VERSION:1} -r win-x64 -f net6.0 -c release
+          
+      - name: Zip - Publish
+        run: |
+          tar -czvf Inveigh-net6.0-linux-x64-trimmed-single-${{ github.ref_name }}.tar.gz --directory=$PWD/Inveigh/bin/release/net6.0/linux-x64/publish/ .
+          tar -czvf Inveigh-net6.0-osx-x64-trimmed-single-${{ github.ref_name }}.tar.gz --directory=$PWD/Inveigh/bin/release/net6.0/osx-x64/publish/ .
+          7z a -tzip -mx9 Inveigh-net6.0-win-x64-trimmed-single-${{ github.ref_name }}.zip $PWD/Inveigh/bin/release/net6.0/win-x64/publish/*
+          
+      - name: Release .zip
+        uses: softprops/action-gh-release@v1
+        with:
+          files: "Inveigh*.zip"
+
+      - name: Release tar.gz
+        uses: softprops/action-gh-release@v1
+        with:
+          files: "Inveigh*.tar.gz"

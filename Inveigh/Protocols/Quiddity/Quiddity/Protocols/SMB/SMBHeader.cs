@@ -1,7 +1,7 @@
 ﻿/*
  * BSD 3-Clause License
  *
- * Copyright (c) 2021, Kevin Robertson
+ * Copyright (c) 2022, Kevin Robertson
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -84,6 +84,28 @@ namespace Quiddity.SMB
                 this.PIDLow = packetReader.BigEndianReadUInt16();
                 this.UID = packetReader.BigEndianReadUInt16();
                 this.MID = packetReader.BigEndianReadUInt16();
+            }
+
+        }
+        public byte[] GetBytes()
+        {
+
+            using (MemoryStream memoryStream = new MemoryStream())
+            {
+                PacketWriter packetWriter = new PacketWriter(memoryStream);
+                packetWriter.Write(this.Protocol);
+                packetWriter.Write(this.Command);
+                packetWriter.Write(this.Status);
+                packetWriter.Write(this.Flags);
+                packetWriter.Write(this.Flags2);
+                packetWriter.Write(this.PIDHigh);
+                packetWriter.Write(this.SecurityFeatures);
+                packetWriter.Write(this.Reserved);
+                packetWriter.Write(this.TID);
+                packetWriter.Write(this.PIDLow);
+                packetWriter.Write(this.UID);
+                packetWriter.Write(this.MID);
+                return memoryStream.ToArray();
             }
 
         }

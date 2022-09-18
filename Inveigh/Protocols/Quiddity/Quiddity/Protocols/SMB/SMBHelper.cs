@@ -1,7 +1,7 @@
 ﻿/*
  * BSD 3-Clause License
  *
- * Copyright (c) 2021, Kevin Robertson
+ * Copyright (c) 2022, Kevin Robertson
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,8 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+using Quiddity.NetBIOS;
+using Quiddity.Support;
 using System.IO;
 
 namespace Quiddity.SMB
@@ -63,6 +65,35 @@ namespace Quiddity.SMB
                 return this;
             }
 
+        }
+
+        public static byte[] GetBytes(object smbCommand)
+        {
+            NetBIOSSessionService netBIOSSessionService = new NetBIOSSessionService();
+            SMBHeader smbHeader = new SMBHeader();
+            return GetBytes(netBIOSSessionService, smbHeader, smbCommand);
+        }
+
+        public static byte[] GetBytes(NetBIOSSessionService netBIOSSessionService, SMBHeader smbHeader, object smbCommand)
+        {
+            byte[] headerData = smbHeader.GetBytes();
+            byte[] commandData = new byte[0];
+
+            switch (smbHeader.Command)
+            {
+
+                case 0x72:
+                    {
+                        SMBCOMNegotiateRequest command = (SMBCOMNegotiateRequest)smbCommand;
+                        commandData = command.GetBytes();
+                    }
+                    break;
+
+            }
+
+            netBIOSSessionService.Length = (ushort)(commandData.Length + 32);
+            byte[] netbiosData = netBIOSSessionService.GetBytes();
+            return Utilities.BlockCopy(netbiosData, headerData, commandData);
         }
 
     }

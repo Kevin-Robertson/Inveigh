@@ -1,7 +1,7 @@
 ﻿/*
  * BSD 3-Clause License
  *
- * Copyright (c) 2021, Kevin Robertson
+ * Copyright (c) 2022, Kevin Robertson
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -107,16 +107,6 @@ namespace Quiddity.SMB2
             netBIOSSessionService.Length = (ushort)(commandData.Length + 64);
             byte[] netbiosData = netBIOSSessionService.GetBytes();
             return Utilities.BlockCopy(netbiosData, headerData, commandData);
-        }
-
-        public void NegotiateProtocol()
-        {
-
-        }
-
-        public void SessionSetup()
-        {
-
         }
 
     }

@@ -1,7 +1,7 @@
 ﻿/*
  * BSD 3-Clause License
  *
- * Copyright (c) 2021, Kevin Robertson
+ * Copyright (c) 2022, Kevin Robertson
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -71,7 +71,7 @@ namespace Quiddity.MDNS
 
         public bool QuestionIsAllowed(string question)
         {
-
+ 
             if (!Utilities.ArrayIsNullOrEmpty(this.Questions) && !Array.Exists(this.Questions, element => element == question.ToUpper()))
             {
                 return false;

@@ -1,7 +1,7 @@
 ﻿/*
  * BSD 3-Clause License
  *
- * Copyright (c) 2021, Kevin Robertson
+ * Copyright (c) 2022, Kevin Robertson
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,7 +40,7 @@ namespace Quiddity.Clients
         public TCPClient(string ipAddress, int port) : base(ipAddress, port)
         {
             this.Client.ReceiveTimeout = 60000;
-            this.ExclusiveAddressUse = false;
+            //this.ExclusiveAddressUse = false;
         }
 
     }

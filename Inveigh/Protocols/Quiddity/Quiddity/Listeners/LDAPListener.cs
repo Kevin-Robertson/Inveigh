@@ -1,7 +1,7 @@
 ﻿/*
  * BSD 3-Clause License
  *
- * Copyright (c) 2021, Kevin Robertson
+ * Copyright (c) 2022, Kevin Robertson
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -82,9 +82,13 @@ namespace Quiddity
                             }
                             while (!tcpAsync.IsCompleted);
 
-                            TcpClient tcpClient = tcpListener.EndAcceptTcpClient(tcpAsync);
-                            object[] parameters = { tcpClient };
-                            ThreadPool.QueueUserWorkItem(new WaitCallback(ReceiveClient), parameters);
+                            if (isRunning)
+                            {
+                                TcpClient tcpClient = tcpListener.EndAcceptTcpClient(tcpAsync);
+                                object[] parameters = { tcpClient, port };
+                                ThreadPool.QueueUserWorkItem(new WaitCallback(ReceiveClient), parameters);
+                            }
+
                         }
                         catch (Exception ex)
                         {
@@ -107,104 +111,114 @@ namespace Quiddity
         {
             object[] parameterArray = parameters as object[];
             TcpClient tcpClient = (TcpClient)parameterArray[0];
+            int port = (int)parameterArray[1];
             NetworkStream tcpStream = tcpClient.GetStream();
             string ntlmChallenge = "";
             string clientIP = ((IPEndPoint)(tcpClient.Client.RemoteEndPoint)).Address.ToString();
             string clientPort = ((IPEndPoint)(tcpClient.Client.RemoteEndPoint)).Port.ToString();
             string listenerPort = ((IPEndPoint)(tcpClient.Client.LocalEndPoint)).Port.ToString();
 
-            while (tcpClient.Connected && isRunning)
+            try
             {
-                byte[] requestData = new byte[4096];
 
-                do
+                while (tcpClient.Connected && isRunning)
                 {
-                    Thread.Sleep(100);
-                }
-                while (!tcpStream.DataAvailable && tcpClient.Connected);
+                    byte[] requestData = new byte[4096];
 
-                while (tcpStream.DataAvailable)
-                {
-                    tcpStream.Read(requestData, 0, requestData.Length);
-                }
-
-                LDAPMessage message = new LDAPMessage();
-                message.Decode(requestData);
-                LDAPMessage message2 = new LDAPMessage();
-                message2.MessageID = message.MessageID;
-                byte[] buffer = new byte[0];
-                OutputConnection(listenerPort, clientIP, clientPort, message.Tag);
-
-                if (message.Tag == 3)
-                {
-                    LDAPMessage message3 = new LDAPMessage();
-                    message3.MessageID = message.MessageID;
-                    LDAPSearchRequest searchRequest = new LDAPSearchRequest();
-                    searchRequest.ReadBytes((byte[][])message.ProtocolOp);
-
-                    LDAPSearchResDone resdone = new LDAPSearchResDone();
-                    resdone.ResultCode = 0;
-                    LDAPSearchResEntry search = new LDAPSearchResEntry();
-
-                    if (String.Equals(searchRequest.Attributes[0], "supportedCapabilities"))
+                    do
                     {
-                        LDAPSupportedCapabilities cap = new LDAPSupportedCapabilities();
-                        search.Attributes = cap.Encode();
+                        Thread.Sleep(100);
                     }
-                    else if (String.Equals(searchRequest.Attributes[0], "supportedSASLMechanisms"))
+                    while (!tcpStream.DataAvailable && tcpClient.Connected);
+
+                    while (tcpStream.DataAvailable)
                     {
-                        LDAPSupportedSASLMechanisms mech = new LDAPSupportedSASLMechanisms();
-                        search.Attributes = mech.Encode();
+                        tcpStream.Read(requestData, 0, requestData.Length);
                     }
 
-                    message2.ProtocolOp = search;
-                    message3.ProtocolOp = resdone;
-                    buffer = Utilities.BlockCopy(message2.Encode(4), message3.Encode(5));
-                }
-                else if (message.Tag == 0)
-                {
-                    LDAPBindRequest bind = new LDAPBindRequest();
-                    bind.ReadBytes((byte[][])message.ProtocolOp);
-                    LDAPSaslCredentials sasl = new LDAPSaslCredentials();
-                    sasl.ReadBytes(bind.Authentication);
-                    NTLMNegotiate ntlm = new NTLMNegotiate();
-                    ntlm.ReadBytes(sasl.Credentials, 0);
+                    LDAPMessage message = new LDAPMessage();
+                    message.Decode(requestData);
+                    LDAPMessage message2 = new LDAPMessage();
+                    message2.MessageID = message.MessageID;
+                    byte[] buffer = new byte[0];
+                    OutputConnection(listenerPort, clientIP, clientPort, message.Tag);
 
-                    if (ntlm.MessageType == 1)
+                    if (message.Tag == 3)
                     {
-                        NTLMChallenge challenge = new NTLMChallenge(Challenge, NetbiosDomain, ComputerName, DNSDomain, ComputerName, DNSDomain);
-                        byte[] challengeData = challenge.GetBytes(ComputerName);
-                        ntlmChallenge = BitConverter.ToString(challenge.ServerChallenge).Replace("-", "");
+                        LDAPMessage message3 = new LDAPMessage();
+                        message3.MessageID = message.MessageID;
+                        LDAPSearchRequest searchRequest = new LDAPSearchRequest();
+                        searchRequest.ReadBytes((byte[][])message.ProtocolOp);
 
-                        LDAPBindResponse bindResponse = new LDAPBindResponse
+                        LDAPSearchResDone resdone = new LDAPSearchResDone();
+                        resdone.ResultCode = 0;
+                        LDAPSearchResEntry search = new LDAPSearchResEntry();
+
+                        if (String.Equals(searchRequest.Attributes[0], "supportedCapabilities"))
                         {
-                            ServerSaslCreds = challengeData
-                        };
-
-                        LDAPMessage bindMessage = new LDAPMessage
+                            LDAPSupportedCapabilities cap = new LDAPSupportedCapabilities();
+                            search.Attributes = cap.Encode();
+                        }
+                        else if (String.Equals(searchRequest.Attributes[0], "supportedSASLMechanisms"))
                         {
-                            MessageID = message.MessageID,
-                            ProtocolOp = bindResponse
-                        };
+                            LDAPSupportedSASLMechanisms mech = new LDAPSupportedSASLMechanisms();
+                            search.Attributes = mech.Encode();
+                        }
 
-                        buffer = bindMessage.Encode(3);
-                        OutputChallenge(listenerPort, clientIP, clientPort, ntlmChallenge);
+                        message2.ProtocolOp = search;
+                        message3.ProtocolOp = resdone;
+                        buffer = Utilities.BlockCopy(message2.Encode(4), message3.Encode(5));
                     }
-                    else if (ntlm.MessageType == 3)
+                    else if (message.Tag == 0)
                     {
-                        NTLMResponse ntlmResponse = new NTLMResponse(sasl.Credentials, false);
-                        string domain = Encoding.Unicode.GetString(ntlmResponse.DomainName);
-                        string user = Encoding.Unicode.GetString(ntlmResponse.UserName);
-                        string host = Encoding.Unicode.GetString(ntlmResponse.Workstation);
-                        string response2 = BitConverter.ToString(ntlmResponse.NtChallengeResponse).Replace("-", "");
-                        string lmResponse = BitConverter.ToString(ntlmResponse.LmChallengeResponse).Replace("-", "");
-                        OutputNTLM("LDAP", listenerPort, clientIP, clientPort, user, domain, host, ntlmChallenge, response2, lmResponse);
+                        LDAPBindRequest bind = new LDAPBindRequest();
+                        bind.ReadBytes((byte[][])message.ProtocolOp);
+                        LDAPSaslCredentials sasl = new LDAPSaslCredentials();
+                        sasl.ReadBytes(bind.Authentication);
+                        NTLMNegotiate ntlm = new NTLMNegotiate();
+                        ntlm.ReadBytes(sasl.Credentials, 0);
+
+                        if (ntlm.MessageType == 1)
+                        {
+                            NTLMChallenge challenge = new NTLMChallenge(Challenge, NetbiosDomain, ComputerName, DNSDomain, ComputerName, DNSDomain);
+                            byte[] challengeData = challenge.GetBytes(ComputerName);
+                            ntlmChallenge = BitConverter.ToString(challenge.ServerChallenge).Replace("-", "");
+
+                            LDAPBindResponse bindResponse = new LDAPBindResponse
+                            {
+                                ServerSaslCreds = challengeData
+                            };
+
+                            LDAPMessage bindMessage = new LDAPMessage
+                            {
+                                MessageID = message.MessageID,
+                                ProtocolOp = bindResponse
+                            };
+
+                            buffer = bindMessage.Encode(3);
+                            OutputChallenge(listenerPort, clientIP, clientPort, ntlmChallenge);
+                        }
+                        else if (ntlm.MessageType == 3)
+                        {
+                            NTLMResponse ntlmResponse = new NTLMResponse(sasl.Credentials, false);
+                            string domain = Encoding.Unicode.GetString(ntlmResponse.DomainName);
+                            string user = Encoding.Unicode.GetString(ntlmResponse.UserName);
+                            string host = Encoding.Unicode.GetString(ntlmResponse.Workstation);
+                            string response2 = BitConverter.ToString(ntlmResponse.NtChallengeResponse).Replace("-", "");
+                            string lmResponse = BitConverter.ToString(ntlmResponse.LmChallengeResponse).Replace("-", "");
+                            OutputNTLM("LDAP", listenerPort, clientIP, clientPort, user, domain, host, ntlmChallenge, response2, lmResponse);
+                        }
+
                     }
 
+                    tcpStream.Write(buffer, 0, buffer.Length);
+                    tcpStream.Flush();
                 }
 
-                tcpStream.Write(buffer, 0, buffer.Length);
-                tcpStream.Flush();
+            }
+            catch (Exception ex)
+            {
+                OutputError(ex, port);
             }
 
         }
