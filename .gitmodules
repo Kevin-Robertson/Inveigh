@@ -1,0 +1,6 @@
+[submodule "Inveigh/Inveigh/Protocols/Quiddity"]
+	path = Inveigh/Inveigh/Protocols/Quiddity
+	url = https://192.168.99.78:3000/kevin/Quiddity.git
+[submodule "Inveigh/Protocols/Inveigh/Protocols/Quiddity"]
+	path = Inveigh/Protocols/Inveigh/Protocols/Quiddity
+	url = https://192.168.99.78:3000/kevin/Quiddity.git

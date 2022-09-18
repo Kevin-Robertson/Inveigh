@@ -49,6 +49,8 @@ namespace Quiddity.HTTP
         public string Accept { get; set; }
         public string AcceptEncoding { get; set; }
         public string AcceptLanguage { get; set; }
+        public string CacheControl { get; set; }
+        public string ProxyConnection{ get; set; }
         public string Authorization { get; set; }
         public string ProxyAuthorization { get; set; }
 
@@ -142,12 +144,20 @@ namespace Quiddity.HTTP
                     this.AcceptLanguage = value;
                     break;
 
+                case "CACHE-CONTROL:":
+                    this.ProxyConnection = value;
+                    break;
+
                 case "AUTHORIZATION:":
                     this.Authorization = value;
                     break;
 
                 case "PROXY-AUTHORIZATION:":
                     this.ProxyAuthorization = value;
+                    break;
+
+                case "PROXY-CONNECTION:":
+                    this.ProxyConnection = value;
                     break;
 
             }

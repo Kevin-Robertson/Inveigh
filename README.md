@@ -38,27 +38,29 @@ Inveigh works with both IPv4 and IPv6 in cases where support for both is provide
 
 ## Cross-Platform Support
 
-Inveigh's SDK style project file is setup for .NET 3.5, 4.5, and 5.0 with 5.0 being the version that also works with Linux and macOS.  
+Inveigh's SDK style project file is setup for .NET 3.5, 4.6.2, and 6.0 with 6.0 being the version that also works with Linux and macOS.  
 
-`<TargetFrameworks>net35;net45;net5.0</TargetFrameworks>`
-
-Windows is still the primary usage target, however I will attempt to support all platforms for new features going forward. For the most part, Inveigh just worked on all 3 platforms once I converted to an SDK project file.
+`<TargetFrameworks>net35;net62;net6.0</TargetFrameworks>`
 
 ### Known Issues
 
 * The packet sniffer is available only on Windows due to differences in the raw socket setups. When compiled for either Linux or macOS, the packet sniffer will just be disabled. Instead, Inveigh's SMB listener can be used if port 445 is open.
 * macOS requires that routes are avalable for joining multicast groups. In my testing, I've had to add routes for DHCPv6 multicast in order to carry out that attack on this platform.  
  `sudo route -nv add -net ff02::1:2 -interface en0`
+ 
+### Execution
 
-### Linux/macOS Compiling 
+`dotnet Inveigh.dll`
 
-* With .NET 5.0 installed on target system  
-`dotnet publish -r linux-x64 -f net5.0 -p:AssemblyName=inveigh`  
-`dotnet publish -r osx-x64 -f net5.0 -p:AssemblyName=inveigh`  
+### Linux/macOS Platform Targeted Builds 
 
-* Without .NET 5.0 installed on target system  
-`dotnet publish --self-contained=true -p:PublishSingleFile=true -r linux-x64 -f net5.0 -p:AssemblyName=inveigh`  
-`dotnet publish --self-contained=true -p:PublishSingleFile=true -r osx-x64 -f net5.0 -p:AssemblyName=inveigh`  
+* With .NET 6.0 installed on target system  
+`dotnet publish -r linux-x64 -f net6.0 -p:AssemblyName=inveigh`  
+`dotnet publish -r osx-x64 -f net6.0 -p:AssemblyName=inveigh`  
+
+* Without .NET 6.0 installed on target system  
+`dotnet publish --self-contained=true -p:PublishSingleFile=true -r linux-x64 -f net6.0 -p:AssemblyName=inveigh`  
+`dotnet publish --self-contained=true -p:PublishSingleFile=true -r osx-x64 -f net6.0 -p:AssemblyName=inveigh`  
 
 ## Usage
 

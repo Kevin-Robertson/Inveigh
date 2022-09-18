@@ -1,0 +1,67 @@
+on:
+  push:
+    branches: [ dev ]
+  pull_request:
+    branches: [ dev ]
+    
+name: Dev
+  
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+ 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup .NET Core SDK
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: 6.0.x
+
+      - name: Restore Dependencies
+        run: dotnet restore
+      
+      - name: Build
+        run: |
+          VERSION=${{ github.ref_name }}
+          dotnet build -c debug       
+          
+      - name: Zip - Build
+        run: |
+          7z a -tzip -mx9 Inveigh-net3.5-dev.zip $PWD/Inveigh/bin/debug/net35/*
+          7z a -tzip -mx9 Inveigh-net4.6.2-dev.zip $PWD/Inveigh/bin/debug/net462/*
+          7z a -tzip -mx9 Inveigh-net6.0-dev.zip $PWD/Inveigh/bin/debug/net6.0/* -x!*/
+      
+      - name: Publish - Trimmed/Single File
+        run: |
+          VERSION=${{ github.ref_name }}
+          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -r linux-x64 -f net6.0 -p:AssemblyName=inveigh -c debug
+          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -r osx-x64 -f net6.0 -p:AssemblyName=inveigh -c debug
+          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -r win-x64 -f net6.0 -c debug
+          
+      - name: Zip - Publish
+        run: |
+          tar -czvf Inveigh-net6.0-linux-x64-trimmed-single-dev.tar.gz --directory=$PWD/Inveigh/bin/debug/net6.0/linux-x64/publish/ .
+          tar -czvf Inveigh-net6.0-osx-x64-trimmed-single-dev.tar.gz --directory=$PWD/Inveigh/bin/debug/net6.0/osx-x64/publish/ .
+          7z a -tzip -mx9 Inveigh-net6.0-win-x64-trimmed-single-dev.zip $PWD/Inveigh/bin/debug/net6.0/win-x64/publish/*
+          
+      - name: Release .zip
+        if: "! startsWith(github.event_name, 'pull_request')"
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Dev Branch Debug Builds
+          tag_name: development
+          prerelease: true
+          files: "Inveigh*.zip"
+          body: |
+            Latest ${{ github.ref_name }} branch debug builds (${{ github.sha }})
+
+      - name: Release tar.gz
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: development
+          files: "Inveigh*.tar.gz"
