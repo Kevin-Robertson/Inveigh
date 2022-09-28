@@ -38,6 +38,11 @@ namespace Inveigh
             Output.NTLMOutput(user, domain, ntlmChallenge, ntlmResponseHash, clientIP, host, protocol, listenerPort, clientPort, lmResponseHash);
         }
 
+        protected override void OutputCleartext(string protocol, string listenerPort, string clientIP, string clientPort, string credentials)
+        {
+            Output.CleartextOutput(protocol, listenerPort, clientIP, clientPort, credentials);
+        }
+
         protected override void OutputChallenge(string protocol, string listenerPort, string clientIP, string clientPort, string challenge)
         {
             Output.Queue(String.Format("[+] [{0}] {1}({2}) NTLM challenge [{3}] sent to {4}:{5}", Output.Timestamp(), protocol, listenerPort, challenge, clientIP, clientPort));

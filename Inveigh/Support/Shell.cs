@@ -34,11 +34,11 @@ namespace Inveigh
                 "get ntlmv2usernames",
                 "get cleartext",
                 "get cleartextunique",
-                "get replytohosts",
+                "get replytoqueries",
                 "get replytoips",
                 "get replytodomains",
                 "get replytomacs",
-                "get ignorehosts",
+                "get ignorequeries",
                 "get ignoreips",
                 "get ignoredomains",
                 "get ignoremacs",
@@ -436,13 +436,13 @@ namespace Inveigh
                     GetNTLMv2Usernames(value);
                     break;
 
-                case "GET REPLYTOHOSTS":
-                    foreach (string entry in Program.argReplyToHosts)
+                case "GET REPLYTOQUERIES":
+                    foreach (string entry in Program.argReplyToQueries)
                         Console.WriteLine(entry);
                     break;
 
-                case "GET IGNOREHOSTS":
-                    foreach (string entry in Program.argIgnoreHosts)
+                case "GET IGNOREQUERIES":
+                    foreach (string entry in Program.argIgnoreQueries)
                         Console.WriteLine(entry);
                     break;
 
@@ -452,7 +452,7 @@ namespace Inveigh
                     break;
 
                 case "GET IGNOREIPS":
-                    foreach (string entry in Program.argIgnoreHosts)
+                    foreach (string entry in Program.argIgnoreIPs)
                         Console.WriteLine(entry);
                     break;
 
@@ -544,14 +544,14 @@ namespace Inveigh
             commands.Add("GET NTLMV2USERNAMES,get usernames and source IPs/hostnames for captured NTLMv2 hashes");
             commands.Add("GET CLEARTEXT,get captured cleartext credentials");
             commands.Add("GET CLEARTEXTUNIQUE,get unique captured cleartext credentials");
-            commands.Add("GET REPLYTODOMAINS,get ReplyToDomains parameter startup values");
-            commands.Add("GET REPLYTOHOSTS,get ReplyToHosts parameter startup values");
+            commands.Add("GET REPLYTODOMAINS,get ReplyToDomains parameter startup values");       
             commands.Add("GET REPLYTOIPS,get ReplyToIPs parameter startup values");
             commands.Add("GET REPLYTOMACS,get ReplyToMACs parameter startup values");
+            commands.Add("GET REPLYTOQUERIES,get ReplyToQueries parameter startup values");
             commands.Add("GET IGNOREDOMAINS,get IgnoreDomains parameter startup values");
-            commands.Add("GET IGNOREHOSTS,get IgnoreHosts parameter startup values");
             commands.Add("GET IGNOREIPS,get IgnoreIPs parameter startup values");
             commands.Add("GET IGNOREMACS,get IgnoreMACs parameter startup values");
+            commands.Add("GET IGNOREQUERIES,get IgnoreQueries parameter startup values");
             commands.Add("SET CONSOLE,set Console parameter value");
             commands.Add("HISTORY,get command history");
             commands.Add("RESUME,resume real time console output");

@@ -147,11 +147,13 @@ Spoofers:
 
   -IgnoreDomains  Default=None: Comma separated list of domains to ignore when spoofing.
 
-  -IgnoreHosts    Default=None: Comma separated list of hostnames to ignore when spoofing.
+
 
   -IgnoreIPs      Default=Local: Comma separated list of source IP addresses to ignore when spoofing.
 
   -IgnoreMACs     Default=Local: Comma separated list of MAC addresses to ignore when DHCPv6 spoofing.
+  
+  -IgnoreQueries  Default=None: Comma separated list of name queries to ignore when spoofing.
 
   -Local          Default=Disabled: (Y/N) performing spoofing attacks against the host system.
 
@@ -179,11 +181,11 @@ Spoofers:
 
   -ReplyToDomains Default=All: Comma separated list of domains to respond to when spoofing.
 
-  -ReplyToHosts   Default=All: Comma separated list of hostnames to respond to when spoofing.
-
   -ReplyToIPs     Default=All: Comma separated list of source IP addresses to respond to when spoofing.
 
   -ReplyToMACs    Default=All: Comma separated list of MAC addresses to respond to when DHCPv6 spoofing.
+  
+  -ReplyToQueries Default=All: Comma separated list of name queries to respond to when spoofing.
 
   -SpooferIP      Default=Autoassign: IP address included in spoofing responses.
 
@@ -494,13 +496,13 @@ GET NTLMV2USERNAMES             | get usernames and source IPs/hostnames for cap
 GET CLEARTEXT                   | get captured cleartext credentials
 GET CLEARTEXTUNIQUE             | get unique captured cleartext credentials
 GET REPLYTODOMAINS              | get ReplyToDomains parameter startup values
-GET REPLYTOHOSTS                | get ReplyToHosts parameter startup values
 GET REPLYTOIPS                  | get ReplyToIPs parameter startup values
 GET REPLYTOMACS                 | get ReplyToMACs parameter startup values
+GET REPLYTOQUERIES              | get ReplyToQueries parameter startup values
 GET IGNOREDOMAINS               | get IgnoreDomains parameter startup values
-GET IGNOREHOSTS                 | get IgnoreHosts parameter startup values
 GET IGNOREIPS                   | get IgnoreIPs parameter startup values
 GET IGNOREMACS                  | get IgnoreMACs parameter startup values
+GET IGNOREQUERIES               | get IgnoreQueries parameter startup values
 SET CONSOLE                     | set Console parameter value
 HISTORY                         | get command history
 RESUME                          | resume real time console output

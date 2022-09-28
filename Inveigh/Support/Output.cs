@@ -592,12 +592,12 @@ namespace Inveigh
 
                                 lock (Program.IPCaptureList)
                                 {
-                                    Program.IPCaptureList.Add(string.Concat(host));
+                                    Program.IPCaptureList.Add(sourceIP);
                                 }
 
                                 lock (Program.HostCaptureList)
                                 {
-                                    Program.HostCaptureList.Add(string.Concat(host));
+                                    Program.HostCaptureList.Add(host);
                                 }
 
                             }
@@ -642,12 +642,12 @@ namespace Inveigh
 
                                 lock (Program.IPCaptureList)
                                 {
-                                    Program.IPCaptureList.Add(string.Concat(host));
+                                    Program.IPCaptureList.Add(sourceIP);
                                 }
 
                                 lock (Program.HostCaptureList)
                                 {
-                                    Program.HostCaptureList.Add(string.Concat(host));
+                                    Program.HostCaptureList.Add(host);
                                 }
 
                             }
@@ -676,6 +676,43 @@ namespace Inveigh
             else
             {
                 Queue(string.Format("[-] [{0}] {1}({2}) {3} ignored for {4}\\{5} from {6}({7}):{8} [machine account]", Timestamp(), protocol, protocolPort, version, domain, user, sourceIP, host, sourcePort));
+            }
+
+        }
+
+        public static void CleartextOutput(string protocol, string listenerPort, string clientIP, string clientPort, string credentials)
+        {
+
+            bool isUnique = false;
+
+            if (Program.cleartextList.Any(str => str.Contains(credentials)))
+            {
+                isUnique = true;
+            }
+
+            lock (Program.cleartextList)
+            {
+                Program.cleartextList.Add(string.Concat(clientIP, ",", credentials));
+            }
+
+            if (Program.enabledConsoleUnique && isUnique)
+            {
+                Queue(string.Format("[+] [{0}] {1}({2}) cleartext credentials captured from {3}({4}):\r\n[not unique]", Timestamp(), protocol, listenerPort, clientIP, clientPort));
+            }
+            else
+            {
+                Queue(string.Format("[+] [{0}] {1}({2}) cleartext credentials captured from {3}({4}):\r\n{5}", Timestamp(), protocol, listenerPort, clientIP, clientPort, credentials));
+            }
+
+            if (Program.enabledFileOutput && (!Program.enabledFileUnique || !isUnique))
+            {
+
+                lock (Program.cleartextFileList)
+                {
+                    Program.cleartextFileList.Add(string.Concat(clientIP, ",", credentials));
+                }
+
+                Queue(string.Format("[+] [{0}] {1}({2}) cleartext credentials written to {3}", Timestamp(), protocol, listenerPort, String.Concat(Program.argFilePrefix, "-Cleartext.txt")));
             }
 
         }
@@ -1005,10 +1042,10 @@ namespace Inveigh
                 OutputHelp(argument, description);
             }
 
-            if (nullarg || string.Equals(arg, "IGNOREHOSTS"))
+            if (nullarg || string.Equals(arg, "IGNOREQUERIES"))
             {
-                string argument = "IgnoreHosts";
-                string description = "Default=None: Comma separated list of hostnames to ignore when spoofing.";
+                string argument = "IgnoreQueries";
+                string description = "Default=None: Comma separated list of name queries to ignore when spoofing.";
                 OutputHelp(argument, description);
             }
 
@@ -1117,13 +1154,6 @@ namespace Inveigh
                 OutputHelp(argument, description);
             }
 
-            if (nullarg || string.Equals(arg, "REPLYTOHOSTS"))
-            {
-                string argument = "ReplyToHosts";
-                string description = "Default=All: Comma separated list of hostnames to respond to when spoofing.";
-                OutputHelp(argument, description);
-            }
-
             if (nullarg || string.Equals(arg, "REPLYTOIPS"))
             {
                 string argument = "ReplyToIPs";
@@ -1135,6 +1165,13 @@ namespace Inveigh
             {
                 string argument = "ReplyToMACs";
                 string description = "Default=All: Comma separated list of MAC addresses to respond to when DHCPv6 spoofing.";
+                OutputHelp(argument, description);
+            }
+
+            if (nullarg || string.Equals(arg, "REPLYTOQUERIES"))
+            {
+                string argument = "ReplyToqueries";
+                string description = "Default=All: Comma separated list of name queries to respond to when spoofing.";
                 OutputHelp(argument, description);
             }
 

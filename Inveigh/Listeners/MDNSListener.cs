@@ -33,8 +33,8 @@ namespace Inveigh
 
             MDNSChecker mdnsHelper = new MDNSChecker
             {
-                IgnoreHosts = Program.argIgnoreHosts,
-                ReplyToHosts = Program.argReplyToHosts,
+                IgnoreQueries = Program.argIgnoreQueries,
+                ReplyToQueries = Program.argReplyToQueries,
                 IgnoreIPs = Program.argIgnoreIPs,
                 ReplyToIPs = Program.argReplyToIPs,
                 IPCaptures = Program.IPCaptureList,

@@ -28,10 +28,10 @@ namespace Inveigh
         public override bool Check(string name, string type, string clientIP, out string message)
         {
 
-            LLMNRChecker llmnrHelper = new LLMNRChecker
+            LLMNRChecker llmnrChecker = new LLMNRChecker
             {
-                IgnoreHosts = Program.argIgnoreHosts,
-                ReplyToHosts = Program.argReplyToHosts,
+                IgnoreQueries = Program.argIgnoreQueries,
+                ReplyToQueries = Program.argReplyToQueries,
                 IgnoreIPs = Program.argIgnoreIPs,
                 ReplyToIPs = Program.argReplyToIPs,
                 IPCaptures = Program.IPCaptureList,
@@ -41,13 +41,13 @@ namespace Inveigh
                 Inspect = Program.enabledInspect,
             };
 
-            if (llmnrHelper.Check(name, type, clientIP))
+            if (llmnrChecker.Check(name, type, clientIP))
             {
-                message = llmnrHelper.OutputMessage;
+                message = llmnrChecker.OutputMessage;
                 return true;
             }
 
-            message = llmnrHelper.OutputMessage;
+            message = llmnrChecker.OutputMessage;
             return false;
         }
 

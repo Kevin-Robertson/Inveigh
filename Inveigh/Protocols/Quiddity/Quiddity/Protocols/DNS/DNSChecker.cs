@@ -37,8 +37,8 @@ namespace Quiddity.DNS
 {
     class DNSChecker
     {
-        public string[] IgnoreHosts { get; set; }
-        public string[] ReplyToHosts { get; set; }
+        public string[] IgnoreQueries { get; set; }
+        public string[] ReplyToQueries { get; set; }
         public string[] IgnoreIPs { get; set; }
         public string[] ReplyToIPs { get; set; }
         public string[] IgnoreDomains { get; set; }
@@ -103,12 +103,12 @@ namespace Quiddity.DNS
                 this.OutputMessage = this.OutputServiceDenied;
                 return false;
             }
-            else if (HostIsDenied(name) || FQDNIsDenied(name))
+            else if (QueryIsDenied(name) || FQDNIsDenied(name))
             {
                 this.OutputMessage = this.OutputHostDenied;
                 return false;
             }
-            else if (!HostIsAllowed(name) && !FQDNIsAllowed(name))
+            else if (!QueryIsAllowed(name) && !FQDNIsAllowed(name))
             {
                 this.OutputMessage = this.OutputHostDenied;
                 return false;
@@ -193,11 +193,11 @@ namespace Quiddity.DNS
             return true;
         }
 
-        public bool HostIsDenied(string name)
+        public bool QueryIsDenied(string name)
         {
             string host = (name.Split('.'))[0];
 
-            if (!Utilities.ArrayIsNullOrEmpty(this.IgnoreHosts) && Array.Exists(this.IgnoreHosts, element => element == host.ToUpper()))
+            if (!Utilities.ArrayIsNullOrEmpty(this.IgnoreQueries) && Array.Exists(this.IgnoreQueries, element => element == host.ToUpper()))
             {
                 return true;
             }
@@ -205,11 +205,11 @@ namespace Quiddity.DNS
             return false;
         }
 
-        public bool HostIsAllowed(string name)
+        public bool QueryIsAllowed(string name)
         {
             string host = (name.Split('.'))[0];
 
-            if (!Utilities.ArrayIsNullOrEmpty(this.ReplyToHosts) && !Array.Exists(this.ReplyToHosts, element => element == host.ToUpper()))
+            if (!Utilities.ArrayIsNullOrEmpty(this.ReplyToQueries) && !Array.Exists(this.ReplyToQueries, element => element == host.ToUpper()))
             {
                 return false;
             }
@@ -220,7 +220,7 @@ namespace Quiddity.DNS
         public bool FQDNIsDenied(string name)
         {
            
-            if (!Utilities.ArrayIsNullOrEmpty(this.IgnoreHosts) && Array.Exists(this.IgnoreHosts, element => element == name.ToUpper()))
+            if (!Utilities.ArrayIsNullOrEmpty(this.IgnoreQueries) && Array.Exists(this.IgnoreQueries, element => element == name.ToUpper()))
             {
                 return true;
             }
@@ -231,7 +231,7 @@ namespace Quiddity.DNS
         public bool FQDNIsAllowed(string name)
         {
 
-            if (!Utilities.ArrayIsNullOrEmpty(this.ReplyToHosts) && !Array.Exists(this.ReplyToHosts, element => element == name.ToUpper()))
+            if (!Utilities.ArrayIsNullOrEmpty(this.ReplyToQueries) && !Array.Exists(this.ReplyToQueries, element => element == name.ToUpper()))
             {
                 return false;
             }

@@ -41,6 +41,7 @@ using System.Security.Authentication;
 using System.Net.Security;
 using Quiddity.Support;
 using System.Collections;
+using System.Collections.Generic;
 
 namespace Quiddity
 {
@@ -64,6 +65,7 @@ namespace Quiddity
         public static bool isRunning = false;
         public const SslProtocols tls12 = (SslProtocols)0x00000C00;
         public static Hashtable httpSessionTable = Hashtable.Synchronized(new Hashtable());
+        public static Hashtable tcpSessionTable = Hashtable.Synchronized(new Hashtable());
 
         public HTTPListener()
         {
@@ -118,8 +120,18 @@ namespace Quiddity
                             if (isRunning)
                             {
                                 TcpClient tcpClient = tcpListener.EndAcceptTcpClient(tcpAsync);
-                                object[] parameters = { tcpClient, type, port };
-                                ThreadPool.QueueUserWorkItem(new WaitCallback(ReceiveClient), parameters);
+                                string sourceIP = ((IPEndPoint)(tcpClient.Client.RemoteEndPoint)).Address.ToString();
+
+                                if (type.Equals("Proxy") && tcpSessionTable.ContainsKey(sourceIP) && DateTime.Compare((DateTime)tcpSessionTable[sourceIP], DateTime.Now) > 0)
+                                {
+                                    tcpClient.Client.Close();
+                                }
+                                else
+                                {
+                                    object[] parameters = { tcpClient, type, port };
+                                    ThreadPool.QueueUserWorkItem(new WaitCallback(ReceiveClient), parameters);
+                                }
+
                             }
 
                         }
@@ -490,6 +502,12 @@ namespace Quiddity
                             if (type.Equals("Proxy"))
                             {
                                 tcpClient.Client.Close();
+
+                                if (!tcpSessionTable.ContainsKey(sourceIP) || DateTime.Compare((DateTime)tcpSessionTable[sourceIP], DateTime.Now) <= 0)
+                                {
+                                    tcpSessionTable[sourceIP] = DateTime.Now.AddSeconds(1);
+                                }
+
                             }
                             else
                             {
