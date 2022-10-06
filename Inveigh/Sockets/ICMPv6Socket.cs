@@ -94,7 +94,7 @@ namespace Inveigh
                 if (Program.icmpv6Interval > 0)
                 {
 
-                    while (Program.isRunning && stopwatchInterval.Elapsed.Seconds <= Program.icmpv6Interval)
+                    while (Program.isRunning && stopwatchInterval.Elapsed.TotalSeconds <= Program.icmpv6Interval)
                     {
                         Thread.Sleep(10);
                     }
@@ -106,7 +106,7 @@ namespace Inveigh
                 {
                     break;
                 }
-
+                
             }
 
         }

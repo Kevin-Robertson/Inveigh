@@ -109,7 +109,7 @@ namespace Inveigh
             string[] authArguments = { nameof(Program.argHTTPAuth), nameof(Program.argProxyAuth), nameof(Program.argWPADAuth), nameof(Program.argWebDAVAuth) };
             string[] authArgumentValues = { Program.argHTTPAuth, Program.argProxyAuth, Program.argWPADAuth, Program.argWebDAVAuth };
             allValid &= Utilities.ValidateStringArguments(authArguments, authArgumentValues, new string[] { "ANONYMOUS", "BASIC", "NTLM" });
-            allValid &= Utilities.ValidateStringArrayArguments(nameof(Program.argDNSTypes), Program.argDNSTypes, new string[] { "A", "SOA", "SRV" });
+            allValid &= Utilities.ValidateStringArrayArguments(nameof(Program.argDNSTypes), Program.argDNSTypes, new string[] { "A", "AAAA", "SOA", "SRV" });
             allValid &= Utilities.ValidateStringArrayArguments(nameof(Program.argDNSSRV), Program.argDNSSRV, new string[] { "LDAP", "KERBEROS", "KPASSWORD", "GC" });
             allValid &= Utilities.ValidateStringArrayArguments(nameof(Program.argNBNSTypes), Program.argNBNSTypes, new string[] { "00", "03", "20", "1B", "1C", "1D", "1E" });
             allValid &= Utilities.ValidateStringArrayArguments(nameof(Program.argMDNSQuestions), Program.argMDNSQuestions, new string[] { "QM", "QU" });

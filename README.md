@@ -137,7 +137,7 @@ Spoofers:
 
   -DNSTTL         Default=30: DNS TTL in seconds.
 
-  -DNSTYPES       Default=A: (A, SOA, SRV) Comma separated list of DNS types to spoof.
+  -DNSTYPES       Default=A: (A, AAAA, SOA, SRV) Comma separated list of DNS types to spoof.
 
   -ICMPv6         Default=Enabled: (Y/N) sending ICMPv6 router advertisements.
 

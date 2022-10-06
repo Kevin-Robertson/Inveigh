@@ -1010,7 +1010,7 @@ namespace Inveigh
             if (nullarg || string.Equals(arg, "DNSTYPES"))
             {
                 string argument = "DNSTYPES";
-                string description = "Default=A: (A, SOA, SRV) Comma separated list of DNS types to spoof.";
+                string description = "Default=A: (A, AAAA, SOA, SRV) Comma separated list of DNS types to spoof.";
                 OutputHelp(argument, description);
             }
 
@@ -1400,6 +1400,7 @@ namespace Inveigh
 
             while (Program.outputList.Count > 0)
             {
+
                 if (Program.console == 5)
                 {
                     Program.consoleList.Add(Program.outputList[0]);

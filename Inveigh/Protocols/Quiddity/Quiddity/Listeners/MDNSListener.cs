@@ -89,7 +89,7 @@ namespace Quiddity
                     {
                         Thread.Sleep(10);
 
-                        if (!isRunning || stopwatchRunTime.IsRunning && stopwatchRunTime.Elapsed.Minutes >= runTime)
+                        if (!isRunning || stopwatchRunTime.IsRunning && stopwatchRunTime.Elapsed.TotalMinutes >= runTime)
                         {
                             isRunning = false;
                             break;

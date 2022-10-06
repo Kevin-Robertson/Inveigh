@@ -79,7 +79,7 @@ namespace Inveigh
                     isPromptRefresh = false;
                 }
 
-                if (consoleStatus > 0 && Program.enabledConsoleOutput && stopwatchConsoleStatus.Elapsed.Minutes >= consoleStatus)
+                if (consoleStatus > 0 && Program.enabledConsoleOutput && stopwatchConsoleStatus.Elapsed.TotalMinutes >= consoleStatus)
                 {
                     Shell.GetCleartextUnique("");
                     Shell.GetNTLMv1Unique("");
@@ -90,7 +90,7 @@ namespace Inveigh
                     stopwatchConsoleStatus.Start();
                 }
 
-                if (runTime > 0 && Program.enabledConsoleOutput && stopwatchRunTime.Elapsed.Minutes >= runTime)
+                if (runTime > 0 && Program.enabledConsoleOutput && stopwatchRunTime.Elapsed.TotalMinutes >= runTime)
                 {                   
                     Output.Queue(String.Format("[*] {0} Inveigh is exiting due to reaching run time", Output.Timestamp()));
                     StopInveigh();
