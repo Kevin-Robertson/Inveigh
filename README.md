@@ -15,7 +15,7 @@ On current versions of Windows, the default running UDP services allow port reus
 
 ### Version Descriptions
 * **PowerShell Inveigh** - original version developed over many years. For now at least, this version (1.506) will go without additional updates. Documentation can be found [here](https://github.com/Kevin-Robertson/Inveigh/wiki).
-* **C# Inveigh (aka InveighZero)** - original C# POC code combined with a C# port of most of the Powershell version's code. This version has now been rebuilt for C# and is taking over as the primary version. For now, the InveighZero will continue to be udated with just the latest C# version as a download alternative to avoid AV flagging the Powershell code.
+* **C# Inveigh (aka InveighZero)** - original C# POC code combined with a C# port of most of the Powershell version's code. This version has now been rebuilt for C# and is taking over as the primary version. 
 
 ### Features
 
