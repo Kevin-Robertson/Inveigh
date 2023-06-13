@@ -50,7 +50,7 @@ namespace Quiddity
             this.TTL = ttl;
         }
 
-        public new void Start(IPAddress ipAddress, string replyIP)
+        public void Start(IPAddress ipAddress, string replyIP)
         {
             Start(ipAddress, replyIP, 0);
         }

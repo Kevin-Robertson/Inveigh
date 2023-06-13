@@ -39,15 +39,24 @@ jobs:
       - name: Publish - Trimmed/Single File
         run: |
           VERSION=${{ github.ref_name }}
-          dotnet publish -r linux-x64 -f net7.0 -p:AssemblyName=inveigh -c debug
-          dotnet publish -r osx-x64 -f net7.0 -p:AssemblyName=inveigh -c debug
-          dotnet publish -r win-x64 -f net7.0 -c debug
+          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -r linux-x64 -f net7.0 -p:AssemblyName=inveigh -c debug
+          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -r osx-x64 -f net7.0 -p:AssemblyName=inveigh -c debug
+          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -r win-x64 -f net7.0 -c debug
           
       - name: Zip - Publish
         run: |
           tar -czvf Inveigh-net7.0-linux-x64-trimmed-single-dev.tar.gz --directory=$PWD/Inveigh/bin/debug/net7.0/linux-x64/publish/ .
           tar -czvf Inveigh-net7.0-osx-x64-trimmed-single-dev.tar.gz --directory=$PWD/Inveigh/bin/debug/net7.0/osx-x64/publish/ .
           7z a -tzip -mx9 Inveigh-net7.0-win-x64-trimmed-single-dev.zip $PWD/Inveigh/bin/debug/net7.0/win-x64/publish/*
+          
+      - name: Publish - NativeAOT
+        run: |
+          VERSION=${{ github.ref_name }}
+          dotnet publish -p:Version=${VERSION:1} -r win-x64 -f net7.0 -p:PublishAot=true -c debug
+
+      - name: Zip - Publish - NativeAOT
+        run: |
+          7z a -tzip -mx9 Inveigh-net7.0-win-x64-nativeaot-${{ github.ref_name }}.zip $PWD/Inveigh/bin/debug/net7.0/win-x64/native/*
           
       - name: Release .zip
         if: "! startsWith(github.event_name, 'pull_request')"

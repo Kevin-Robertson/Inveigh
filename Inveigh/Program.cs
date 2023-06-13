@@ -174,7 +174,7 @@ namespace Inveigh
         public static string netbiosDomain = Environment.UserDomainName;
         public static string dnsDomain = "";    
         public static ulong smb2Session = 5548434740922023936; // todo check
-        public static string version = "2.0.9";
+        public static string version = "2.0.10";
 
         static void Main(string[] arguments)
         {

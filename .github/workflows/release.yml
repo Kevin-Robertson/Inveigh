@@ -38,15 +38,24 @@ jobs:
       - name: Publish - Trimmed/Single File
         run: |
           VERSION=${{ github.ref_name }}
-          dotnet publish -p:Version=${VERSION:1} -r linux-x64 -f net7.0 -p:AssemblyName=inveigh -c release
-          dotnet publish -p:Version=${VERSION:1} -r osx-x64 -f net7.0 -p:AssemblyName=inveigh -c release
-          dotnet publish -p:Version=${VERSION:1} -r win-x64 -f net7.0 -c release
-          
+          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:Version=${VERSION:1} -r linux-x64 -f net7.0 -p:AssemblyName=inveigh -c release
+          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:Version=${VERSION:1} -r osx-x64 -f net7.0 -p:AssemblyName=inveigh -c release
+          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:Version=${VERSION:1} -r win-x64 -f net7.0 -c release
+       
       - name: Zip - Publish
         run: |
           tar -czvf Inveigh-net7.0-linux-x64-trimmed-single-${{ github.ref_name }}.tar.gz --directory=$PWD/Inveigh/bin/release/net7.0/linux-x64/publish/ .
           tar -czvf Inveigh-net7.0-osx-x64-trimmed-single-${{ github.ref_name }}.tar.gz --directory=$PWD/Inveigh/bin/release/net7.0/osx-x64/publish/ .
           7z a -tzip -mx9 Inveigh-net7.0-win-x64-trimmed-single-${{ github.ref_name }}.zip $PWD/Inveigh/bin/release/net7.0/win-x64/publish/*
+          
+      - name: Publish - NativeAOT
+        run: |
+          VERSION=${{ github.ref_name }}
+          dotnet publish -p:Version=${VERSION:1} -r win-x64 -f net7.0 -p:PublishAot=true -c release
+
+      - name: Zip - Publish - NativeAOT
+        run: |
+          7z a -tzip -mx9 Inveigh-net7.0-win-x64-nativeaot-${{ github.ref_name }}.zip $PWD/Inveigh/bin/release/net7.0/win-x64/native/Inveigh.exe
           
       - name: Release .zip
         uses: softprops/action-gh-release@v1
