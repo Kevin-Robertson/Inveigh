@@ -2,8 +2,9 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>net35;net462;net6.0</TargetFrameworks>
+    <TargetFrameworks>net35;net462;net7.0</TargetFrameworks>
     <PlatformTarget>AnyCPU</PlatformTarget>
+    <PublishAot Condition="'$(TargetFramework)' == 'net7.0'">true</PublishAot>
   </PropertyGroup>
    
   <PropertyGroup Condition="'$(Configuration)|$(TargetFrameworks)|$(Platform)'=='Debug|net35|AnyCPU'">
@@ -23,32 +24,15 @@
       <Version>6.0.1</Version>
     </PackageReference>
   </ItemGroup>
-  
-  <ItemGroup Condition="'$(TargetFramework)' == 'net6.0'">
-    <PackageReference Include="System.DirectoryServices.Protocols">
-      <Version>6.0.1</Version>
-    </PackageReference>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net7.0'">
+    <PackageReference Include="System.DirectoryServices.Protocols" Version="7.0.0-*" />
   </ItemGroup>
   
   <ItemGroup Condition="'$(TargetFramework)' == 'net462'">
     <PackageReference Include="Costura.Fody" Version="5.7.0">
       <PrivateAssets>all</PrivateAssets>
       <!--<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>-->
-    </PackageReference>
-    <PackageReference Include="Fody" Version="6.6.3">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-  </ItemGroup>
-  
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net6.0'">
-    <DefineConstants>ISNET6_0</DefineConstants>
-  </PropertyGroup>
-  
-  <ItemGroup Condition="'$(TargetFramework)' == 'net6.0'">
-    <PackageReference Include="Costura.Fody" Version="5.7.0">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Fody" Version="6.6.3">
       <PrivateAssets>all</PrivateAssets>

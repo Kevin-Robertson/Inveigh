@@ -18,9 +18,9 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Setup .NET Core SDK
-        uses: actions/setup-dotnet@v2
+        uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: 6.0.x
+          dotnet-version: 7.0.x
 
       - name: Restore Dependencies
         run: dotnet restore
@@ -34,20 +34,20 @@ jobs:
         run: |
           7z a -tzip -mx9 Inveigh-net3.5-dev.zip $PWD/Inveigh/bin/debug/net35/*
           7z a -tzip -mx9 Inveigh-net4.6.2-dev.zip $PWD/Inveigh/bin/debug/net462/*
-          7z a -tzip -mx9 Inveigh-net6.0-dev.zip $PWD/Inveigh/bin/debug/net6.0/* -x!*/
+          7z a -tzip -mx9 Inveigh-net7.0-dev.zip $PWD/Inveigh/bin/debug/net7.0/* -x!*/
       
       - name: Publish - Trimmed/Single File
         run: |
           VERSION=${{ github.ref_name }}
-          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -r linux-x64 -f net6.0 -p:AssemblyName=inveigh -c debug
-          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -r osx-x64 -f net6.0 -p:AssemblyName=inveigh -c debug
-          dotnet publish --self-contained=true -p:PublishSingleFile=true -p:PublishTrimmed=true -r win-x64 -f net6.0 -c debug
+          dotnet publish -r linux-x64 -f net7.0 -p:AssemblyName=inveigh -c debug
+          dotnet publish -r osx-x64 -f net7.0 -p:AssemblyName=inveigh -c debug
+          dotnet publish -r win-x64 -f net7.0 -c debug
           
       - name: Zip - Publish
         run: |
-          tar -czvf Inveigh-net6.0-linux-x64-trimmed-single-dev.tar.gz --directory=$PWD/Inveigh/bin/debug/net6.0/linux-x64/publish/ .
-          tar -czvf Inveigh-net6.0-osx-x64-trimmed-single-dev.tar.gz --directory=$PWD/Inveigh/bin/debug/net6.0/osx-x64/publish/ .
-          7z a -tzip -mx9 Inveigh-net6.0-win-x64-trimmed-single-dev.zip $PWD/Inveigh/bin/debug/net6.0/win-x64/publish/*
+          tar -czvf Inveigh-net7.0-linux-x64-trimmed-single-dev.tar.gz --directory=$PWD/Inveigh/bin/debug/net7.0/linux-x64/publish/ .
+          tar -czvf Inveigh-net7.0-osx-x64-trimmed-single-dev.tar.gz --directory=$PWD/Inveigh/bin/debug/net7.0/osx-x64/publish/ .
+          7z a -tzip -mx9 Inveigh-net7.0-win-x64-trimmed-single-dev.zip $PWD/Inveigh/bin/debug/net7.0/win-x64/publish/*
           
       - name: Release .zip
         if: "! startsWith(github.event_name, 'pull_request')"
