@@ -4,7 +4,7 @@ Inveigh is a cross-platform .NET IPv4/IPv6 machine-in-the-middle tool for penetr
 
 ## Overview
 
-Inveigh conducts spoofing attacks and hash/credential captures through both packet sniffing and protocol specific isteners/sockets. The packet sniffing method, which was the basis for the original Powershell version of this tool, has the following advantages:
+Inveigh conducts spoofing attacks and hash/credential captures through both packet sniffing and protocol specific listeners/sockets. The packet sniffing method, which was the basis for the original Powershell version of this tool, has the following advantages:
 
 * SMB NTLM challenge/response captures over the Window's SMB service
 * Fewer visible port binds on the host system
@@ -45,7 +45,7 @@ Inveigh's SDK style project file is setup for .NET 3.5, 4.6.2, and 6.0 with 6.0 
 ### Known Issues
 
 * The packet sniffer is available only on Windows due to differences in the raw socket setups. When compiled for either Linux or macOS, the packet sniffer will just be disabled. Instead, Inveigh's SMB listener can be used if port 445 is open.
-* macOS requires that routes are avalable for joining multicast groups. In my testing, I've had to add routes for DHCPv6 multicast in order to carry out that attack on this platform.  
+* macOS requires that routes are available for joining multicast groups. In my testing, I've had to add routes for DHCPv6 multicast in order to carry out that attack on this platform.  
  `sudo route -nv add -net ff02::1:2 -interface en0`
  
 ### Execution
@@ -216,7 +216,7 @@ Capture:
 
   -HTTPSPorts     Default=443: Comma separated list of TCP ports for the HTTPS listener.
 
-  -IgnoreAgents   Default=Firefox: Comma separated list of HTTP user agents to ignore with wpad anmd proxy auth.
+  -IgnoreAgents   Default=Firefox: Comma separated list of HTTP user agents to ignore with wpad and proxy auth.
 
   -LDAP           Default=Enabled: (Y/N) LDAP listener.
 
