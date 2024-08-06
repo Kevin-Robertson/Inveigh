@@ -1,7 +1,7 @@
 ﻿/*
  * BSD 3-Clause License
  *
- * Copyright (c) 2022, Kevin Robertson
+ * Copyright (c) 2024, Kevin Robertson
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,6 +38,7 @@ using Quiddity.NetBIOS;
 using Quiddity.NTLM;
 using Quiddity.SMB;
 using Quiddity.SMB2;
+using Quiddity.Support;
 
 namespace Quiddity
 {
@@ -243,7 +244,13 @@ namespace Quiddity
                                             string user = Encoding.Unicode.GetString(ntlmResponse.UserName);
                                             string host = Encoding.Unicode.GetString(ntlmResponse.Workstation);
                                             string response = BitConverter.ToString(ntlmResponse.NtChallengeResponse).Replace("-", "");
-                                            string lmResponse = BitConverter.ToString(ntlmResponse.LmChallengeResponse).Replace("-", "");
+                                            string lmResponse = "";
+
+                                            if (!Utilities.ArrayIsNullOrEmpty(ntlmResponse.UserName))
+                                            {
+                                                lmResponse = BitConverter.ToString(ntlmResponse.LmChallengeResponse).Replace("-", "");
+                                            }
+
                                             OutputNTLM("SMB", listenerPort, clientIP, clientPort, user, domain, host, challenge, response, lmResponse);
                                             SMB2Header responseSMB2Header = new SMB2Header();
                                             SMB2SessionSetupResponse smb2SessionSetupResponse = new SMB2SessionSetupResponse();

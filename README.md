@@ -4,7 +4,7 @@ Inveigh is a cross-platform .NET IPv4/IPv6 machine-in-the-middle tool for penetr
 
 ## Overview
 
-Inveigh conducts spoofing attacks and hash/credential captures through both packet sniffing and protocol specific listeners/sockets. The packet sniffing method, which was the basis for the original Powershell version of this tool, has the following advantages:
+Inveigh conducts spoofing attacks and hash/credential captures through both packet sniffing and protocol specific listeners/sockets. The packet sniffing method, which was the basis for the original PowerShell version of this tool, has the following advantages:
 
 * SMB NTLM challenge/response captures over the Window's SMB service
 * Fewer visible port binds on the host system
@@ -15,7 +15,7 @@ On current versions of Windows, the default running UDP services allow port reus
 
 ### Version Descriptions
 * **PowerShell Inveigh** - original version developed over many years. For now at least, this version (1.506) will go without additional updates. Documentation can be found [here](https://github.com/Kevin-Robertson/Inveigh/wiki).
-* **C# Inveigh (aka InveighZero)** - original C# POC code combined with a C# port of most of the Powershell version's code. This version has now been rebuilt for C# and is taking over as the primary version. 
+* **C# Inveigh (aka InveighZero)** - original C# POC code combined with a C# port of most of the PowerShell version's code. This version has now been rebuilt for C# and is taking over as the primary version. 
 
 ### Features
 
@@ -55,12 +55,12 @@ Inveigh's SDK style project file is setup for .NET 3.5, 4.6.2, and 6.0 with 6.0 
 ### Linux/macOS Platform Targeted Builds 
 
 * With .NET 6.0 installed on target system  
-`dotnet publish -r linux-x64 -f net6.0 -p:AssemblyName=inveigh`  
-`dotnet publish -r osx-x64 -f net6.0 -p:AssemblyName=inveigh`  
+`dotnet publish -r linux-x64 -f net8.0 -p:AssemblyName=inveigh`  
+`dotnet publish -r osx-x64 -f net8.0 -p:AssemblyName=inveigh`  
 
 * Without .NET 6.0 installed on target system  
-`dotnet publish --self-contained=true -p:PublishSingleFile=true -r linux-x64 -f net6.0 -p:AssemblyName=inveigh`  
-`dotnet publish --self-contained=true -p:PublishSingleFile=true -r osx-x64 -f net6.0 -p:AssemblyName=inveigh`  
+`dotnet publish --self-contained=true -p:PublishSingleFile=true -r linux-x64 -f net8.0 -p:AssemblyName=inveigh`  
+`dotnet publish --self-contained=true -p:PublishSingleFile=true -r osx-x64 -f net8.0 -p:AssemblyName=inveigh`  
 
 ## Usage
 
@@ -112,7 +112,7 @@ Output:
 
   -FileDirectory  Default=Working Directory: Valid path to an output directory for enabled file output.
 
-  -FileOutput     Default=Disabled: (Y/N) real time file output.
+  -FileOutput     Default=Enabled: (Y/N) real time file output.
 
   -FilePrefix     Default=Inveigh: Prefix for all output files.
 

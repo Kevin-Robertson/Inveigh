@@ -1,7 +1,7 @@
 ﻿/*
  * BSD 3-Clause License
  *
- * Copyright (c) 2022, Kevin Robertson
+ * Copyright (c) 2024, Kevin Robertson
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -110,14 +110,16 @@ namespace Quiddity.NTLM
             if (signature.StartsWith("NTLMSSP"))
             {
                 ReadBytes(data);
+                ParseValues(data);
             }
             else
             {
                 SPNEGONegTokenResp token = this.Decode(data);
                 this.ReadBytes(token.ResponseToken);
+                ParseValues(token.ResponseToken);
             }
 
-            ParseValues();
+            
         }
 
         public NTLMResponse(byte[] data, bool decode)
@@ -127,18 +129,19 @@ namespace Quiddity.NTLM
             {
                 SPNEGONegTokenResp token = this.Decode(data);
                 this.ReadBytes(token.ResponseToken);
+                ParseValues(token.ResponseToken);
             }
             else
             {
                 ReadBytes(data);
+                ParseValues(data);
             }
-
-            ParseValues();
+            
         }
 
         public void ReadBytes(byte[] data)
         {
-
+            
             using (MemoryStream memoryStream = new MemoryStream(data))
             {
                 PacketReader packetReader = new PacketReader(memoryStream);
@@ -163,7 +166,6 @@ namespace Quiddity.NTLM
                 this.EncryptedRandomSessionKeyMaxLen = packetReader.ReadUInt16();
                 this.EncryptedRandomSessionKeyBufferOffset = packetReader.ReadUInt32();
                 this.NegotiateFlags = packetReader.ReadBytes(4);
-
                 
                 string flags = Convert.ToString(BitConverter.ToUInt32(this.NegotiateFlags, 0), 2).PadLeft(this.NegotiateFlags.Length * 8, '0');
 
@@ -178,7 +180,6 @@ namespace Quiddity.NTLM
                 }
 
                 this.Payload = packetReader.ReadBytes(data.Length - (int)this.DomainNameBufferOffset);
-                
             }
 
         }
@@ -198,6 +199,20 @@ namespace Quiddity.NTLM
 
             return hash;
         }
+        
+        public byte[] Encode(byte[] data)
+        {
+            SPNEGONegTokenResp spnegoNegTokenResp = new SPNEGONegTokenResp();
+            spnegoNegTokenResp.NegState = 1;
+            byte[] segment1 = ASN1.Encode(0x04, data);
+            segment1 = ASN1.Encode(0xa2, segment1);
+            byte[] segment2 = ASN1.Encode(0x0a, new byte[1] { spnegoNegTokenResp.NegState });
+            segment2 = ASN1.Encode(0xa0, segment2);
+            byte[] asn1Data = Utilities.BlockCopy(segment2, segment1);
+            asn1Data = ASN1.Encode(0x30, asn1Data);
+            asn1Data = ASN1.Encode(0xa1, asn1Data);
+            return asn1Data;
+        }
 
         private SPNEGONegTokenResp Decode(byte[] data)
         {
@@ -212,21 +227,72 @@ namespace Quiddity.NTLM
 
             return spnegoNegTokenResp;
         }
-
-        private void ParseValues()
+        
+        private void ParseValues(byte[] data)
         {
             this.DomainName = new byte[this.DomainNameLen];
-            Buffer.BlockCopy(this.Payload, 0, this.DomainName, 0, this.DomainNameLen);
+            Buffer.BlockCopy(data, (int)this.DomainNameBufferOffset, this.DomainName, 0, this.DomainNameLen);
             this.UserName = new byte[this.UserNameLen];
-            Buffer.BlockCopy(this.Payload, (int)(this.UserNameBufferOffset - this.DomainNameBufferOffset), this.UserName, 0, this.UserNameLen);
+            Buffer.BlockCopy(data, (int)this.UserNameBufferOffset, this.UserName, 0, this.UserNameLen);
             this.Workstation = new byte[this.WorkstationLen];
-            Buffer.BlockCopy(this.Payload, (int)(this.WorkstationBufferOffset - this.DomainNameBufferOffset), this.Workstation, 0, this.WorkstationLen);
+            Buffer.BlockCopy(data, (int)this.WorkstationBufferOffset, this.Workstation, 0, this.WorkstationLen);
             this.EncryptedRandomSessionKey = new byte[this.EncryptedRandomSessionKeyLen];
-            Buffer.BlockCopy(this.Payload, (int)(this.EncryptedRandomSessionKeyBufferOffset - this.DomainNameBufferOffset), this.EncryptedRandomSessionKey, 0, this.EncryptedRandomSessionKeyLen);
-            this.LmChallengeResponse = new byte[this.LmChallengeResponseLen];
-            Buffer.BlockCopy(this.Payload, (int)(this.LmChallengeResponseBufferOffset - this.DomainNameBufferOffset), this.LmChallengeResponse, 0, this.LmChallengeResponseLen);
+            Buffer.BlockCopy(data, (int)this.EncryptedRandomSessionKeyBufferOffset, this.EncryptedRandomSessionKey, 0, this.EncryptedRandomSessionKeyLen);
+
+            if (this.LmChallengeResponseLen > 0)
+            {
+                this.LmChallengeResponse = new byte[this.LmChallengeResponseLen];
+                Buffer.BlockCopy(data,
+                    (int)this.LmChallengeResponseBufferOffset, this.LmChallengeResponse,
+                    0, this.LmChallengeResponseLen);
+            }
+            
             this.NtChallengeResponse = new byte[this.NtChallengeResponseLen];
-            Buffer.BlockCopy(this.Payload, (int)(this.NtChallengeResponseBufferOffset - this.DomainNameBufferOffset), this.NtChallengeResponse, 0, this.NtChallengeResponseLen);
+            Buffer.BlockCopy(data, (int)this.NtChallengeResponseBufferOffset, this.NtChallengeResponse, 0, this.NtChallengeResponseLen);
+        }
+        
+        public byte[] GetBytes(string domain, string userName, string workstation, NTLMChallenge ntlmChallenge)
+        {
+            byte[] domainData = Encoding.Unicode.GetBytes(domain);
+            this.DomainNameLen = (ushort)domainData.Length;
+            this.DomainNameMaxLen = this.DomainNameLen;
+            this.DomainNameBufferOffset = (ushort)(domainData.Length + 88);
+            byte[] userNameData = Encoding.Unicode.GetBytes(userName);
+            this.UserNameLen = (ushort)this.Payload.Length;
+            this.UserNameMaxLen = this.UserNameLen;
+            this.UserNameBufferOffset = (ushort)(domainData.Length + userNameData.Length + 88);
+            byte[] workstationData = Encoding.Unicode.GetBytes(workstation);
+            this.WorkstationLen = (ushort)this.Payload.Length;
+            this.WorkstationMaxLen = this.WorkstationLen;
+            this.WorkstationBufferOffset = (ushort)(domainData.Length + userNameData.Length + workstationData.Length + 88);
+            
+            using (MemoryStream memoryStream = new MemoryStream())
+            {
+                PacketWriter packetWriter = new PacketWriter(memoryStream);
+                packetWriter.Write(this.Signature);
+                packetWriter.Write(this.MessageType);
+                packetWriter.Write(this.LmChallengeResponseLen);
+                packetWriter.Write(this.LmChallengeResponseMaxLen);
+                packetWriter.Write(this.LmChallengeResponseBufferOffset);
+                packetWriter.Write(this.NtChallengeResponseLen);
+                packetWriter.Write(this.NtChallengeResponseMaxLen);
+                packetWriter.Write(this.NtChallengeResponseBufferOffset);
+                packetWriter.Write(this.DomainNameLen);
+                packetWriter.Write(this.DomainNameMaxLen);
+                packetWriter.Write(this.DomainNameBufferOffset);
+                packetWriter.Write(this.UserNameLen);
+                packetWriter.Write(this.UserNameMaxLen);
+                packetWriter.Write(this.UserNameBufferOffset);
+                packetWriter.Write(this.WorkstationLen);
+                packetWriter.Write(this.WorkstationMaxLen);
+                packetWriter.Write(this.WorkstationBufferOffset);
+                packetWriter.Write(this.EncryptedRandomSessionKeyLen);
+                packetWriter.Write(this.EncryptedRandomSessionKeyMaxLen);
+                packetWriter.Write(this.EncryptedRandomSessionKeyBufferOffset);
+                packetWriter.Write(this.NegotiateFlags);
+                return memoryStream.ToArray();
+            }
+
         }
 
     }

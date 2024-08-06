@@ -613,7 +613,13 @@ namespace Inveigh
                                                     string user = Encoding.Unicode.GetString(ntlmResponse.UserName);
                                                     string host = Encoding.Unicode.GetString(ntlmResponse.Workstation);
                                                     string response = BitConverter.ToString(ntlmResponse.NtChallengeResponse).Replace("-", "");
-                                                    string lmResponse = BitConverter.ToString(ntlmResponse.LmChallengeResponse).Replace("-", "");
+                                                    string lmResponse = "";
+
+                                                    if (!Utilities.ArrayIsNullOrEmpty(ntlmResponse.UserName))
+                                                    {
+                                                        lmResponse = BitConverter.ToString(ntlmResponse.LmChallengeResponse).Replace("-", "");
+                                                    }
+
                                                     Output.NTLMOutput(user, domain, challenge, response, clientIP, host, "SMB", listenerPort, clientPort, lmResponse);
                                                 }
 
@@ -695,11 +701,12 @@ namespace Inveigh
 
                                         if (!BitConverter.ToString(smb2SessionSetupRequest.Buffer).Contains("2A-86-48-86-F7-12-01-02-02")) // kerberos
                                         {
+
                                             NTLMHelper ntlmHelper = new NTLMHelper(smb2SessionSetupRequest.Buffer);
 
                                             if (ntlmHelper.Signature.StartsWith("NTLMSSP"))
                                             {
-
+                                                
                                                 if (ntlmHelper.MessageType == 3)
                                                 {
                                                     NTLMResponse ntlmResponse = new NTLMResponse(smb2SessionSetupRequest.Buffer);
@@ -709,7 +716,13 @@ namespace Inveigh
                                                     string user = Encoding.Unicode.GetString(ntlmResponse.UserName);
                                                     string host = Encoding.Unicode.GetString(ntlmResponse.Workstation);
                                                     string response = BitConverter.ToString(ntlmResponse.NtChallengeResponse).Replace("-", "");
-                                                    string lmResponse = BitConverter.ToString(ntlmResponse.LmChallengeResponse).Replace("-", "");
+                                                    string lmResponse = "";
+
+                                                    if (!Utilities.ArrayIsNullOrEmpty(ntlmResponse.UserName))
+                                                    {
+                                                        lmResponse = BitConverter.ToString(ntlmResponse.LmChallengeResponse).Replace("-", "");
+                                                    }
+                                                    
                                                     Output.NTLMOutput(user, domain, challenge, response, clientIP, host, "SMB", listenerPort, clientPort, lmResponse);
                                                 }
 
